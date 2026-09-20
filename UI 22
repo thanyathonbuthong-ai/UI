@@ -1,0 +1,830 @@
+--[[
+================================================================================
+  SpaceHub UI Library
+  Reusable Roblox UI library extracted & refactored from the "Space Hub" script.
+  Design language: dark modern card UI with side-rail tabs, accent glow,
+  smooth tweens, keybind support, notifications, and draggable/minimizable window.
+
+  Usage (executor / loadstring):
+      local Library = loadstring(game:HttpGet("https://your-host/SpaceHubUI.lua"))()
+
+      local Window = Library:CreateWindow({
+          Title    = "Space Hub",
+          Subtitle = "discord.gg/space-hub",
+          Accent   = Color3.fromRGB(255, 255, 255),  -- optional
+          ToggleKey = Enum.KeyCode.RightControl,      -- optional, hide/show
+      })
+
+      local Tab = Window:CreateTab("Main")
+      Tab:Section("SPEED CONFIGURATION")
+      Tab:Toggle({ Name = "Carry Mode", Default = false, Keybind = Enum.KeyCode.Q,
+          Callback = function(v) print("Carry", v) end })
+      Tab:Button({ Name = "Insta Reset", Keybind = Enum.KeyCode.I,
+          Callback = function() print("reset") end })
+      Tab:Slider({ Name = "Radius", Min = 0, Max = 100, Default = 62, Decimals = 0,
+          Callback = function(v) print("radius", v) end })
+      Tab:Input({ Name = "Normal Speed", Default = "59.5",
+          Callback = function(v) print("speed", v) end })
+      Tab:Dropdown({ Name = "Animation Pack", Options = {"Off","Korblox","Headless"},
+          Callback = function(v) print(v) end })
+      Tab:Cycle({ Name = "Sky", Options = {"Off","Stars","Sunset","Night"},
+          Callback = function(i, v) print(i, v) end })
+      Tab:Mode({ Left = "NORMAL", Right = "SEMI",
+          Callback = function(isLeft) print(isLeft) end })
+      Tab:Keybind({ Name = "Drop Brainrot", Default = Enum.KeyCode.H,
+          Callback = function(key) print(key) end })
+
+      Library:Notify("Space Hub loaded!", 4)
+================================================================================
+]]
+
+local Library = {}
+Library.__index = Library
+
+--// Services
+local Players          = game:GetService("Players")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer      = Players.LocalPlayer
+local PlayerGui        = LocalPlayer:WaitForChild("PlayerGui")
+
+--// Default theme (overridable per-window via Accent)
+local DEFAULT_THEME = {
+    Accent      = Color3.fromRGB(255, 255, 255),
+    BG_DARK     = Color3.fromRGB(10, 11, 13),
+    ROW_BG      = Color3.fromRGB(16, 17, 20),
+    CARD_STROKE = Color3.fromRGB(34, 37, 43),
+    TEXT_WHITE  = Color3.fromRGB(255, 255, 255),
+    TEXT_PRIMARY= Color3.fromRGB(238, 238, 238),
+    TEXT_DIM    = Color3.fromRGB(125, 125, 125),
+    TEXT_SECTION= Color3.fromRGB(200, 205, 215),
+    BTN_BG      = Color3.fromRGB(18, 18, 18),
+    TOGGLE_OFF  = Color3.fromRGB(40, 40, 40),
+    TOGGLE_KNOB = Color3.fromRGB(185, 185, 185),
+    KNOB_ON     = Color3.fromRGB(12, 12, 12),
+    GRAD_TOP    = Color3.fromRGB(20, 21, 25),
+    GRAD_BOT    = Color3.fromRGB(13, 14, 17),
+}
+
+local TWEEN_FAST = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TWEEN_MED  = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local KEY_DISPLAY_ALIASES = {
+    ["Space"] = "Spacebar", ["LeftControl"] = "L-Ctrl", ["RightControl"] = "R-Ctrl",
+    ["LeftShift"] = "L-Shift", ["RightShift"] = "R-Shift", ["LeftAlt"] = "L-Alt",
+    ["RightAlt"] = "R-Alt", ["Return"] = "Enter", ["Backquote"] = "~",
+    ["Slash"] = "/", ["Backslash"] = "\\", ["LeftBracket"] = "[", ["RightBracket"] = "]",
+    ["Minus"] = "-", ["Equals"] = "=", ["Semicolon"] = ";", ["Quote"] = "'",
+    ["Comma"] = ",", ["Period"] = ".", ["One"] = "1", ["Two"] = "2", ["Three"] = "3",
+    ["Four"] = "4", ["Five"] = "5", ["Six"] = "6", ["Seven"] = "7", ["Eight"] = "8",
+    ["Nine"] = "9", ["Zero"] = "0",
+}
+
+--// Global keybind-listener state (shared across all windows)
+local KeyListen = { active = false, label = nil, cb = nil, previousText = nil }
+
+local function prettyKeyName(keyCode)
+    if typeof(keyCode) == "EnumItem" then
+        return KEY_DISPLAY_ALIASES[keyCode.Name] or keyCode.Name
+    end
+    return tostring(keyCode)
+end
+
+local function cancelKeyListen()
+    if KeyListen.label and KeyListen.label.Parent and KeyListen.previousText then
+        KeyListen.label.Text = KeyListen.previousText
+    end
+    KeyListen.cb = nil
+    KeyListen.label = nil
+    KeyListen.active = false
+    KeyListen.previousText = nil
+end
+
+local function startKeyListen(labelBtn, onKeySet)
+    cancelKeyListen()
+    KeyListen.cb = onKeySet
+    KeyListen.label = labelBtn
+    KeyListen.active = true
+    KeyListen.previousText = labelBtn.Text
+    labelBtn.Text = "..."
+    labelBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    labelBtn.BackgroundTransparency = 0.3
+    local captureId = labelBtn
+    task.delay(8, function()
+        if KeyListen.label == captureId and KeyListen.active then
+            cancelKeyListen()
+            if labelBtn and labelBtn.Parent then
+                labelBtn.Text = KeyListen.previousText or "None"
+                labelBtn.BackgroundTransparency = 0.5
+            end
+        end
+    end)
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not KeyListen.active then return end
+    local ut = input.UserInputType
+    if ut ~= Enum.UserInputType.Keyboard and ut ~= Enum.UserInputType.Gamepad1 and ut ~= Enum.UserInputType.Gamepad2 then return end
+    local key = input.KeyCode
+    local ignored = {
+        [Enum.KeyCode.Unknown] = true, [Enum.KeyCode.LeftShift] = true,
+        [Enum.KeyCode.RightShift] = true, [Enum.KeyCode.LeftMeta] = true,
+        [Enum.KeyCode.RightMeta] = true, [Enum.KeyCode.Tab] = true,
+    }
+    if ignored[key] and key ~= Enum.KeyCode.CapsLock then return end
+    if key == Enum.KeyCode.Escape then cancelKeyListen(); return end
+    local cb = KeyListen.cb
+    local lbl = KeyListen.label
+    cancelKeyListen()
+    if lbl and lbl.Parent then
+        lbl.Text = prettyKeyName(key)
+        lbl.BackgroundTransparency = 0.5
+    end
+    if cb then task.spawn(cb, key) end
+end)
+
+--// Responsive panel sizing (mobile / small viewport aware)
+local function getResponsivePanelSize(defaultWidth, defaultHeight)
+    local camera = workspace.CurrentCamera
+    local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+    local compact = (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled) or viewport.X <= 700
+    if not compact then return defaultWidth, defaultHeight end
+    local width  = math.min(defaultWidth, math.max(220, viewport.X - 32))
+    local height = math.min(defaultHeight, math.max(300, viewport.Y - 24))
+    return width, height
+end
+
+--// Internal styling helpers (bound to a window's theme)
+local function makeHelpers(theme)
+    local H = {}
+
+    function H.cardStyle(f)
+        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 9); c.Parent = f
+        local s = Instance.new("UIStroke"); s.Color = theme.CARD_STROKE; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Transparency = 0.4; s.Parent = f
+        local g = Instance.new("UIGradient"); g.Color = ColorSequence.new(theme.GRAD_TOP, theme.GRAD_BOT); g.Rotation = 90; g.Transparency = NumberSequence.new(0.08, 0.08); g.Parent = f
+    end
+
+    function H.smallBtn(p)
+        local b = Instance.new("TextButton")
+        b.Position = p.Pos or UDim2.new(0, 0, 0, 0); b.Size = p.Size or UDim2.new(0, 40, 0, 23)
+        b.BackgroundColor3 = p.Bg or theme.BTN_BG; b.BorderSizePixel = 0
+        b.Text = p.Text or ""; b.TextColor3 = p.Col or theme.TEXT_DIM; b.TextSize = p.TS or 11
+        b.Font = Enum.Font.GothamBold; b.AutoButtonColor = false; b.ZIndex = p.Z or 1; b.Parent = p.Parent
+        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, p.CR or 6); c.Parent = b
+        local s = Instance.new("UIStroke"); s.Color = p.SC or theme.CARD_STROKE; s.Thickness = p.ST or 1
+        s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Transparency = p.STr or 0.5; s.Parent = b
+        return b
+    end
+
+    function H.accentBar(parent, on)
+        local b = Instance.new("Frame")
+        b.Position = UDim2.new(0, 0, 0.5, -11); b.Size = UDim2.new(0, 3, 0, 22)
+        b.BackgroundColor3 = on and theme.Accent or theme.TEXT_WHITE
+        b.BackgroundTransparency = on and 0 or 1; b.BorderSizePixel = 0; b.Parent = parent
+        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 2); c.Parent = b
+        return b
+    end
+
+    function H.autoCanvas(scroll)
+        local lay = scroll:FindFirstChildOfClass("UIListLayout"); if not lay then return end
+        local pad = scroll:FindFirstChildOfClass("UIPadding")
+        local function upd()
+            local h = lay.AbsoluteContentSize.Y + (pad and pad.PaddingBottom.Offset or 0)
+            scroll.CanvasSize = UDim2.new(0, 0, 0, h)
+        end
+        lay:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(upd)
+        task.defer(upd)
+    end
+
+    function H.makeDrag(obj, target, onDrag)
+        local drag, dInp, dStart, sPos
+        obj.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                drag = true; dStart = i.Position; sPos = target.Position
+                i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then drag = false end end)
+            end
+        end)
+        obj.InputChanged:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then dInp = i end
+        end)
+        UserInputService.InputChanged:Connect(function(i)
+            if i == dInp and drag then
+                local d = i.Position - dStart
+                target.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + d.X, sPos.Y.Scale, sPos.Y.Offset + d.Y)
+                if onDrag then onDrag(target.Position) end
+            end
+        end)
+    end
+
+    return H
+end
+
+--// ==========================================================================
+--//  Tab class
+--// ==========================================================================
+local Tab = {}
+Tab.__index = Tab
+
+function Tab.new(window, name, order, visible)
+    local self = setmetatable({}, Tab)
+    self.Window = window
+    self.Helpers = window.Helpers
+    self.Theme = window.Theme
+
+    local p = Instance.new("ScrollingFrame")
+    p.Name = name .. "_Page"
+    p.Visible = visible ~= false
+    p.LayoutOrder = order
+    p.Size = UDim2.new(1, 0, 1, 0)
+    p.BackgroundTransparency = 1
+    p.BorderSizePixel = 0
+    p.ScrollBarThickness = 2
+    p.ScrollBarImageColor3 = self.Theme.Accent
+    p.CanvasSize = UDim2.new(0, 0, 0, 0)
+    p.Parent = window.ContentFrame
+    local l = Instance.new("UIListLayout"); l.Padding = UDim.new(0, 7); l.SortOrder = Enum.SortOrder.LayoutOrder; l.Parent = p
+    local pd = Instance.new("UIPadding"); pd.PaddingBottom = UDim.new(0, 10); pd.PaddingRight = UDim.new(0, 4); pd.Parent = p
+    self.Helpers.autoCanvas(p)
+    self.Page = p
+    return self
+end
+
+--// Section header
+function Tab:Section(text)
+    local H, theme = self.Helpers, self.Theme
+    local r = Instance.new("Frame"); r.Size = UDim2.new(1, 0, 0, 24); r.BackgroundTransparency = 1; r.Parent = self.Page
+    local b = Instance.new("Frame"); b.Position = UDim2.new(0, 0, 0.5, -6); b.Size = UDim2.new(0, 3, 0, 13)
+    b.BackgroundColor3 = theme.Accent; b.BorderSizePixel = 0; b.Parent = r
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 2)
+    local l = Instance.new("TextLabel"); l.Position = UDim2.new(0, 12, 0, 0); l.Size = UDim2.new(1, -12, 1, 0)
+    l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = theme.TEXT_SECTION; l.TextSize = 11
+    l.Font = Enum.Font.GothamBold; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = r
+    return r
+end
+
+--// Toggle (pill switch) with optional keybind + expandable sub-rows
+function Tab:Toggle(opts)
+    local H, theme = self.Helpers, self.Theme
+    local label, def, keybind, hasExpand, cb = opts.Name, opts.Default or false, opts.Keybind, opts.Expand, opts.Callback
+    local h = keybind and 44 or 46
+    local r = Instance.new("Frame"); r.ClipsDescendants = true; r.Size = UDim2.new(1, 0, 0, h)
+    r.BackgroundColor3 = theme.ROW_BG; r.BackgroundTransparency = 0.03; r.BorderSizePixel = 0; r.Parent = self.Page; H.cardStyle(r)
+    local bar = H.accentBar(r, def)
+    local lw = keybind and UDim2.new(1, -120, 1, 0) or UDim2.new(1, -74, 1, 0)
+    if hasExpand then lw = UDim2.new(1, -108, 1, 0) end
+    local l = Instance.new("TextLabel"); l.Position = UDim2.new(0, 14, 0, 0); l.Size = lw; l.BackgroundTransparency = 1
+    l.Text = label; l.TextColor3 = theme.TEXT_PRIMARY; l.TextSize = 14; l.Font = Enum.Font.GothamMedium
+    l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = r
+
+    local tb = Instance.new("TextButton"); tb.Position = UDim2.new(1, -54, 0.5, -11); tb.Size = UDim2.new(0, 44, 0, 22)
+    tb.BackgroundColor3 = def and theme.Accent or theme.TOGGLE_OFF; tb.BorderSizePixel = 0; tb.Text = ""; tb.AutoButtonColor = false; tb.Parent = r
+    Instance.new("UICorner", tb).CornerRadius = UDim.new(0, 11)
+    local knob = Instance.new("Frame"); knob.Size = UDim2.new(0, 16, 0, 16); knob.BorderSizePixel = 0
+    knob.Position = def and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+    knob.BackgroundColor3 = def and theme.KNOB_ON or theme.TOGGLE_KNOB; knob.Parent = tb
+    Instance.new("UICorner", knob)
+
+    local state = def
+    local api = {}
+    local function set(v)
+        state = v
+        TweenService:Create(tb, TWEEN_FAST, { BackgroundColor3 = v and theme.Accent or theme.TOGGLE_OFF }):Play()
+        TweenService:Create(knob, TWEEN_FAST, { Position = v and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8), BackgroundColor3 = v and theme.KNOB_ON or theme.TOGGLE_KNOB }):Play()
+        TweenService:Create(bar, TWEEN_FAST, { BackgroundTransparency = v and 0 or 1 }):Play()
+        bar.BackgroundColor3 = theme.Accent
+    end
+    api.Set = set
+    api.Get = function() return state end
+    tb.MouseButton1Click:Connect(function()
+        local nextState = not state
+        set(nextState)
+        if cb then task.spawn(cb, nextState) end
+    end)
+
+    if keybind then
+        local currentKey = keybind
+        local kb = H.smallBtn({ Parent = r, Pos = UDim2.new(1, -104, 0.5, -11), Size = UDim2.new(0, 40, 0, 23), Text = prettyKeyName(keybind), Z = 4 })
+        kb.MouseButton1Click:Connect(function()
+            startKeyListen(kb, function(newKey)
+                currentKey = newKey
+                kb.Text = prettyKeyName(newKey)
+                if opts.KeybindCallback then task.spawn(opts.KeybindCallback, newKey) end
+            end)
+        end)
+        -- fire keybind when pressed globally
+        UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == currentKey and not KeyListen.active then
+                local nextState = not state
+                set(nextState)
+                if cb then task.spawn(cb, nextState) end
+            end
+        end)
+    end
+
+    local expandRows
+    if hasExpand then
+        expandRows = {}; local exp = false
+        local eb = H.smallBtn({ Parent = r, Pos = UDim2.new(1, -90, 0.5, -11), Size = UDim2.new(0, 26, 0, 22),
+            Text = "^", Col = theme.Accent, Bg = Color3.fromRGB(24, 18, 23), SC = theme.Accent, ST = 1.2, STr = 0.15 })
+        eb.MouseButton1Click:Connect(function()
+            exp = not exp; eb.Text = exp and "v" or "^"
+            for _, rr in ipairs(expandRows) do rr.Visible = exp end
+        end)
+        api.AddExpandRow = function(rowFrame) table.insert(expandRows, rowFrame); rowFrame.Visible = false; return rowFrame end
+    end
+
+    return api, r
+end
+
+--// Button (action) with optional keybind
+function Tab:Button(opts)
+    local H, theme = self.Helpers, self.Theme
+    local label, keybind, cb = opts.Name, opts.Keybind, opts.Callback
+    local r = Instance.new("Frame"); r.ClipsDescendants = true; r.Size = UDim2.new(1, 0, 0, 42)
+    r.BackgroundColor3 = theme.ROW_BG; r.BackgroundTransparency = 0.03; r.BorderSizePixel = 0; r.Parent = self.Page; H.cardStyle(r)
+    local btn = Instance.new("TextButton"); btn.Size = UDim2.new(1, -56, 1, 0); btn.BackgroundTransparency = 1
+    btn.Text = label; btn.TextColor3 = theme.TEXT_PRIMARY; btn.TextSize = 14; btn.Font = Enum.Font.GothamBold; btn.Parent = r
+    local bar = H.accentBar(r, false)
+    local function fire()
+        bar.BackgroundColor3 = theme.Accent
+        TweenService:Create(bar, TWEEN_FAST, { BackgroundTransparency = 0 }):Play()
+        task.delay(0.3, function() TweenService:Create(bar, TWEEN_FAST, { BackgroundTransparency = 1 }):Play() end)
+        if cb then task.spawn(cb) end
+    end
+    btn.MouseButton1Click:Connect(fire)
+    if keybind then
+        local kb = H.smallBtn({ Parent = r, Pos = UDim2.new(1, -50, 0.5, -11), Size = UDim2.new(0, 40, 0, 23), Text = prettyKeyName(keybind), Z = 3 })
+        local currentKey = keybind
+        kb.MouseButton1Click:Connect(function()
+            startKeyListen(kb, function(newKey)
+                currentKey = newKey
+                kb.Text = prettyKeyName(newKey)
+                if opts.KeybindCallback then task.spawn(opts.KeybindCallback, newKey) end
+            end)
+        end)
+        UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == currentKey and not KeyListen.active then fire() end
+        end)
+    end
+    return { Fire = fire }, r
+end
+
+--// Slider (horizontal drag) with live value label
+function Tab:Slider(opts)
+    local H, theme = self.Helpers, self.Theme
+    local label, min, max, def, decimals, cb = opts.Name, opts.Min or 0, opts.Max or 100, opts.Default or opts.Min or 0, opts.Decimals or 0, opts.Callback
+    local r = Instance.new("Frame"); r.ClipsDescendants = true; r.Size = UDim2.new(1, 0, 0, 48)
+    r.BackgroundColor3 = theme.ROW_BG; r.BackgroundTransparency = 0.03; r.BorderSizePixel = 0; r.Parent = self.Page; H.cardStyle(r)
+    H.accentBar(r, false)
+    local l = Instance.new("TextLabel"); l.Position = UDim2.new(0, 13, 0, 4); l.Size = UDim2.new(1, -80, 0, 18)
+    l.BackgroundTransparency = 1; l.Text = label; l.TextColor3 = theme.TEXT_PRIMARY; l.TextSize = 13
+    l.Font = Enum.Font.GothamMedium; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = r
+    local valLbl = Instance.new("TextLabel"); valLbl.Position = UDim2.new(1, -70, 0, 4); valLbl.Size = UDim2.new(0, 58, 0, 18)
+    valLbl.BackgroundTransparency = 1; valLbl.Text = tostring(def); valLbl.TextColor3 = theme.Accent; valLbl.TextSize = 12
+    valLbl.Font = Enum.Font.GothamBold; valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.Parent = r
+
+    local track = Instance.new("Frame"); track.Position = UDim2.new(0, 13, 0, 30); track.Size = UDim2.new(1, -26, 0, 6)
+    track.BackgroundColor3 = theme.TOGGLE_OFF; track.BorderSizePixel = 0; track.Parent = r
+    Instance.new("UICorner", track).CornerRadius = UDim.new(0, 3)
+    local fill = Instance.new("Frame"); fill.Size = UDim2.new(0, 0, 1, 0); fill.BackgroundColor3 = theme.Accent; fill.BorderSizePixel = 0; fill.Parent = track
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
+    local knob = Instance.new("Frame"); knob.AnchorPoint = Vector2.new(0.5, 0.5); knob.Position = UDim2.new(0, 0, 0.5, 0); knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.BackgroundColor3 = theme.TEXT_WHITE; knob.BorderSizePixel = 0; knob.Parent = track
+    Instance.new("UICorner", knob)
+
+    local value = def
+    local dragging = false
+    local function updateFromInput(inputPos)
+        local rel = math.clamp((inputPos.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        value = min + (max - min) * rel
+        value = math.floor(value * 10 ^ decimals + 0.5) / 10 ^ decimals
+        if decimals <= 0 then value = math.floor(value + 0.5) end
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        knob.Position = UDim2.new(rel, 0, 0.5, 0)
+        valLbl.Text = tostring(value)
+        if cb then task.spawn(cb, value) end
+    end
+    local hitbox = Instance.new("TextButton"); hitbox.Size = UDim2.new(1, 0, 1, 0); hitbox.BackgroundTransparency = 1; hitbox.Text = ""; hitbox.AutoButtonColor = false; hitbox.ZIndex = 5; hitbox.Parent = r
+    hitbox.MouseButton1Down:Connect(function()
+        dragging = true
+        updateFromInput(UserInputService:GetMouseLocation())
+    end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            updateFromInput(i.Position)
+        end
+    end)
+    -- init
+    do
+        local rel = math.clamp((def - min) / (max - min), 0, 1)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        knob.Position = UDim2.new(rel, 0, 0.5, 0)
+    end
+
+    local api = {}
+    api.Set = function(v)
+        value = math.clamp(v, min, max)
+        local rel = (value - min) / (max - min)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        knob.Position = UDim2.new(rel, 0, 0.5, 0)
+        valLbl.Text = tostring(value)
+    end
+    api.Get = function() return value end
+    return api, r
+end
+
+--// Text input (textbox)
+function Tab:Input(opts)
+    local H, theme = self.Helpers, self.Theme
+    local label, def, cb = opts.Name, opts.Default or "", opts.Callback
+    local r = Instance.new("Frame"); r.ClipsDescendants = true; r.Size = UDim2.new(1, 0, 0, 44)
+    r.BackgroundColor3 = theme.ROW_BG; r.BackgroundTransparency = 0.03; r.BorderSizePixel = 0; r.Parent = self.Page; H.cardStyle(r)
+    local l = Instance.new("TextLabel"); l.Position = UDim2.new(0, 13, 0, 0); l.Size = UDim2.new(1, -84, 1, 0)
+    l.BackgroundTransparency = 1; l.Text = label; l.TextColor3 = theme.TEXT_PRIMARY; l.TextSize = 13
+    l.Font = Enum.Font.GothamMedium; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = r
+    local bx = Instance.new("TextBox"); bx.Position = UDim2.new(1, -66, 0.5, -12); bx.Size = UDim2.new(0, 56, 0, 25)
+    bx.BackgroundColor3 = theme.BTN_BG; bx.BorderSizePixel = 0; bx.Text = def; bx.TextColor3 = theme.Accent
+    bx.TextSize = 13; bx.Font = Enum.Font.GothamBold; bx.Parent = r
+    Instance.new("UICorner", bx).CornerRadius = UDim.new(0, 6)
+    local s = Instance.new("UIStroke"); s.Color = theme.CARD_STROKE; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Transparency = 0.5; s.Parent = bx
+    bx.FocusLost:Connect(function(enterPressed)
+        if cb then task.spawn(cb, bx.Text, enterPressed) end
+    end)
+    return { Set = function(v) bx.Text = v end, Get = function() return bx.Text end }, r
+end
+
+--// Dropdown (expandable option list)
+function Tab:Dropdown(opts)
+    local H, theme = self.Helpers, self.Theme
+    local label, options, def, cb = opts.Name, opts.Options or {}, opts.Default or (opts.Options and opts.Options[1]) or "", opts.Callback
+    local r = Instance.new("Frame"); r.ClipsDescendants = true; r.Size = UDim2.new(1, 0, 0, 44)
+    r.BackgroundColor3 = theme.ROW_BG; r.BackgroundTransparency = 0.03; r.BorderSizePixel = 0; r.Parent = self.Page; H.cardStyle(r)
+    local l = Instance.new("TextLabel"); l.Position = UDim2.new(0, 13, 0, 0); l.Size = UDim2.new(0.45, 0, 0, 44); l.BackgroundTransparency = 1
+    l.Text = label; l.TextColor3 = theme.TEXT_PRIMARY; l.TextSize = 13; l.Font = Enum.Font.GothamMedium; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = r
+    local dd = H.smallBtn({ Parent = r, Pos = UDim2.new(1, -130, 0, 8), Size = UDim2.new(0, 120, 0, 27), Text = def .. "  v", Col = theme.TEXT_PRIMARY, TS = 11, CR = 7, SC = theme.CARD_STROKE, STr = 0.45 })
+    local ca = Instance.new("Frame"); ca.Position = UDim2.new(0, 13, 0, 44); ca.Size = UDim2.new(1, -26, 0, 0); ca.BackgroundTransparency = 1; ca.Parent = r
+    local lay = Instance.new("UIListLayout"); lay.Padding = UDim.new(0, 4); lay.SortOrder = Enum.SortOrder.LayoutOrder; lay.Parent = ca
+    local exp = false
+    local api = {}
+    local function buildOptions()
+        for _, c in ipairs(ca:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+        for i, opt in ipairs(options) do
+            local ob = H.smallBtn({ Parent = ca, Size = UDim2.new(1, 0, 0, 24), Text = opt, Col = theme.TEXT_DIM, TS = 11, CR = 6 })
+            ob.MouseButton1Click:Connect(function()
+                dd.Text = opt .. "  v"
+                exp = false
+                TweenService:Create(r, TWEEN_MED, { Size = UDim2.new(1, 0, 0, 44) }):Play()
+                if cb then task.spawn(cb, opt, i) end
+            end)
+        end
+    end
+    buildOptions()
+    dd.MouseButton1Click:Connect(function()
+        exp = not exp
+        local targetH = exp and (44 + lay.AbsoluteContentSize.Y + 10) or 44
+        TweenService:Create(r, TWEEN_MED, { Size = UDim2.new(1, 0, 0, targetH) }):Play()
+    end)
+    api.SetOptions = function(newOpts) options = newOpts; buildOptions() end
+    api.Refresh = buildOptions
+    return api, r
+end
+
+--// Cycle / arrow selector (< value >)
+function Tab:Cycle(opts)
+    local H, theme = self.Helpers, self.Theme
+    local label, options, cb = opts.Name, opts.Options or { "Off" }, opts.Callback
+    if typeof(options) == "string" then options = { options } end
+    local idx = 1
+    local r = Instance.new("Frame"); r.ClipsDescendants = true; r.Size = UDim2.new(1, 0, 0, 44)
+    r.BackgroundColor3 = theme.ROW_BG; r.BackgroundTransparency = 0.03; r.BorderSizePixel = 0; r.Parent = self.Page; H.cardStyle(r)
+    local l = Instance.new("TextLabel"); l.Position = UDim2.new(0, 13, 0, 0); l.Size = UDim2.new(0.43, 0, 0, 44); l.BackgroundTransparency = 1
+    l.Text = label; l.TextColor3 = theme.TEXT_PRIMARY; l.TextSize = 13; l.Font = Enum.Font.GothamMedium; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = r
+    local la = H.smallBtn({ Parent = r, Pos = UDim2.new(1, -174, 0, 8), Size = UDim2.new(0, 29, 0, 27), Text = "<", Col = theme.TEXT_PRIMARY, TS = 13, CR = 7, SC = theme.CARD_STROKE, STr = 0.45 })
+    local vl = Instance.new("TextLabel"); vl.Position = UDim2.new(1, -141, 0, 8); vl.Size = UDim2.new(0, 102, 0, 27)
+    vl.BackgroundColor3 = theme.BTN_BG; vl.BorderSizePixel = 0; vl.Text = options[1]; vl.TextColor3 = theme.TEXT_PRIMARY; vl.TextSize = 10; vl.Font = Enum.Font.GothamBold; vl.Parent = r
+    Instance.new("UICorner", vl).CornerRadius = UDim.new(0, 7)
+    local vs = Instance.new("UIStroke"); vs.Color = theme.CARD_STROKE; vs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; vs.Transparency = 0.45; vs.Parent = vl
+    local ra = H.smallBtn({ Parent = r, Pos = UDim2.new(1, -35, 0, 8), Size = UDim2.new(0, 29, 0, 27), Text = ">", Col = theme.TEXT_PRIMARY, TS = 13, CR = 7, SC = theme.CARD_STROKE, STr = 0.45 })
+    local function upd()
+        vl.Text = options[idx]
+        if cb then task.spawn(cb, idx, options[idx]) end
+    end
+    la.MouseButton1Click:Connect(function() idx = idx - 1; if idx < 1 then idx = #options end; upd() end)
+    ra.MouseButton1Click:Connect(function() idx = idx + 1; if idx > #options then idx = 1 end; upd() end)
+    return { Get = function() return idx, options[idx] end, Set = function(i) idx = ((i - 1) % #options) + 1; vl.Text = options[idx] end }, r
+end
+
+--// Mode selector (2-way pill, LEFT | RIGHT)
+function Tab:Mode(opts)
+    local H, theme = self.Helpers, self.Theme
+    local lt, rt, cb, defLeft = opts.Left or "LEFT", opts.Right or "RIGHT", opts.Callback, (opts.Default ~= false)
+    local r = Instance.new("Frame"); r.ClipsDescendants = true; r.Size = UDim2.new(1, 0, 0, 36)
+    r.BackgroundColor3 = theme.ROW_BG; r.BackgroundTransparency = 0.03; r.BorderSizePixel = 0; r.Parent = self.Page; H.cardStyle(r)
+    local sl = Instance.new("Frame"); sl.ZIndex = 2; sl.Position = defLeft and UDim2.new(0, 4, 0, 4) or UDim2.new(0.5, 2, 0, 4); sl.Size = UDim2.new(0.5, -6, 1, -8)
+    sl.BackgroundColor3 = theme.Accent; sl.BorderSizePixel = 0; sl.Parent = r
+    Instance.new("UICorner", sl).CornerRadius = UDim.new(0, 7)
+    local lb = Instance.new("TextButton"); lb.ZIndex = 3; lb.Size = UDim2.new(0.5, 0, 1, 0); lb.BackgroundTransparency = 1; lb.BorderSizePixel = 0
+    lb.Text = lt; lb.TextColor3 = defLeft and theme.TEXT_WHITE or theme.TEXT_DIM; lb.TextSize = 11; lb.Font = Enum.Font.GothamBold; lb.AutoButtonColor = false; lb.Parent = r
+    local rb = Instance.new("TextButton"); rb.ZIndex = 3; rb.Position = UDim2.new(0.5, 0, 0, 0); rb.Size = UDim2.new(0.5, 0, 1, 0); rb.BackgroundTransparency = 1; rb.BorderSizePixel = 0
+    rb.Text = rt; rb.TextColor3 = defLeft and theme.TEXT_DIM or theme.TEXT_WHITE; rb.TextSize = 11; rb.Font = Enum.Font.GothamBold; rb.AutoButtonColor = false; rb.Parent = r
+    local left = defLeft
+    local function setM(l)
+        left = l
+        TweenService:Create(sl, TWEEN_FAST, { Position = l and UDim2.new(0, 4, 0, 4) or UDim2.new(0.5, 2, 0, 4) }):Play()
+        lb.TextColor3 = l and theme.TEXT_WHITE or theme.TEXT_DIM
+        rb.TextColor3 = l and theme.TEXT_DIM or theme.TEXT_WHITE
+        if cb then task.spawn(cb, l) end
+    end
+    lb.MouseButton1Click:Connect(function() setM(true) end)
+    rb.MouseButton1Click:Connect(function() setM(false) end)
+    return { Get = function() return left end, Set = setM }, r
+end
+
+--// Keybind-only row
+function Tab:Keybind(opts)
+    local H, theme = self.Helpers, self.Theme
+    local label, key, cb = opts.Name, opts.Default, opts.Callback
+    local r = Instance.new("Frame"); r.ClipsDescendants = true; r.Size = UDim2.new(1, 0, 0, 44)
+    r.BackgroundColor3 = theme.ROW_BG; r.BackgroundTransparency = 0.03; r.BorderSizePixel = 0; r.Parent = self.Page; H.cardStyle(r)
+    local l = Instance.new("TextLabel"); l.Position = UDim2.new(0, 13, 0, 0); l.Size = UDim2.new(0.45, 0, 0, 44); l.BackgroundTransparency = 1
+    l.Text = label; l.TextColor3 = theme.TEXT_PRIMARY; l.TextSize = 13; l.Font = Enum.Font.GothamMedium; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = r
+    local kb = H.smallBtn({ Parent = r, Pos = UDim2.new(1, -130, 0.5, -12), Size = UDim2.new(0, 120, 0, 25), Text = key and prettyKeyName(key) or "None", Col = theme.TEXT_DIM, TS = 11, CR = 6 })
+    local currentKey = key
+    kb.MouseButton1Click:Connect(function()
+        startKeyListen(kb, function(newKey)
+            currentKey = newKey
+            kb.Text = prettyKeyName(newKey)
+            if cb then task.spawn(cb, newKey) end
+        end)
+    end)
+    return { Get = function() return currentKey end, Set = function(k) currentKey = k; kb.Text = prettyKeyName(k) end }, r
+end
+
+--// Spacer / divider
+function Tab:Spacer(height)
+    local r = Instance.new("Frame"); r.Size = UDim2.new(1, 0, 0, height or 8); r.BackgroundTransparency = 1; r.Parent = self.Page
+    return r
+end
+
+--// ==========================================================================
+--//  Window class
+--// ==========================================================================
+local Window = {}
+Window.__index = Window
+
+function Library:CreateWindow(opts)
+    opts = opts or {}
+    local self = setmetatable({}, Window)
+    self.Tabs = {}
+    self.TabButtons = {}
+
+    -- theme
+    local theme = {}
+    for k, v in pairs(DEFAULT_THEME) do theme[k] = v end
+    if opts.Accent then theme.Accent = opts.Accent end
+    self.Theme = theme
+    local H = makeHelpers(theme)
+    self.Helpers = H
+
+    local title = opts.Title or "Space Hub"
+    local subtitle = opts.Subtitle or ""
+    local toggleKey = opts.ToggleKey or Enum.KeyCode.RightControl
+    local width, height = getResponsivePanelSize(opts.Width or 420, opts.Height or 528)
+
+    -- ScreenGui
+    local gui = Instance.new("ScreenGui")
+    gui.Name = opts.Name or ("SpaceHubUI_" .. title:gsub("%s", ""))
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    local parent = (gethui and gethui()) or PlayerGui
+    gui.Parent = parent
+    self.Gui = gui
+
+    -- Main frame
+    local frame = Instance.new("Frame")
+    frame.Name = "MainFrame"
+    frame.ClipsDescendants = true
+    frame.Position = opts.Position or UDim2.new(0, 22, 0.5, -math.floor(height / 2))
+    frame.Size = UDim2.fromOffset(width, height)
+    frame.BackgroundColor3 = theme.BG_DARK
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
+    self.Frame = frame
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 16)
+    do
+        local g = Instance.new("UIGradient"); g.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(16, 19, 26)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(9, 10, 13)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(11, 14, 20))
+        }); g.Rotation = 90; g.Parent = frame
+        local st = Instance.new("UIStroke"); st.Color = theme.Accent; st.Thickness = 1.5; st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; st.Transparency = 1; st.Parent = frame
+    end
+
+    -- Decorative corner glows
+    for _, d in ipairs({
+        { P = UDim2.new(0, -18, 0, 30), S = UDim2.new(0, 360, 0, 360), C = theme.Accent, T = 0.922 },
+        { P = UDim2.new(0, -4, 0, 44),  S = UDim2.new(0, 330, 0, 330), T = 0.852 },
+        { P = UDim2.new(1, -2, 1, -30), S = UDim2.new(0, 360, 0, 360), C = theme.Accent, T = 0.922, A = Vector2.new(1, 1), R = 180 },
+        { P = UDim2.new(1, -2, 1, -44), S = UDim2.new(0, 330, 0, 330), T = 0.852, A = Vector2.new(1, 1), R = 180 },
+    }) do
+        local i = Instance.new("ImageLabel"); i.Visible = false; i.ZIndex = 0; i.Position = d.P; i.Size = d.S
+        i.BackgroundTransparency = 1; i.Image = "rbxassetid://108037416708175"
+        if d.C then i.ImageColor3 = d.C end; i.ImageTransparency = d.T; i.ScaleType = Enum.ScaleType.Fit
+        if d.A then i.AnchorPoint = d.A end; if d.R then i.Rotation = d.R end; i.Parent = frame
+    end
+
+    -- Header
+    local header = Instance.new("Frame"); header.Size = UDim2.new(1, 0, 0, 68); header.BackgroundTransparency = 1; header.Parent = frame
+    self.Header = header
+    do
+        local t = Instance.new("TextLabel"); t.ZIndex = 3; t.Position = UDim2.new(0, 18, 0, 13); t.Size = UDim2.new(0, width - 80, 0, 34)
+        t.BackgroundTransparency = 1; t.Text = title; t.TextColor3 = theme.TEXT_WHITE
+        t.TextSize = 26; t.Font = Enum.Font.GothamBlack; t.TextXAlignment = Enum.TextXAlignment.Left; t.RichText = true; t.Parent = header
+        local s = Instance.new("TextLabel"); s.ZIndex = 3; s.Position = UDim2.new(0, 20, 0, 45); s.Size = UDim2.new(0, width - 80, 0, 13)
+        s.BackgroundTransparency = 1; s.Text = subtitle; s.TextColor3 = theme.TEXT_DIM
+        s.TextSize = 11; s.Font = Enum.Font.GothamMedium; s.TextXAlignment = Enum.TextXAlignment.Left; s.Parent = header
+    end
+
+    -- Minimize button
+    local minBtn = Instance.new("TextButton"); minBtn.ZIndex = 3; minBtn.Position = UDim2.new(1, -42, 0, 13); minBtn.Size = UDim2.new(0, 30, 0, 30)
+    minBtn.BackgroundColor3 = theme.BTN_BG; minBtn.BorderSizePixel = 0; minBtn.Text = "-"; minBtn.TextColor3 = theme.TEXT_PRIMARY
+    minBtn.TextSize = 13; minBtn.Font = Enum.Font.GothamBold; minBtn.AutoButtonColor = false; minBtn.Parent = header
+    Instance.new("UICorner", minBtn)
+    do local s = Instance.new("UIStroke"); s.Color = theme.CARD_STROKE; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Transparency = 0.4; s.Parent = minBtn end
+
+    -- Divider
+    local div = Instance.new("Frame"); div.Position = UDim2.new(0, 16, 0, 64); div.Size = UDim2.new(1, -32, 0, 1)
+    div.BackgroundColor3 = theme.TEXT_WHITE; div.BorderSizePixel = 0; div.Parent = frame
+    do local g = Instance.new("UIGradient"); g.Color = ColorSequence.new(theme.Accent, theme.Accent); g.Transparency = NumberSequence.new(0.2, 0.85); g.Parent = div end
+
+    -- Content area (paged)
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Name = "PagedContent"
+    contentFrame.Position = UDim2.new(0, 13, 0, 72)
+    contentFrame.Size = UDim2.new(1, -128, 1, -86)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.ZIndex = 2
+    contentFrame.Parent = frame
+    self.ContentFrame = contentFrame
+
+    -- Side tab rail
+    local tabRail = Instance.new("Frame"); tabRail.Name = "TabRail"; tabRail.ZIndex = 8
+    tabRail.Position = UDim2.new(1, -100, 0, 72); tabRail.Size = UDim2.new(0, 88, 1, -86)
+    tabRail.BackgroundTransparency = 1; tabRail.Parent = frame
+    self.TabRail = tabRail
+    local tabBg = Instance.new("Frame"); tabBg.Size = UDim2.new(1, 0, 1, 0); tabBg.BackgroundColor3 = Color3.fromRGB(5, 5, 7)
+    tabBg.BackgroundTransparency = 0.15; tabBg.BorderSizePixel = 0; tabBg.Parent = tabRail
+    Instance.new("UICorner", tabBg).CornerRadius = UDim.new(0, 10)
+
+    -- Tab highlight (animated)
+    local tabHL = Instance.new("Frame"); tabHL.ZIndex = 8; tabHL.Size = UDim2.new(0.999991, 0, 0, 30)
+    tabHL.BackgroundColor3 = theme.Accent; tabHL.BackgroundTransparency = 0.82; tabHL.BorderSizePixel = 0; tabHL.Parent = tabRail
+    Instance.new("UICorner", tabHL).CornerRadius = UDim.new(0, 7)
+    do local s = Instance.new("UIStroke"); s.Color = theme.Accent; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = tabHL end
+    self.TabHL = tabHL
+
+    -- Notification frame
+    local notifFrame = Instance.new("Frame"); notifFrame.Position = UDim2.new(1, -262, 1, -396)
+    notifFrame.Size = UDim2.new(0, 250, 0, 380); notifFrame.BackgroundTransparency = 1; notifFrame.Parent = gui
+    do local l = Instance.new("UIListLayout"); l.Padding = UDim.new(0, 8); l.VerticalAlignment = Enum.VerticalAlignment.Bottom; l.SortOrder = Enum.SortOrder.LayoutOrder; l.Parent = notifFrame end
+    self.NotifFrame = notifFrame
+
+    -- Minimized pill
+    local minPill = Instance.new("Frame"); minPill.Visible = false; minPill.Active = true; minPill.ZIndex = 40
+    minPill.Position = UDim2.new(0, 24, 0.35, 0); minPill.Size = UDim2.new(0, 140, 0, 40)
+    minPill.BackgroundColor3 = Color3.fromRGB(5, 5, 7); minPill.BackgroundTransparency = 0.02; minPill.BorderSizePixel = 0; minPill.Parent = gui
+    Instance.new("UICorner", minPill).CornerRadius = UDim.new(0, 12)
+    do
+        local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(55, 57, 63); s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Transparency = 0.55; s.Parent = minPill
+        local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 1, 0); l.BackgroundTransparency = 1; l.Text = title; l.TextColor3 = theme.Accent; l.TextSize = 14; l.Font = Enum.Font.GothamBlack; l.Parent = minPill
+        local b = Instance.new("TextButton"); b.ZIndex = 41; b.Size = UDim2.new(1, 0, 1, 0); b.BackgroundTransparency = 1; b.Text = ""; b.AutoButtonColor = false; b.Parent = minPill
+        b.MouseButton1Click:Connect(function() minPill.Visible = false; frame.Visible = true end)
+    end
+    self.MinPill = minPill
+
+    -- Tab switching
+    self.CurrentTab = nil
+    function self:SwitchTab(name)
+        if self.CurrentTab == name then return end
+        self.CurrentTab = name
+        for tabName, tab in pairs(self.Tabs) do tab.Page.Visible = (tabName == name) end
+        for tabName, btn in pairs(self.TabButtons) do
+            local act = (tabName == name)
+            btn.TextColor3 = act and theme.TEXT_WHITE or theme.TEXT_DIM
+            btn.BackgroundTransparency = act and 0 or 0.28
+            local st = btn:FindFirstChildOfClass("UIStroke")
+            if st then st.Color = act and theme.Accent or theme.CARD_STROKE end
+        end
+        local ab = self.TabButtons[name]
+        if ab then
+            TweenService:Create(tabHL, TWEEN_MED, { Position = UDim2.new(ab.Position.X.Scale, ab.Position.X.Offset, ab.Position.Y.Scale, ab.Position.Y.Offset) }):Play()
+        end
+    end
+
+    -- Minimize
+    local function minimize() frame.Visible = false; minPill.Visible = true end
+    minBtn.MouseButton1Click:Connect(minimize)
+    self.Minimize = minimize
+    self.Restore = function() minPill.Visible = false; frame.Visible = true end
+    self.Toggle = function()
+        if frame.Visible then minimize() else minPill.Visible = false; frame.Visible = true end
+    end
+
+    -- Dragging
+    H.makeDrag(header, frame)
+    H.makeDrag(minPill, minPill)
+
+    -- Hide/show toggle key
+    UserInputService.InputBegan:Connect(function(inp, gpe)
+        if gpe then return end
+        if inp.UserInputType == Enum.UserInputType.Keyboard and inp.KeyCode == toggleKey and not KeyListen.active then
+            self:Toggle()
+        end
+    end)
+
+    -- Intro animation
+    frame.BackgroundTransparency = 1
+    frame.Size = UDim2.new(0, width, 0, 0)
+    task.defer(function()
+        TweenService:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(width, height), BackgroundTransparency = 0
+        }):Play()
+    end)
+
+    return self
+end
+
+--// Create a tab on the window (auto-positioned in side rail)
+function Window:CreateTab(name, tabText)
+    tabText = tabText or name
+    local order = #self.Tabs + 1
+    local tab = Tab.new(self, name, order, order == 1)
+    self.Tabs[name] = tab
+
+    -- Tab button in rail
+    local btn = Instance.new("TextButton")
+    btn.Name = "Tab_" .. name
+    btn.ZIndex = 9
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.Position = UDim2.new(0, 0, 0, (order - 1) * 40)
+    btn.BackgroundColor3 = Color3.fromRGB(18, 19, 23)
+    btn.BackgroundTransparency = (order == 1) and 0 or 0.28
+    btn.BorderSizePixel = 0
+    btn.Text = tabText
+    btn.TextColor3 = (order == 1) and self.Theme.TEXT_WHITE or self.Theme.TEXT_DIM
+    btn.TextSize = 9
+    btn.Font = Enum.Font.GothamBold
+    btn.AutoButtonColor = false
+    btn.Parent = self.TabRail
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+    local s = Instance.new("UIStroke"); s.Color = (order == 1) and self.Theme.Accent or self.Theme.CARD_STROKE
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Transparency = 0.25; s.Parent = btn
+    self.TabButtons[name] = btn
+
+    btn.MouseButton1Click:Connect(function() self:SwitchTab(name) end)
+
+    if order == 1 then
+        self.CurrentTab = name
+        self.TabHL.Position = btn.Position
+    end
+    return tab
+end
+
+--// Notification (per-window, but Library:Notify uses first window or global)
+function Window:Notify(text, duration)
+    duration = duration or 3
+    local theme = self.Theme
+    local n = Instance.new("Frame"); n.Size = UDim2.new(1, 0, 0, 36); n.BackgroundColor3 = Color3.fromRGB(5, 5, 7); n.BackgroundTransparency = 0.05; n.BorderSizePixel = 0; n.Parent = self.NotifFrame
+    Instance.new("UICorner", n).CornerRadius = UDim.new(0, 10)
+    local ns = Instance.new("UIStroke"); ns.Color = theme.Accent; ns.Transparency = 0.5; ns.Parent = n
+    local nl = Instance.new("TextLabel"); nl.Size = UDim2.new(1, -16, 1, 0); nl.Position = UDim2.new(0, 8, 0, 0)
+    nl.BackgroundTransparency = 1; nl.Text = text; nl.TextColor3 = theme.TEXT_PRIMARY; nl.TextSize = 11; nl.Font = Enum.Font.GothamBold
+    nl.TextXAlignment = Enum.TextXAlignment.Left; nl.Parent = n
+    task.delay(duration, function()
+        TweenService:Create(n, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(nl, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+        TweenService:Create(ns, TweenInfo.new(0.4), { Transparency = 1 }):Play()
+        task.delay(0.45, function() n:Destroy() end)
+    end)
+end
+
+--// Global notify (attaches to most recently created window, or creates one)
+Library._windows = {}
+function Library:Notify(text, duration)
+    local w = self._windows[#self._windows]
+    if w then w:Notify(text, duration) end
+end
+
+local origCreateWindow = Library.CreateWindow
+function Library:CreateWindow(opts)
+    local w = origCreateWindow(self, opts)
+    table.insert(self._windows, w)
+    return w
+end
+
+return Library
