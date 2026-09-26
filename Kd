@@ -1,0 +1,571 @@
+--[[
+    NOSSX HUB UI Library
+    สำหรับสร้าง UI Hub ใน Roblox ตามรูปแบบของ NOSSX HUB
+    ใช้ได้กับ LocalScript หรือ Script ที่อยู่ใน StarterPlayer > StarterCharacterScripts
+]]
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local NossxUI = {}
+NossxUI.__index = NossxUI
+
+-- สีที่ใช้ในการสร้าง UI (จับคู่จากรูปต้นฉบับ)
+local COLORS = {
+    DarkRed = Color3.fromRGB(30, 8, 10),        -- พื้นหลังหลัก
+    PanelRed = Color3.fromRGB(45, 14, 16),      -- พื้นหลัง panel เข้มกว่านิด
+    HeaderRed = Color3.fromRGB(20, 5, 7),       -- title bar เข้มสุด
+    ActiveRed = Color3.fromRGB(80, 20, 22),     -- แถบเมนูที่ถูกเลือก (Main)
+    BrightRed = Color3.fromRGB(200, 45, 45),    -- ตัวอักษร/เส้นแดงสว่าง
+    LineRed = Color3.fromRGB(90, 25, 28),       -- เส้นแบ่งจางๆ
+    White = Color3.fromRGB(240, 240, 240),
+    Gray = Color3.fromRGB(140, 130, 130),
+    DarkGray = Color3.fromRGB(90, 85, 85),
+    Green = Color3.fromRGB(60, 210, 110),
+    Black = Color3.fromRGB(0, 0, 0),
+    Gold = Color3.fromRGB(230, 200, 150),
+}
+
+-- ฟังก์ชันสร้าง Hub UI
+function NossxUI.new(title, version)
+    local self = setmetatable({}, NossxUI)
+    
+    self.title = title or "NOSSX HUB"
+    self.version = version or "V2.0"
+    self.isOpen = true
+    self.isDragging = false
+    self.dragStart = Vector2.new(0, 0)
+    self.toggleOptions = {}
+    self.menuButtons = {}
+    self.currentSelectedMenu = nil
+    
+    self:CreateMainUI()
+    
+    return self
+end
+
+-- สร้าง Main UI Container
+function NossxUI:CreateMainUI()
+    local player = Players.LocalPlayer
+    local playerGui = player:WaitForChild("PlayerGui")
+    
+    -- Main Screen GUI
+    self.ScreenGui = Instance.new("ScreenGui")
+    self.ScreenGui.Name = "NossxHubUI"
+    self.ScreenGui.ResetOnSpawn = false
+    self.ScreenGui.Parent = playerGui
+    
+    -- Main Frame
+    self.MainFrame = Instance.new("Frame")
+    self.MainFrame.Name = "MainFrame"
+    self.MainFrame.Size = UDim2.new(0, 550, 0, 420)
+    self.MainFrame.Position = UDim2.new(0.5, -275, 0.5, -210)
+    self.MainFrame.BackgroundColor3 = COLORS.DarkRed
+    self.MainFrame.BorderSizePixel = 0
+    self.MainFrame.ClipsDescendants = true
+    self.MainFrame.Parent = self.ScreenGui
+    
+    -- Corner Radius
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = self.MainFrame
+    
+    -- Title Bar
+    self:CreateTitleBar()
+    
+    -- Left Sidebar
+    self:CreateLeftSidebar()
+    
+    -- Right Settings Panel
+    self:CreateSettingsPanel()
+    
+    -- Close button
+    self:CreateCloseButton()
+    
+    -- Make draggable
+    self:MakeDraggable()
+end
+
+-- สร้าง Title Bar
+function NossxUI:CreateTitleBar()
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1, 0, 0, 48)
+    titleBar.BackgroundColor3 = COLORS.HeaderRed
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = self.MainFrame
+    
+    -- Title Text (สีขาวอมชมพูอ่อน ตัวหนา)
+    local titleText = Instance.new("TextLabel")
+    titleText.Name = "TitleText"
+    titleText.Size = UDim2.new(0, 180, 0, 20)
+    titleText.Position = UDim2.new(0, 14, 0, 7)
+    titleText.BackgroundTransparency = 1
+    titleText.TextColor3 = Color3.fromRGB(235, 200, 200)
+    titleText.TextSize = 18
+    titleText.Font = Enum.Font.GothamBold
+    titleText.Text = self.title
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    titleText.Parent = titleBar
+    
+    -- Version Text (V2.0)
+    local versionText = Instance.new("TextLabel")
+    versionText.Name = "VersionText"
+    versionText.Size = UDim2.new(0, 80, 0, 14)
+    versionText.Position = UDim2.new(0, 14, 0, 26)
+    versionText.BackgroundTransparency = 1
+    versionText.TextColor3 = COLORS.BrightRed
+    versionText.TextSize = 10
+    versionText.Font = Enum.Font.Gotham
+    versionText.Text = self.version
+    versionText.TextXAlignment = Enum.TextXAlignment.Left
+    versionText.Parent = titleBar
+    
+    -- Ping Text
+    local pingText = Instance.new("TextLabel")
+    pingText.Name = "PingText"
+    pingText.Size = UDim2.new(0, 90, 0, 16)
+    pingText.Position = UDim2.new(0, 210, 0, 16)
+    pingText.BackgroundTransparency = 1
+    pingText.TextColor3 = COLORS.BrightRed
+    pingText.TextSize = 12
+    pingText.Font = Enum.Font.Gotham
+    pingText.Text = "Ping: 90ms"
+    pingText.TextXAlignment = Enum.TextXAlignment.Left
+    pingText.Parent = titleBar
+    
+    -- FPS Text
+    local fpsText = Instance.new("TextLabel")
+    fpsText.Name = "FpsText"
+    fpsText.Size = UDim2.new(0, 70, 0, 16)
+    fpsText.Position = UDim2.new(0, 310, 0, 16)
+    fpsText.BackgroundTransparency = 1
+    fpsText.TextColor3 = COLORS.BrightRed
+    fpsText.TextSize = 12
+    fpsText.Font = Enum.Font.Gotham
+    fpsText.Text = "FPS: 41"
+    fpsText.TextXAlignment = Enum.TextXAlignment.Left
+    fpsText.Parent = titleBar
+    
+    -- Minimize Button ("-")
+    local minimizeButton = Instance.new("TextButton")
+    minimizeButton.Name = "MinimizeButton"
+    minimizeButton.Size = UDim2.new(0, 26, 0, 22)
+    minimizeButton.Position = UDim2.new(1, -58, 0, 13)
+    minimizeButton.BackgroundTransparency = 1
+    minimizeButton.TextColor3 = COLORS.White
+    minimizeButton.TextSize = 16
+    minimizeButton.Font = Enum.Font.GothamBold
+    minimizeButton.Text = "-"
+    minimizeButton.Parent = titleBar
+    
+    minimizeButton.MouseButton1Click:Connect(function()
+        self:ToggleMinimize()
+    end)
+    
+    -- Update FPS every second
+    local lastUpdate = tick()
+    local frameCount = 0
+    RunService.RenderStepped:Connect(function()
+        frameCount = frameCount + 1
+        local currentTime = tick()
+        if currentTime - lastUpdate >= 1 then
+            fpsText.Text = "FPS: " .. frameCount
+            frameCount = 0
+            lastUpdate = currentTime
+        end
+    end)
+    
+    self.TitleBar = titleBar
+end
+
+-- Toggle minimize (ย่อ/ขยาย content ส่วนล่าง title bar)
+function NossxUI:ToggleMinimize()
+    self.Sidebar.Visible = not self.Sidebar.Visible
+    self.SettingsPanel.Visible = not self.SettingsPanel.Visible
+end
+
+-- สร้าง Left Sidebar
+function NossxUI:CreateLeftSidebar()
+    local sidebar = Instance.new("Frame")
+    sidebar.Name = "Sidebar"
+    sidebar.Size = UDim2.new(0, 128, 1, -48)
+    sidebar.Position = UDim2.new(0, 0, 0, 48)
+    sidebar.BackgroundColor3 = COLORS.DarkRed
+    sidebar.BorderSizePixel = 0
+    sidebar.Parent = self.MainFrame
+    
+    -- เส้นแบ่งด้านขวาของ sidebar
+    local rightLine = Instance.new("Frame")
+    rightLine.Size = UDim2.new(0, 1, 1, 0)
+    rightLine.Position = UDim2.new(1, -1, 0, 0)
+    rightLine.BackgroundColor3 = COLORS.LineRed
+    rightLine.BorderSizePixel = 0
+    rightLine.Parent = sidebar
+    
+    -- Menu Items (icon แบบ text ให้ใกล้เคียงรูปมากที่สุด: วงกลม, คลื่นสัญญาณ, กากบาทในกรอบ, กากบาทในกรอบ)
+    local menuItems = {
+        {icon = "◉", name = "Info"},
+        {icon = "∿", name = "Main"},
+        {icon = "✕", name = "Teleport"},
+        {icon = "✕", name = "Bonus"},
+    }
+    
+    for i, item in ipairs(menuItems) do
+        self:CreateMenuButton(sidebar, item.name, item.icon, (i-1) * 42, i)
+    end
+    
+    -- ตั้งค่าเริ่มต้นให้ "Main" เป็นเมนูที่ถูกเลือก (ตามรูป)
+    self.currentSelectedMenu = "Main"
+    
+    -- User Profile
+    self:CreateUserProfile(sidebar)
+    
+    self.Sidebar = sidebar
+end
+
+-- สร้าง Menu Button
+function NossxUI:CreateMenuButton(parent, name, icon, offsetY, index)
+    local isActive = (name == "Main")
+    
+    local button = Instance.new("TextButton")
+    button.Name = name .. "Button"
+    button.Size = UDim2.new(1, 0, 0, 38)
+    button.Position = UDim2.new(0, 0, 0, offsetY + 6)
+    button.BackgroundColor3 = isActive and COLORS.ActiveRed or COLORS.DarkRed
+    button.BackgroundTransparency = isActive and 0 or 1
+    button.TextColor3 = isActive and COLORS.White or COLORS.BrightRed
+    button.TextSize = 12
+    button.Font = isActive and Enum.Font.GothamBold or Enum.Font.Gotham
+    button.Text = "   " .. icon .. "   " .. name
+    button.TextXAlignment = Enum.TextXAlignment.Left
+    button.BorderSizePixel = 0
+    button.AutoButtonColor = false
+    button.Parent = parent
+    
+    -- เส้นบาง ๆ ใต้แต่ละแถวเมนู
+    local underline = Instance.new("Frame")
+    underline.Size = UDim2.new(1, -16, 0, 1)
+    underline.Position = UDim2.new(0, 8, 1, -1)
+    underline.BackgroundColor3 = COLORS.LineRed
+    underline.BorderSizePixel = 0
+    underline.Parent = button
+    
+    button.MouseButton1Click:Connect(function()
+        -- reset ปุ่มเก่า
+        for _, btnData in ipairs(self.menuButtons) do
+            btnData.button.BackgroundTransparency = 1
+            btnData.button.TextColor3 = COLORS.BrightRed
+            btnData.button.Font = Enum.Font.Gotham
+        end
+        
+        -- highlight ปุ่มที่เลือก
+        button.BackgroundColor3 = COLORS.ActiveRed
+        button.BackgroundTransparency = 0
+        button.TextColor3 = COLORS.White
+        button.Font = Enum.Font.GothamBold
+        
+        self.currentSelectedMenu = name
+        if self.onMenuSelected then
+            self.onMenuSelected(name)
+        end
+    end)
+    
+    table.insert(self.menuButtons, {button = button, name = name})
+end
+
+-- สร้าง User Profile Section
+function NossxUI:CreateUserProfile(parent)
+    local profileFrame = Instance.new("Frame")
+    profileFrame.Name = "ProfileFrame"
+    profileFrame.Size = UDim2.new(1, 0, 0, 56)
+    profileFrame.Position = UDim2.new(0, 0, 1, -56)
+    profileFrame.BackgroundColor3 = COLORS.DarkRed
+    profileFrame.BorderSizePixel = 0
+    profileFrame.Parent = parent
+    
+    -- เส้นแบ่งด้านบน
+    local divider = Instance.new("Frame")
+    divider.Size = UDim2.new(1, 0, 0, 1)
+    divider.BackgroundColor3 = COLORS.LineRed
+    divider.BorderSizePixel = 0
+    divider.Parent = profileFrame
+    
+    -- Profile Image Placeholder (วงกลม avatar สีอ่อน)
+    local profileImage = Instance.new("Frame")
+    profileImage.Name = "ProfileImage"
+    profileImage.Size = UDim2.new(0, 36, 0, 36)
+    profileImage.Position = UDim2.new(0, 8, 0, 10)
+    profileImage.BackgroundColor3 = Color3.fromRGB(210, 200, 195)
+    profileImage.BorderSizePixel = 0
+    profileImage.Parent = profileFrame
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = profileImage
+    
+    local profileText = Instance.new("TextLabel")
+    profileText.Name = "ProfileText"
+    profileText.Size = UDim2.new(1, 0, 1, 0)
+    profileText.BackgroundTransparency = 1
+    profileText.TextColor3 = COLORS.DarkRed
+    profileText.TextSize = 16
+    profileText.Font = Enum.Font.GothamBold
+    profileText.Text = "😊"
+    profileText.Parent = profileImage
+    
+    -- Username
+    local usernameText = Instance.new("TextLabel")
+    usernameText.Name = "UsernameText"
+    usernameText.Size = UDim2.new(1, -70, 0, 16)
+    usernameText.Position = UDim2.new(0, 50, 0, 10)
+    usernameText.BackgroundTransparency = 1
+    usernameText.TextColor3 = COLORS.White
+    usernameText.TextSize = 12
+    usernameText.Font = Enum.Font.GothamBold
+    usernameText.Text = "nossx00..."
+    usernameText.TextXAlignment = Enum.TextXAlignment.Left
+    usernameText.TextTruncate = Enum.TextTruncate.AtEnd
+    usernameText.Parent = profileFrame
+    
+    -- Subtitle เล็ก ๆ ใต้ชื่อ
+    local statusText = Instance.new("TextLabel")
+    statusText.Name = "StatusText"
+    statusText.Size = UDim2.new(1, -70, 0, 14)
+    statusText.Position = UDim2.new(0, 50, 0, 28)
+    statusText.BackgroundTransparency = 1
+    statusText.TextColor3 = COLORS.Gray
+    statusText.TextSize = 9
+    statusText.Font = Enum.Font.Gotham
+    statusText.Text = "nossx boffer"
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    statusText.Parent = profileFrame
+    
+    -- ลูกศร ">" ด้านขวาสุด
+    local arrowText = Instance.new("TextLabel")
+    arrowText.Name = "ArrowText"
+    arrowText.Size = UDim2.new(0, 16, 1, 0)
+    arrowText.Position = UDim2.new(1, -20, 0, 0)
+    arrowText.BackgroundTransparency = 1
+    arrowText.TextColor3 = COLORS.BrightRed
+    arrowText.TextSize = 12
+    arrowText.Font = Enum.Font.GothamBold
+    arrowText.Text = ">"
+    arrowText.Parent = profileFrame
+end
+
+-- สร้าง Settings Panel
+function NossxUI:CreateSettingsPanel()
+    local settingsPanel = Instance.new("ScrollingFrame")
+    settingsPanel.Name = "SettingsPanel"
+    settingsPanel.Size = UDim2.new(1, -128, 1, -48)
+    settingsPanel.Position = UDim2.new(0, 128, 0, 48)
+    settingsPanel.BackgroundColor3 = COLORS.DarkRed
+    settingsPanel.BorderSizePixel = 0
+    settingsPanel.ScrollBarThickness = 6
+    settingsPanel.ScrollBarImageColor3 = COLORS.BrightRed
+    settingsPanel.CanvasSize = UDim2.new(1, 0, 0, 0)
+    settingsPanel.TopImage = ""
+    settingsPanel.BottomImage = ""
+    settingsPanel.MidImage = ""
+    settingsPanel.Parent = self.MainFrame
+    
+    -- List Layout
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 3)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = settingsPanel
+    
+    -- Update canvas size
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        settingsPanel.CanvasSize = UDim2.new(1, 0, 0, layout.AbsoluteContentSize.Y + 5)
+    end)
+    
+    self.SettingsPanel = settingsPanel
+    self.SettingsLayout = layout
+end
+
+-- Add Toggle Option
+function NossxUI:AddToggle(name, defaultState, callback)
+    local toggleOption = Instance.new("Frame")
+    toggleOption.Name = name .. "Toggle"
+    toggleOption.Size = UDim2.new(1, -20, 0, 54)
+    toggleOption.BackgroundTransparency = 1
+    toggleOption.LayoutOrder = #self.toggleOptions + 1
+    toggleOption.Parent = self.SettingsPanel
+    
+    -- เส้นแบ่งด้านล่างของแต่ละแถว (จางๆ)
+    local rowDivider = Instance.new("Frame")
+    rowDivider.Size = UDim2.new(1, 0, 0, 1)
+    rowDivider.Position = UDim2.new(0, 0, 1, -1)
+    rowDivider.BackgroundColor3 = COLORS.LineRed
+    rowDivider.BackgroundTransparency = 0.3
+    rowDivider.BorderSizePixel = 0
+    rowDivider.Parent = toggleOption
+    
+    -- Label
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Size = UDim2.new(0.65, -5, 1, -1)
+    label.Position = UDim2.new(0, 4, 0, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = COLORS.White
+    label.TextSize = 13
+    label.Font = Enum.Font.GothamBold
+    label.Text = name
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.Parent = toggleOption
+    
+    -- Toggle Button Background
+    local toggleButton = Instance.new("Frame")
+    toggleButton.Name = "ToggleButton"
+    toggleButton.Size = UDim2.new(0, 40, 0, 20)
+    toggleButton.Position = UDim2.new(1, -46, 0.5, -11)
+    toggleButton.BackgroundColor3 = defaultState and COLORS.Green or COLORS.DarkGray
+    toggleButton.BorderSizePixel = 0
+    toggleButton.Parent = toggleOption
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = toggleButton
+    
+    -- Circle indicator
+    local circle = Instance.new("Frame")
+    circle.Name = "Circle"
+    circle.Size = UDim2.new(0, 16, 0, 16)
+    circle.Position = defaultState and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    circle.BackgroundColor3 = COLORS.White
+    circle.BorderSizePixel = 0
+    circle.Parent = toggleButton
+    
+    local circleCorner = Instance.new("UICorner")
+    circleCorner.CornerRadius = UDim.new(1, 0)
+    circleCorner.Parent = circle
+    
+    -- ใช้ table เก็บ state เพื่อให้ GetToggleState อ่านค่าล่าสุดได้เสมอ
+    local toggleData = {name = name, button = toggleButton, state = defaultState}
+    
+    -- Make toggle button clickable
+    local clickButton = Instance.new("TextButton")
+    clickButton.Name = "ClickButton"
+    clickButton.Size = UDim2.new(1, 0, 1, 0)
+    clickButton.BackgroundTransparency = 1
+    clickButton.TextTransparency = 1
+    clickButton.BorderSizePixel = 0
+    clickButton.Parent = toggleButton
+    
+    clickButton.MouseButton1Click:Connect(function()
+        toggleData.state = not toggleData.state
+        
+        -- Animate
+        toggleButton.BackgroundColor3 = toggleData.state and COLORS.Green or COLORS.DarkGray
+        
+        local tweenInfo = TweenInfo.new(0.15)
+        local tween = game:GetService("TweenService"):Create(
+            circle,
+            tweenInfo,
+            {Position = toggleData.state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)}
+        )
+        tween:Play()
+        
+        if callback then
+            callback(toggleData.state)
+        end
+    end)
+    
+    table.insert(self.toggleOptions, toggleData)
+    
+    return toggleButton
+end
+
+-- Make GUI draggable
+function NossxUI:MakeDraggable()
+    local dragging = false
+    local dragInput = nil
+    local dragStart = nil
+    local startPos = nil
+    
+    self.TitleBar.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = self.MainFrame.Position
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input, gameProcessed)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            self.MainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if input == dragInput then
+            dragging = false
+        end
+    end)
+end
+
+-- Create Close Button
+function NossxUI:CreateCloseButton()
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "CloseButton"
+    closeButton.Size = UDim2.new(0, 24, 0, 22)
+    closeButton.Position = UDim2.new(1, -28, 0, 13)
+    closeButton.BackgroundTransparency = 1
+    closeButton.TextColor3 = COLORS.White
+    closeButton.TextSize = 15
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.Text = "x"
+    closeButton.BorderSizePixel = 0
+    closeButton.Parent = self.MainFrame
+    
+    closeButton.MouseButton1Click:Connect(function()
+        self:Close()
+    end)
+    
+    closeButton.MouseEnter:Connect(function()
+        closeButton.TextColor3 = COLORS.BrightRed
+    end)
+    
+    closeButton.MouseLeave:Connect(function()
+        closeButton.TextColor3 = COLORS.White
+    end)
+end
+
+-- Close the UI
+function NossxUI:Close()
+    self.ScreenGui:Destroy()
+end
+
+-- Toggle visibility
+function NossxUI:ToggleVisibility()
+    self.MainFrame.Visible = not self.MainFrame.Visible
+end
+
+-- Get toggle state
+function NossxUI:GetToggleState(name)
+    for _, toggle in ipairs(self.toggleOptions) do
+        if toggle.name == name then
+            return toggle.state
+        end
+    end
+    return nil
+end
+
+-- Set menu selected callback
+function NossxUI:OnMenuSelected(callback)
+    self.onMenuSelected = callback
+end
+
+return NossxUI
