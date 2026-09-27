@@ -1,0 +1,965 @@
+--[[
+================================================================================
+  Supremacy UI Library  (สกัดและ Refactor จากสคริปต์ Supremacy Hub)
+--------------------------------------------------------------------------------
+  แยกส่วน UI ออกมาจากสคริปต์เดิม ให้กลายเป็น Library ที่เรียกใช้ซ้ำได้
+  รักษาโครงสร้างเดิม แต่ปรับเป็น Dark Theme (พื้นหลังสีดำ):
+    - หน้าต่างพื้นหลังสีดำ (Frame มน + ขอบบาง)
+    - ตัวอักษรสีขาว/เทาอ่อน  Font Gotham
+    - Toggle pill สีขาวตอน ON  (ลูกกลิ้งเลื่อนขวา)
+    - Slider พร้อมกล่องใส่ตัวเลข  (คั่นหลักพันด้วย ,)
+    - Dropdown popup สีเข้ม
+    - Color Picker popup ธีมมืด 12 สี พร้อม Save/Cancel
+    - Open Button (รูปภาพ) ลากได้  คลิกเปิด/ปิดเมนู
+    - Minimize / Close  ปุ่มสีแดง  Discord (ปรับแต่งได้)
+    - Header ลากหน้าต่างได้ (เพิ่มเติมจากของเดิม)
+
+  วิธีใช้:
+    local Library = loadstring(game:HttpGet("URL ของไฟล์นี้"))()
+    local Window = Library:CreateWindow({ Name = "My Hub" })
+    local Tab = Window:Tab("AimBot")
+    Tab:Toggle({ Name = "Silent Aim", Default = false, Callback = function(v) end })
+    Tab:Slider({ Name = "FOV Size", Min = 0, Max = 100, Default = 50, Callback = function(v) end })
+    Tab:Dropdown({ Name = "Aim Part", Options = {"Head","Torso","Leg"}, Default = "Head", Callback = function(v) end })
+    Tab:ToggleColor({ Name = "ESP Box", Default = false, DefaultColor = Color3.fromHex("#222222"), Callback = function(v) end, ColorCallback = function(c) end })
+    Tab:Button({ Name = "Execute", Callback = function() end })
+    Tab:Keybind({ Name = "Aim Key", Default = Enum.KeyCode.X, Callback = function(key) end })
+    Tab:Label("ข้อความธรรมดา")
+    Window:Notify("Hello!")
+================================================================================
+]]
+
+local Library = {}
+Library.__index = Library
+
+-- Services ---------------------------------------------------------------------
+local Players           = game:GetService("Players")
+local TweenService      = game:GetService("TweenService")
+local UserInputService  = game:GetService("UserInputService")
+local CoreGui           = game:GetService("CoreGui")
+
+local player = Players.LocalPlayer
+if not player then
+	Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+	player = Players.LocalPlayer
+end
+repeat task.wait() until player and player.Parent
+
+-- ธีมสี (Dark Theme — พื้นหลังสีดำ) ---------------------------------------------
+local Theme = {
+	Text          = Color3.fromRGB(235, 235, 235), -- ตัวอักษรหลัก (บนพื้นดำ)
+	TextDim       = Color3.fromRGB(150, 150, 155), -- ตัวอักษรจาง
+	TextSelected  = Color3.fromRGB(255, 255, 255), -- tab ที่เลือก
+	Accent        = Color3.fromRGB(255, 255, 255), -- TOGGLE_ON (ลูกกลิ้ง/ปุ่มตอนเปิด)
+	Red           = Color3.fromRGB(230, 70, 70),   -- RED_BTN (ปิด/ย่อ)
+	ToggleBg      = Color3.fromRGB(55, 55, 60),    -- พื้นหลัง pill ตอน off
+	BallOff       = Color3.fromRGB(110, 110, 115), -- ลูกกลิ้งตอน off
+	ValueBox      = Color3.fromRGB(45, 45, 50),    -- กล่องตัวเลข / ปุ่มเลือก
+	DropdownBg    = Color3.fromRGB(20, 20, 23),    -- พื้นหลัง dropdown
+	OptionNormal  = Color3.fromRGB(45, 45, 50),    -- ตัวเลือกธรรมดา
+	OptionSelected= Color3.fromRGB(85, 85, 95),    -- ตัวเลือกที่เลือก
+	WindowBg      = Color3.fromRGB(16, 16, 18),    -- พื้นหลังหน้าต่าง (สีดำ)
+	White         = Color3.fromRGB(255, 255, 255),
+	Font          = Enum.Font.Gotham,
+	FontBold      = Enum.Font.GothamBold,
+}
+
+-- Asset IDs จากสคริปต์เดิม (ปรับแต่งได้ตอน CreateWindow) ------------------------
+local DEFAULT_ASSETS = {
+	OpenButton       = "rbxassetid://128357067597318",
+	WindowBackground = "rbxassetid://137715018178430",
+	Discord          = "rbxassetid://100811421674645",
+}
+
+-- Helper: สร้าง Instance พร้อมเซต property ทีเดียว --------------------------------
+local function Create(class, props)
+	local obj = Instance.new(class)
+	for k, v in pairs(props or {}) do obj[k] = v end
+	return obj
+end
+
+-- Helper: ปกป้อง ScreenGui (gethui / syn.protect_gui / CoreGui / PlayerGui) -----
+local function ProtectGui(gui)
+	pcall(function()
+		if syn and syn.protect_gui then
+			syn.protect_gui(gui)
+			gui.Parent = CoreGui
+		elseif gethui then
+			gui.Parent = gethui()
+		else
+			gui.Parent = CoreGui
+		end
+	end)
+	if not gui.Parent then
+		gui.Parent = player:WaitForChild("PlayerGui")
+	end
+end
+
+-- Helper: ทำให้ GuiObject ลากได้ (แบบเปิด-ปิด ไม่กระตุก) -------------------------
+local function MakeDraggable(obj, onClicked)
+	local dragging, moved, dragStart, startPos, dragInput = false, false, nil, nil, nil
+	obj.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true; moved = false; dragStart = input.Position; startPos = obj.Position
+		end
+	end)
+	obj.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input == dragInput then
+			local delta = input.Position - dragStart
+			if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then moved = true end
+			obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if dragging and not moved and onClicked then
+				task.spawn(onClicked)
+			end
+			dragging = false
+		end
+	end)
+end
+
+-- Helper: จัดรูปตัวเลขให้มี , คั่นหลักพัน (เหมือนเดิม) -----------------------------
+local function FormatNum(n)
+	local s = tostring(math.floor(n + 0.5))
+	local rev = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if rev:sub(1, 1) == "," then rev = rev:sub(2) end
+	return rev
+end
+
+-- Helper: ตรวจจุดกดอยู่ใน Gui หรือไม่ -------------------------------------------
+local function PointInside(gui, x, y)
+	if not gui or not gui.Visible then return false end
+	local p, s = gui.AbsolutePosition, gui.AbsoluteSize
+	return x >= p.X and x <= p.X + s.X and y >= p.Y and y <= p.Y + s.Y
+end
+
+-- Tween info ที่ใช้บ่อย ----------------------------------------------------------
+local TWEEN_TOGGLE = TweenInfo.new(0.15)
+
+--[[
+  Color Picker popup  (เหมือนเดิม: ขาว 230x185, 12 สี, Save/Cancel)
+  parent = Main frame, anchor = จุดที่ให้ popup โผล่ (ไม่จำเป็น ตรงกลางเสมอ)
+]]
+local function OpenColorPicker(menuFrame, defaultColor, onSave)
+	-- ลบ color menu เก่าถ้ามี
+	for _, c in pairs(menuFrame:GetChildren()) do
+		if c.Name == "ColorMenu" then c:Destroy() end
+	end
+	local selectedColor = defaultColor
+	local frame = Create("Frame", {
+		Name = "ColorMenu",
+		Size = UDim2.new(0, 230, 0, 185),
+		Position = UDim2.new(0.5, -115, 0.5, -92),
+		BackgroundColor3 = Color3.fromRGB(28, 28, 32),
+		BorderSizePixel = 0,
+		ZIndex = 500,
+		Parent = menuFrame,
+	})
+	Create("UIStroke", { Color = Color3.fromRGB(70, 70, 75), Thickness = 1, Parent = frame })
+	Create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 28),
+		BackgroundColor3 = Color3.fromRGB(22, 22, 25),
+		BorderSizePixel = 0,
+		Text = "Pick a Color",
+		TextColor3 = Color3.fromRGB(235, 235, 235),
+		Font = Theme.FontBold,
+		TextSize = 15,
+		ZIndex = 501,
+		Parent = frame,
+	})
+	local colors = {
+		Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 128, 0), Color3.fromRGB(255, 255, 0),
+		Color3.fromRGB(0, 255, 0), Color3.fromHex("#00FAFF"), Color3.fromRGB(80, 160, 255),
+		Color3.fromRGB(200, 80, 255), Color3.fromRGB(255, 255, 255), Color3.fromRGB(0, 0, 0),
+		Color3.fromRGB(120, 120, 120), Color3.fromRGB(255, 105, 180), Color3.fromRGB(255, 20, 147),
+	}
+	local startX, startY, spacing = 19, 36, 34
+	local selectedStroke
+	for i, color in ipairs(colors) do
+		local btn = Create("TextButton", {
+			Size = UDim2.new(0, 30, 0, 30),
+			Position = UDim2.new(0, startX + ((i - 1) % 6) * spacing, 0, startY + math.floor((i - 1) / 6) * 36),
+			BackgroundColor3 = color,
+			Text = "",
+			AutoButtonColor = false,
+			ZIndex = 501,
+			Parent = frame,
+		})
+		local stroke = Create("UIStroke", { Thickness = 2, Color = Color3.fromRGB(50, 50, 50), Parent = btn })
+		if color == defaultColor then
+			selectedStroke = stroke
+			stroke.Color = Color3.fromRGB(30, 30, 30)
+			stroke.Thickness = 3
+		end
+		btn.MouseButton1Click:Connect(function()
+			selectedColor = color
+			if selectedStroke then selectedStroke.Color = Color3.fromRGB(50, 50, 50); selectedStroke.Thickness = 2 end
+			selectedStroke = stroke
+			stroke.Color = Color3.fromRGB(30, 30, 30); stroke.Thickness = 3
+		end)
+	end
+	local save = Create("TextButton", {
+		Size = UDim2.new(0, 90, 0, 28),
+		Position = UDim2.new(0, 20, 1, -38),
+		Text = "Save",
+		Font = Theme.FontBold,
+		TextSize = 13,
+		BackgroundColor3 = Color3.fromRGB(0, 120, 255),
+		TextColor3 = Color3.new(1, 1, 1),
+		AutoButtonColor = false,
+		ZIndex = 501,
+		Parent = frame,
+	})
+	local cancel = Create("TextButton", {
+		Size = UDim2.new(0, 90, 0, 28),
+		Position = UDim2.new(1, -110, 1, -38),
+		Text = "Cancel",
+		Font = Theme.FontBold,
+		TextSize = 13,
+		BackgroundColor3 = Color3.fromRGB(55, 55, 60),
+		TextColor3 = Color3.fromRGB(235, 235, 235),
+		AutoButtonColor = false,
+		ZIndex = 501,
+		Parent = frame,
+	})
+	save.MouseButton1Click:Connect(function()
+		if onSave then pcall(onSave, selectedColor) end
+		frame:Destroy()
+	end)
+	cancel.MouseButton1Click:Connect(function() frame:Destroy() end)
+	return frame
+end
+
+--[[
+  สร้างหน้าต่างหลัก
+  opts = {
+    Name = "ชื่อหัวข้อ",
+    Size = UDim2.new(0,500,0,295),        -- (ค่าเริ่มต้นเหมือนเดิม)
+    Position = UDim2.new(0.5,-250,0.5,-147),
+    Assets = { OpenButton=..., WindowBackground=..., Discord=... },
+    DiscordLink = "https://discord.gg/...", -- ใส่ถ้าต้องการปุ่ม Discord
+    ToggleKey = Enum.KeyCode.RightShift,    -- พิมพ์ลัดเปิด/ปิดเมนู (optional)
+  }
+]]
+function Library:CreateWindow(opts)
+	opts = opts or {}
+	local assets = {}
+	for k, v in pairs(DEFAULT_ASSETS) do assets[k] = (opts.Assets and opts.Assets[k]) or v end
+
+	local self = setmetatable({}, Library)
+	self.Tabs = {}
+	self.TabButtons = {}
+	self.Pages = {}
+	self.OpenDropdowns = {} -- จัดการ dropdown ที่เปิดอยู่ (ปิดได้ทีเดียว)
+
+	-- ScreenGui ----------------------------------------------------------------
+	local ScreenGui = Create("ScreenGui", {
+		Name = (opts.Name or "Hub") .. "UI",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		IgnoreGuiInset = true,
+		DisplayOrder = 50,
+	})
+	ProtectGui(ScreenGui)
+	self.ScreenGui = ScreenGui
+
+	-- Open Button (ลากได้, คลิกเปิด/ปิด) ---------------------------------------
+	local OpenBtn = Create("ImageButton", {
+		Size = UDim2.new(0, 42, 0, 42),
+		Position = UDim2.new(0, 12, 0, 70),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Image = assets.OpenButton,
+		ScaleType = Enum.ScaleType.Fit,
+		AutoButtonColor = false,
+		Active = true,
+		ZIndex = 15,
+		Parent = ScreenGui,
+	})
+	self.OpenBtn = OpenBtn
+
+	-- Main Frame ---------------------------------------------------------------
+	local Main = Create("Frame", {
+		Name = "Main",
+		Size = opts.Size or UDim2.new(0, 500, 0, 295),
+		Position = opts.Position or UDim2.new(0.5, -250, 0.5, -147),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		ClipsDescendants = true,
+		ZIndex = 20,
+		Parent = ScreenGui,
+	})
+	self.Main = Main
+
+	-- พื้นหลัง: สีดำ (Dark Theme) — Frame มน + ขอบบาง (ไม่ใช้รูปภาพธีมสว่างเดิม)
+	local bgFallback = Create("Frame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Theme.WindowBg,
+		BorderSizePixel = 0,
+		ZIndex = 1,
+		Parent = Main,
+	})
+	Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = bgFallback })
+	Create("UIStroke", { Color = Color3.fromRGB(60, 60, 65), Thickness = 1, Transparency = 0.3, Parent = bgFallback })
+
+	-- Header (ลากหน้าต่างได้ + ชื่อ + Discord + Min + Close) --------------------
+	local Header = Create("Frame", {
+		Size = UDim2.new(1, -50, 0, 26),
+		Position = UDim2.new(0, 32, 0, 8),
+		BackgroundTransparency = 1,
+		ZIndex = 30,
+		Parent = Main,
+	})
+	-- Zone สำหรับลากหน้าต่าง (เฉพาะพื้นที่ว่าง/ตรงชื่อ ใน header — ไม่ทับปุ่ม Discord/Min/Close)
+	-- (แก้บัค: ก่อนหน้านี้ลาก Header ทั้งแถบ ทำให้กดปุ่มปิด/ย่อไม่ได้ หรือหน้าต่างเคลื่อนที่เองตอนกดปุ่ม)
+	local DragZone = Create("TextButton", {
+		Size = UDim2.new(1, -105, 1, 0),
+		Position = UDim2.new(0, 0, 0, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+		ZIndex = 5,
+		Parent = Header,
+	})
+	MakeDraggable(DragZone)
+
+	Create("TextLabel", {
+		Size = UDim2.new(0, 160, 1, 0),
+		BackgroundTransparency = 1,
+		Text = opts.Name or "Hub",
+		Font = Theme.FontBold,
+		TextSize = 15,
+		TextColor3 = Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 31,
+		Parent = Header,
+	})
+
+	-- Notify label (ข้อความลอย เช่น "Discord link copied") ----------------------
+	local NotifyLabel = Create("TextLabel", {
+		Size = UDim2.new(0, 220, 0, 20),
+		Position = UDim2.new(0.5, -110, 0, 8),
+		BackgroundTransparency = 1,
+		Text = "",
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = Theme.White,
+		TextTransparency = 1,
+		TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+		TextStrokeTransparency = 0,
+		ZIndex = 900,
+		Parent = ScreenGui,
+	})
+	function self:Notify(text, duration)
+		NotifyLabel.Text = tostring(text)
+		NotifyLabel.TextTransparency = 0
+		TweenService:Create(NotifyLabel, TweenInfo.new(0.2), { TextTransparency = 0 }):Play()
+		task.delay(duration or 2, function()
+			if NotifyLabel then
+				TweenService:Create(NotifyLabel, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+			end
+		end)
+	end
+
+	-- Discord button (optional) -------------------------------------------------
+	if opts.DiscordLink then
+		local dcCircle = Create("Frame", {
+			Size = UDim2.new(0, 26, 0, 26),
+			Position = UDim2.new(1, -78, 0.5, -13),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.35,
+			BorderSizePixel = 0,
+			ZIndex = 34,
+			Parent = Header,
+		})
+		Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = dcCircle })
+		local dcBtn = Create("ImageButton", {
+			Size = UDim2.new(0, 22, 0, 22),
+			Position = UDim2.new(1, -76, 0.5, -11),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Image = assets.Discord,
+			ImageColor3 = Theme.White,
+			ScaleType = Enum.ScaleType.Fit,
+			AutoButtonColor = true,
+			ZIndex = 40,
+			Parent = Header,
+		})
+		dcBtn.MouseButton1Click:Connect(function()
+			pcall(function()
+				if setclipboard then setclipboard(opts.DiscordLink)
+				elseif toclipboard then toclipboard(opts.DiscordLink)
+				elseif Clipboard and Clipboard.set then Clipboard.set(opts.DiscordLink)
+				end
+			end)
+			self:Notify("Discord link copied")
+		end)
+	end
+
+	-- Min / Close ---------------------------------------------------------------
+	local MinBtn = Create("TextButton", {
+		Size = UDim2.new(0, 22, 0, 22),
+		Position = UDim2.new(1, -46, 0.5, -11),
+		BackgroundTransparency = 1,
+		Text = "-",
+		Font = Theme.FontBold,
+		TextSize = 18,
+		TextColor3 = Theme.Red,
+		ZIndex = 31,
+		Parent = Header,
+	})
+	local CloseBtn = Create("TextButton", {
+		Size = UDim2.new(0, 22, 0, 22),
+		Position = UDim2.new(1, -22, 0.5, -11),
+		BackgroundTransparency = 1,
+		Text = "x",
+		Font = Theme.FontBold,
+		TextSize = 18,
+		TextColor3 = Theme.Red,
+		ZIndex = 31,
+		Parent = Header,
+	})
+	MinBtn.MouseButton1Click:Connect(function() Main.Visible = false end)
+	CloseBtn.MouseButton1Click:Connect(function()
+		ScreenGui:Destroy()
+		if self.OnClose then pcall(self.OnClose) end
+	end)
+
+	-- เปิด/ปิดเมนูด้วย OpenBtn ---------------------------------------------------
+	MakeDraggable(OpenBtn, function()
+		Main.Visible = not Main.Visible
+	end)
+
+	-- พิมพ์ลัดเปิด/ปิด (optional) ------------------------------------------------
+	if opts.ToggleKey then
+		UserInputService.InputBegan:Connect(function(input, gpe)
+			if gpe then return end
+			if input.KeyCode == opts.ToggleKey then
+				Main.Visible = not Main.Visible
+			end
+		end)
+	end
+
+	-- TabsFrame (คอลัมน์ซ้าย) ----------------------------------------------------
+	local TabsFrame = Create("Frame", {
+		Size = UDim2.new(0, 70, 1, -50),
+		Position = UDim2.new(0, 18, 0, 40),
+		BackgroundTransparency = 1,
+		ZIndex = 30,
+		Parent = Main,
+	})
+	Create("UIListLayout", {
+		Padding = UDim.new(0, 5),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Parent = TabsFrame,
+	})
+	self.TabsFrame = TabsFrame
+
+	-- Content (แถบเลื่อนด้านขวา) -------------------------------------------------
+	local Content = Create("ScrollingFrame", {
+		Size = UDim2.new(0, 400, 1, -52),
+		Position = UDim2.new(0, 90, 0, 40),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ClipsDescendants = true,
+		ZIndex = 30,
+		Parent = Main,
+	})
+	Create("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Content })
+	Create("UIPadding", { PaddingRight = UDim.new(0, 16), PaddingBottom = UDim.new(0, 12), Parent = Content })
+	self.Content = Content
+
+	-- ปิด dropdown ตอนเลื่อน / เปลี่ยน tab ---------------------------------------
+	local function CloseAllDropdowns()
+		for _, dd in pairs(self.OpenDropdowns) do
+			pcall(function() dd.Visible = false end)
+		end
+		table.clear(self.OpenDropdowns)
+	end
+	self.CloseAllDropdowns = CloseAllDropdowns
+	Content:GetPropertyChangedSignal("CanvasPosition"):Connect(CloseAllDropdowns)
+
+	-- ปิด dropdown ตอนคลิกข้างนอก ------------------------------------------------
+	UserInputService.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		task.delay(0.12, function()
+			if self._dropIgnoreUntil and tick() < self._dropIgnoreUntil then return end
+			local pos = input.Position
+			local anyOpen = false
+			for _, dd in pairs(self.OpenDropdowns) do if dd.Visible then anyOpen = true end end
+			if not anyOpen then return end
+			for _, dd in pairs(self.OpenDropdowns) do
+				if PointInside(dd, pos.X, pos.Y) then return end
+			end
+			CloseAllDropdowns()
+		end)
+	end)
+
+	-- สร้าง Tab ------------------------------------------------------------------
+	local tabOrder = 0
+	function self:Tab(name)
+		tabOrder = tabOrder + 1
+		local btn = Create("TextButton", {
+			Size = UDim2.new(1, 0, 0, 20),
+			BackgroundTransparency = 1,
+			Text = name,
+			Font = Theme.Font,
+			TextSize = 12,
+			TextColor3 = Theme.TextDim,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			LayoutOrder = tabOrder,
+			ZIndex = 32,
+			Parent = TabsFrame,
+		})
+		self.TabButtons[name] = btn
+
+		local page = Create("Frame", {
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			Visible = (tabOrder == 1),
+			ZIndex = 31,
+			Parent = Content,
+		})
+		Create("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = page })
+		self.Pages[name] = page
+
+		if tabOrder == 1 then btn.TextColor3 = Theme.TextSelected end
+
+		btn.MouseButton1Click:Connect(function()
+			for _, b in pairs(self.TabButtons) do b.TextColor3 = Theme.TextDim end
+			btn.TextColor3 = Theme.TextSelected
+			for n, p in pairs(self.Pages) do p.Visible = (n == name) end
+			pcall(function() Content.CanvasPosition = Vector2.new(0, 0) end)
+			CloseAllDropdowns()
+		end)
+
+		-- Object ของแต่ละ Tab ที่จะ return ออกไป (มี method สร้าง element) --------
+		local Tab = {}
+		Tab.Page = page
+		Tab.Window = self
+
+		-- Toggle (ธรรมดา) ---------------------------------------------------------
+		function Tab:Toggle(o)
+			o = o or {}
+			local row = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, ZIndex = 200, Parent = page })
+			Create("TextLabel", {
+				Size = UDim2.new(1, -50, 1, 0), BackgroundTransparency = 1, Text = o.Name or "Toggle",
+				Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text,
+				TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+				ZIndex = 201, Parent = row,
+			})
+			local toggle = Create("Frame", {
+				Size = UDim2.new(0, 28, 0, 12), Position = UDim2.new(1, -44, 0.5, -6),
+				BackgroundColor3 = Theme.ToggleBg, BorderSizePixel = 0, ZIndex = 202, Parent = row,
+			})
+			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = toggle })
+			local ball = Create("Frame", {
+				Size = UDim2.new(0, 8, 0, 8), Position = UDim2.new(0, 2, 0.5, -4),
+				BackgroundColor3 = Theme.BallOff, BorderSizePixel = 0, ZIndex = 203, Parent = toggle,
+			})
+			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ball })
+			local state = (o.Default == true)
+			local function Update()
+				if state then
+					TweenService:Create(ball, TWEEN_TOGGLE, { Position = UDim2.new(0, 18, 0.5, -4), BackgroundColor3 = Theme.Accent }):Play()
+				else
+					TweenService:Create(ball, TWEEN_TOGGLE, { Position = UDim2.new(0, 2, 0.5, -4), BackgroundColor3 = Theme.BallOff }):Play()
+				end
+				if o.Callback then local s = state; task.delay(0, function() pcall(o.Callback, s) end) end
+			end
+			Update()
+			local btn = Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", ZIndex = 204, Parent = toggle })
+			btn.MouseButton1Click:Connect(function() state = not state; Update() end)
+			return {
+				Set = function(_, v) state = (v == true); Update() end,
+				Get = function() return state end,
+				Instance = row,
+			}
+		end
+
+		-- Toggle + Color Picker ----------------------------------------------------
+		function Tab:ToggleColor(o)
+			o = o or {}
+			local row = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, ZIndex = 200, Parent = page })
+			Create("TextLabel", {
+				Size = UDim2.new(1, -62, 1, 0), BackgroundTransparency = 1, Text = o.Name or "Toggle",
+				Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text,
+				TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+				ZIndex = 201, Parent = row,
+			})
+			local picker = Create("TextButton", {
+				Size = UDim2.new(0, 11, 0, 11), Position = UDim2.new(1, -58, 0.5, -5.5),
+				BackgroundColor3 = o.DefaultColor or Color3.fromHex("#222222"), Text = "",
+				BorderSizePixel = 0, AutoButtonColor = false, ZIndex = 202, Parent = row,
+			})
+			Create("UICorner", { CornerRadius = UDim.new(0, 3), Parent = picker })
+			Create("UIStroke", { Thickness = 1, Color = Color3.fromRGB(80, 80, 80), Parent = picker })
+			picker.MouseButton1Click:Connect(function()
+				OpenColorPicker(Main, picker.BackgroundColor3, function(color)
+					picker.BackgroundColor3 = color
+					if o.ColorCallback then pcall(o.ColorCallback, color) end
+				end)
+			end)
+			local toggle = Create("Frame", {
+				Size = UDim2.new(0, 28, 0, 12), Position = UDim2.new(1, -44, 0.5, -6),
+				BackgroundColor3 = Theme.ToggleBg, BorderSizePixel = 0, ZIndex = 202, Parent = row,
+			})
+			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = toggle })
+			local ball = Create("Frame", {
+				Size = UDim2.new(0, 8, 0, 8), Position = UDim2.new(0, 2, 0.5, -4),
+				BackgroundColor3 = Theme.BallOff, BorderSizePixel = 0, ZIndex = 203, Parent = toggle,
+			})
+			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ball })
+			local state = (o.Default == true)
+			local function Update()
+				if state then
+					TweenService:Create(ball, TWEEN_TOGGLE, { Position = UDim2.new(0, 18, 0.5, -4), BackgroundColor3 = Theme.Accent }):Play()
+				else
+					TweenService:Create(ball, TWEEN_TOGGLE, { Position = UDim2.new(0, 2, 0.5, -4), BackgroundColor3 = Theme.BallOff }):Play()
+				end
+				if o.Callback then local s = state; task.delay(0, function() pcall(o.Callback, s) end) end
+			end
+			Update()
+			local btn = Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", ZIndex = 204, Parent = toggle })
+			btn.MouseButton1Click:Connect(function() state = not state; Update() end)
+			return {
+				Set = function(_, v) state = (v == true); Update() end,
+				Get = function() return state end,
+				SetColor = function(_, c) if typeof(c) == "Color3" then picker.BackgroundColor3 = c; if o.ColorCallback then pcall(o.ColorCallback, c) end end end,
+				GetColor = function() return picker.BackgroundColor3 end,
+				Instance = row,
+			}
+		end
+
+		-- Slider (พร้อม toggle ถ้าต้องการ + กล่องใส่ตัวเลข) -------------------------
+		function Tab:Slider(o)
+			o = o or {}
+			local minV, maxV = o.Min or 0, o.Max or 100
+			local defV = math.clamp(o.Default or minV, minV, maxV)
+			local hasToggle = (o.Toggleable == true)
+
+			local container = Create("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, ZIndex = 200, Parent = page })
+			local topRow = Create("Frame", { Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, ZIndex = 200, Parent = container })
+			Create("TextLabel", {
+				Size = UDim2.new(1, -50, 1, 0), BackgroundTransparency = 1, Text = o.Name or "Slider",
+				Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text,
+				TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 201, Parent = topRow,
+			})
+
+			local state = (o.ToggleDefault == true)
+			local ball, toggleBtn
+			if hasToggle then
+				local toggle = Create("Frame", {
+					Size = UDim2.new(0, 28, 0, 12), Position = UDim2.new(1, -44, 0.5, -6),
+					BackgroundColor3 = Theme.ToggleBg, BorderSizePixel = 0, ZIndex = 202, Parent = topRow,
+				})
+				Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = toggle })
+				ball = Create("Frame", {
+					Size = UDim2.new(0, 8, 0, 8), Position = UDim2.new(0, 2, 0.5, -4),
+					BackgroundColor3 = Theme.BallOff, BorderSizePixel = 0, ZIndex = 203, Parent = toggle,
+				})
+				Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ball })
+				local function UpdateToggle()
+					if state then
+						TweenService:Create(ball, TWEEN_TOGGLE, { Position = UDim2.new(0, 18, 0.5, -4), BackgroundColor3 = Theme.Accent }):Play()
+					else
+						TweenService:Create(ball, TWEEN_TOGGLE, { Position = UDim2.new(0, 2, 0.5, -4), BackgroundColor3 = Theme.BallOff }):Play()
+					end
+					if o.ToggleCallback then local s = state; task.delay(0, function() pcall(o.ToggleCallback, s) end) end
+				end
+				UpdateToggle()
+				toggleBtn = Create("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", ZIndex = 204, Parent = toggle })
+				toggleBtn.MouseButton1Click:Connect(function() state = not state; UpdateToggle() end)
+				container._UpdateToggle = UpdateToggle
+			end
+
+			-- Bar + Thumb ------------------------------------------------------------
+			local bar = Create("Frame", {
+				Size = UDim2.new(1, -70, 0, 8), Position = UDim2.new(0, 0, 0, 24),
+				BackgroundColor3 = Theme.ToggleBg, BorderSizePixel = 0, ZIndex = 201, Parent = container,
+			})
+			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = bar })
+			local pct0 = (maxV > minV) and ((defV - minV) / (maxV - minV)) or 0
+			local thumb = Create("Frame", {
+				Size = UDim2.new(0, 10, 0, 10), Position = UDim2.new(pct0, -5, 0.5, -5),
+				BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, ZIndex = 202, Parent = bar,
+			})
+			Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = thumb })
+			local valueBox = Create("TextBox", {
+				Size = UDim2.new(0, 52, 0, 14), Position = UDim2.new(1, -58, 0, 21),
+				BackgroundColor3 = Theme.ValueBox, BorderSizePixel = 0, Text = FormatNum(defV),
+				Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.White,
+				TextXAlignment = Enum.TextXAlignment.Center, ClearTextOnFocus = true, ZIndex = 201, Parent = container,
+			})
+
+			local currentValue = defV
+			local dragging = false
+			local lastCb, pending = 0, nil
+			local function Update(value, forceCb)
+				value = math.clamp(math.floor(value + 0.5), minV, maxV)
+				currentValue = value
+				local p = (maxV > minV) and ((value - minV) / (maxV - minV)) or 0
+				thumb.Position = UDim2.new(p, -5, 0.5, -5)
+				valueBox.Text = FormatNum(value)
+				if not o.Callback then return end
+				local now = tick()
+				if forceCb or (now - lastCb) >= 0.12 then
+					lastCb = now; pending = nil
+					local v = value; task.delay(0, function() pcall(o.Callback, v) end)
+				else
+					pending = value
+				end
+			end
+			valueBox.FocusLost:Connect(function()
+				local cleaned = valueBox.Text:gsub(",", ""):gsub("%s", "")
+				local num = tonumber(cleaned)
+				if num then Update(num, true) else valueBox.Text = FormatNum(currentValue) end
+			end)
+			bar.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = true
+					-- อัปเดตทันทีตอนกด
+					local pos = (UserInputService:GetMouseLocation().X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+					Update(minV + pos * (maxV - minV), false)
+				end
+			end)
+			UserInputService.InputEnded:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = false
+					if pending ~= nil then
+						local v = pending; pending = nil
+						if o.Callback then task.delay(0, function() pcall(o.Callback, v) end) end
+					end
+				end
+			end)
+			UserInputService.InputChanged:Connect(function(input)
+				if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+					local pos = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+					Update(minV + pos * (maxV - minV), false)
+				end
+			end)
+
+			return {
+				Set = function(_, v) Update(tonumber(v) or defV, true) end,
+				Get = function() return currentValue end,
+				SetState = function(_, v) if hasToggle then state = (v == true); container._UpdateToggle() end end,
+				GetState = function() return state end,
+				Instance = container,
+			}
+		end
+
+		-- Dropdown (popup สีเข้มเหมือนเดิม) ----------------------------------------
+		function Tab:Dropdown(o)
+			o = o or {}
+			local options = o.Options or {}
+			local selected = o.Default or (options[1] or "")
+			local row = Create("TextButton", {
+				Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Text = "",
+				AutoButtonColor = false, ZIndex = 200, Parent = page,
+			})
+			Create("TextLabel", {
+				Size = UDim2.new(1, -50, 1, 0), BackgroundTransparency = 1, Text = o.Name or "Select",
+				Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text,
+				TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 201, Parent = row,
+			})
+			local selectLabel = Create("TextButton", {
+				Size = UDim2.new(0, o.Width or 70, 0, 14), Position = UDim2.new(1, -(o.Width or 70) - 8, 0.5, -7),
+				BackgroundColor3 = Theme.ValueBox, BorderSizePixel = 0, Text = tostring(selected),
+				Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.White,
+				AutoButtonColor = false, ZIndex = 202, Parent = row,
+			})
+			-- Dropdown popup (สร้างครั้งเดียว แล้วซ่อน/แสดง)
+			local dd = Create("ScrollingFrame", {
+				Size = UDim2.new(0, o.Width or 70, 0, 0),
+				BackgroundColor3 = Theme.DropdownBg, BorderSizePixel = 0, Visible = false,
+				ScrollBarThickness = 4, CanvasSize = UDim2.new(0, 0, 0, 0),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y, ClipsDescendants = true,
+				ZIndex = 60, Parent = Main,
+			})
+			Create("UIListLayout", { Padding = UDim.new(0, 2), Parent = dd })
+			local optButtons = {}
+			local function refresh()
+				for _, b in pairs(optButtons) do
+					b.BackgroundColor3 = (tostring(b.Text) == tostring(selected)) and Theme.OptionSelected or Theme.OptionNormal
+				end
+			end
+			for _, name in ipairs(options) do
+				local b = Create("TextButton", {
+					Size = UDim2.new(1, 0, 0, 20),
+					BackgroundColor3 = (tostring(name) == tostring(selected)) and Theme.OptionSelected or Theme.OptionNormal,
+					Text = tostring(name), TextColor3 = Theme.White, TextSize = 10,
+					Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center,
+					ZIndex = 61, BorderSizePixel = 0, AutoButtonColor = false, Parent = dd,
+				})
+				b.MouseButton1Click:Connect(function()
+					selected = name
+					selectLabel.Text = tostring(name)
+					refresh()
+					dd.Visible = false
+					table.clear(self.OpenDropdowns)
+					if o.Callback then task.delay(0, function() pcall(o.Callback, name) end) end
+				end)
+				optButtons[name] = b
+			end
+			local function toggle()
+				if dd.Visible then
+					dd.Visible = false
+					self.OpenDropdowns[dd] = nil
+					return
+				end
+				CloseAllDropdowns()
+				local absPos, absSize = selectLabel.AbsolutePosition, selectLabel.AbsoluteSize
+				local mainAbs, mainSize = Main.AbsolutePosition, Main.AbsoluteSize
+				local h = #options * 20 + (#options - 1) * 2
+				local y = absPos.Y - mainAbs.Y + absSize.Y + 2
+				if y + h > mainSize.Y - 8 then y = math.max(8, mainSize.Y - h - 8) end
+				dd.Size = UDim2.new(0, math.floor(absSize.X), 0, math.min(h, 120))
+				dd.Position = UDim2.new(0, absPos.X - mainAbs.X, 0, y)
+				dd.Visible = true
+				self.OpenDropdowns[dd] = dd
+				self._dropIgnoreUntil = tick() + 0.25 -- ป้องกัน handler คลิกข้างนอกปิดทันที
+				refresh()
+			end
+			row.MouseButton1Click:Connect(toggle)
+			selectLabel.MouseButton1Click:Connect(toggle)
+			return {
+				Set = function(_, v)
+					selected = v
+					selectLabel.Text = tostring(v)
+					refresh()
+					if o.Callback then pcall(o.Callback, v) end
+				end,
+				Get = function() return selected end,
+				Instance = row,
+			}
+		end
+
+		-- Button -------------------------------------------------------------------
+		function Tab:Button(o)
+			o = o or {}
+			local btn = Create("TextButton", {
+				Size = UDim2.new(1, 0, 0, 20),
+				BackgroundColor3 = Theme.ValueBox,
+				BorderSizePixel = 0,
+				Text = o.Name or "Button",
+				Font = Theme.FontBold,
+				TextSize = 12,
+				TextColor3 = Theme.White,
+				AutoButtonColor = true,
+				ZIndex = 200,
+				Parent = page,
+			})
+			Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = btn })
+			btn.MouseButton1Click:Connect(function()
+				if o.Callback then task.delay(0, function() pcall(o.Callback) end) end
+			end)
+			return { Instance = btn, Click = function() if o.Callback then pcall(o.Callback) end end }
+		end
+
+		-- Label --------------------------------------------------------------------
+		function Tab:Label(text)
+			local lbl = Create("TextLabel", {
+				Size = UDim2.new(1, 0, 0, 18),
+				BackgroundTransparency = 1,
+				Text = tostring(text),
+				Font = Theme.Font,
+				TextSize = 12,
+				TextColor3 = Theme.TextDim,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				ZIndex = 200,
+				Parent = page,
+			})
+			return {
+				Set = function(_, t) lbl.Text = tostring(t) end,
+				Instance = lbl,
+			}
+		end
+
+		-- Keybind (คลิกแล้วรอปุ่มถัดไป) ---------------------------------------------
+		function Tab:Keybind(o)
+			o = o or {}
+			local currentKey = o.Default -- Enum.KeyCode หรือ nil
+			local function keyName(k)
+				if not k then return "None" end
+				return tostring(k):gsub("Enum%.KeyCode%.", "")
+			end
+			local row = Create("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, ZIndex = 200, Parent = page })
+			Create("TextLabel", {
+				Size = UDim2.new(1, -50, 1, 0), BackgroundTransparency = 1, Text = o.Name or "Keybind",
+				Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text,
+				TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 201, Parent = row,
+			})
+			local keyBtn = Create("TextButton", {
+				Size = UDim2.new(0, 70, 0, 14), Position = UDim2.new(1, -78, 0.5, -7),
+				BackgroundColor3 = Theme.ValueBox, BorderSizePixel = 0, Text = keyName(currentKey),
+				Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.White,
+				AutoButtonColor = false, ZIndex = 202, Parent = row,
+			})
+			local listening = false
+			local conn
+			keyBtn.MouseButton1Click:Connect(function()
+				if listening then return end
+				listening = true
+				keyBtn.Text = "..."
+				conn = UserInputService.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.Keyboard then
+						if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Escape then
+							currentKey = nil
+						else
+							currentKey = input.KeyCode
+						end
+						keyBtn.Text = keyName(currentKey)
+						listening = false
+						conn:Disconnect()
+						if o.Callback then task.delay(0, function() pcall(o.Callback, currentKey) end) end
+					end
+				end)
+			end)
+			return {
+				Set = function(_, k) currentKey = k; keyBtn.Text = keyName(currentKey) end,
+				Get = function() return currentKey end,
+				Instance = row,
+			}
+		end
+
+		-- Toggle (ซ่อน toggle pill ไว้สำหรับ slider ย่อย เหมือน Predict Y/X เดิม) --
+		function Tab:HiddenToggleSlider(o)
+			local el = self:Slider(o)
+			pcall(function()
+				for _, ch in pairs(el.Instance:GetDescendants()) do
+					if ch:IsA("Frame") and ch.Size.X.Offset == 28 and ch.Size.Y.Offset == 12 then
+						ch.Visible = false
+					end
+				end
+			end)
+			return el
+		end
+
+		self.Tabs[name] = Tab
+		return Tab
+	end
+
+	-- method ของ Window เพิ่มเติม ------------------------------------------------
+	function self:Toggle() Main.Visible = not Main.Visible end
+	function self:Show() Main.Visible = true end
+	function self:Hide() Main.Visible = false end
+	function self:Destroy() ScreenGui:Destroy() end
+
+	return self
+end
+
+return Library
