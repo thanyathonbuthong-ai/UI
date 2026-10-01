@@ -1,0 +1,887 @@
+--[[
+	Kings UI Library
+	โหลดด้วย:
+		local Kings = loadstring(game:HttpGet("LINK_RAW_ของคุณ"))()
+]]
+
+local Kings = {}
+local UIAnimationSpeed = 0.1
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local GUI_NAME = "KingsLibUI"
+
+---------------------------------------------------------------------
+-- helpers
+---------------------------------------------------------------------
+local function new(class, props, parent)
+	local inst = Instance.new(class)
+	for k, v in pairs(props or {}) do
+		inst[k] = v
+	end
+	if parent then
+		inst.Parent = parent
+	end
+	return inst
+end
+
+local function gotham(weight)
+	return Font.new("rbxasset://fonts/families/GothamSSm.json", weight or Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+end
+
+local function corner(parent, r)
+	return new("UICorner", { CornerRadius = UDim.new(0, r or 7) }, parent)
+end
+
+local function stroke(parent, color, thickness)
+	return new("UIStroke", { Color = color or Color3.fromRGB(20, 20, 20), Thickness = thickness or 0.51 }, parent)
+end
+
+local function isPress(input)
+	return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function isMove(input)
+	return input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function getTab(window, tab)
+	if type(tab) == "table" then
+		return tab[1]
+	end
+	return window[1][tab or "main"]
+end
+
+---------------------------------------------------------------------
+-- ScreenGui (สร้างเองเพราะรันผ่าน loadstring)
+---------------------------------------------------------------------
+local function candidateParents()
+	local list = {}
+	pcall(function()
+		if gethui then
+			table.insert(list, gethui())
+		end
+	end)
+	pcall(function()
+		table.insert(list, game:GetService("CoreGui"))
+	end)
+	pcall(function()
+		table.insert(list, Players.LocalPlayer:WaitForChild("PlayerGui"))
+	end)
+	return list
+end
+
+-- ลบอันเก่าถ้ารันซ้ำ
+for _, p in ipairs(candidateParents()) do
+	pcall(function()
+		local old = p:FindFirstChild(GUI_NAME)
+		if old then
+			old:Destroy()
+		end
+	end)
+end
+
+local ScreenGui = new("ScreenGui", {
+	Name = GUI_NAME,
+	ResetOnSpawn = false,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	DisplayOrder = 999,
+})
+
+pcall(function()
+	if syn and syn.protect_gui then
+		syn.protect_gui(ScreenGui)
+	end
+end)
+
+for _, p in ipairs(candidateParents()) do
+	local ok = pcall(function()
+		ScreenGui.Parent = p
+	end)
+	if ok and ScreenGui.Parent then
+		break
+	end
+end
+
+Kings.ScreenGui = ScreenGui
+
+function Kings.destroy()
+	ScreenGui:Destroy()
+end
+
+---------------------------------------------------------------------
+-- Window
+---------------------------------------------------------------------
+function Kings.newWindow(windowName, windowSettings)
+	windowName = windowName or "Window"
+	windowSettings = windowSettings or {}
+
+	local newWindow = new("Frame", {
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(50, 50, 50),
+		Size = windowSettings.windowSize or UDim2.new(0, 300, 0, 400),
+		Position = windowSettings.windowPosition or UDim2.new(0.07, 0, 0.15, 0),
+		Name = windowName,
+	}, ScreenGui)
+
+	corner(newWindow, 7)
+
+	local gradient = new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new(Color3.fromRGB(50, 50, 50), Color3.fromRGB(50, 50, 50)),
+	}, newWindow)
+
+	if windowSettings.windowColor then
+		local c = windowSettings.windowColor
+		gradient.Color = ColorSequence.new(Color3.fromRGB(c[1], c[2], c[3]), Color3.fromRGB(0, 0, 0))
+	end
+
+	local function setWindowLight(integer)
+		newWindow.BackgroundColor3 = Color3.fromRGB(integer, integer, integer)
+	end
+
+	if windowSettings.hide == true then
+		newWindow.Visible = false
+	end
+
+	local function toggleVisibility()
+		newWindow.Visible = not newWindow.Visible
+	end
+
+	-- pattern / shadows (อยู่ใต้ content)
+	if windowSettings.pattern == true then
+		local bg = new("ImageLabel", {
+			Name = "background",
+			ZIndex = 0,
+			ScaleType = Enum.ScaleType.Tile,
+			TileSize = UDim2.new(0, 250, 0, 250),
+			ImageTransparency = 0.6,
+			Image = "rbxassetid://2151741365",
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0),
+		}, newWindow)
+		corner(bg, 7)
+	end
+
+	if windowSettings.showShadows == true then
+		local holder = new("Frame", {
+			Name = "shadowHolder",
+			ZIndex = 0,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1.0567, 0, 1.0375, 0),
+			Position = UDim2.new(-0.0267, 0, -0.016, 0),
+		}, newWindow)
+
+		for _, s in ipairs({ { "umbraShadow", 0.86 }, { "penumbraShadow", 0.88 }, { "ambientShadow", 0.88 } }) do
+			new("ImageLabel", {
+				Name = s[1],
+				ZIndex = 0,
+				SliceCenter = Rect.new(10, 10, 118, 118),
+				ScaleType = Enum.ScaleType.Slice,
+				ImageColor3 = Color3.fromRGB(0, 0, 0),
+				ImageTransparency = s[2],
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Image = "rbxassetid://1316045217",
+				Size = UDim2.new(1, 2, 1, 2),
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0.5, 0, 0.5, 0),
+			}, holder)
+		end
+	end
+
+	-- แถบด้านบน (ใช้ลาก)
+	local topbar = new("Frame", {
+		Name = "topbar",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 31),
+		Active = true,
+	}, newWindow)
+
+	if windowSettings.draggable == true then
+		local dragging, dragStart, startPos
+
+		topbar.InputBegan:Connect(function(input)
+			if isPress(input) then
+				dragging = true
+				dragStart = input.Position
+				startPos = newWindow.Position
+				input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then
+						dragging = false
+					end
+				end)
+			end
+		end)
+
+		local conn = UserInputService.InputChanged:Connect(function(input)
+			if dragging and isMove(input) then
+				local d = input.Position - dragStart
+				TweenService:Create(newWindow, TweenInfo.new(0.08, Enum.EasingStyle.Linear), {
+					Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y),
+				}):Play()
+			end
+		end)
+
+		newWindow.Destroying:Connect(function()
+			conn:Disconnect()
+		end)
+	end
+
+	-- title
+	local newTitle = new("TextLabel", {
+		Name = "windowTitle",
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		FontFace = gotham(),
+		TextSize = 17,
+		TextColor3 = Color3.fromRGB(221, 221, 221),
+		Size = UDim2.new(1, -80, 0, 25),
+		Position = UDim2.new(0, 40, 0, 3),
+		Text = windowName,
+	}, newWindow)
+
+	if windowSettings.hideWindowTitle == true then
+		newTitle.Visible = false
+	end
+
+	local function setWindowName(name)
+		newTitle.Text = name
+	end
+
+	-- ปุ่มปิด
+	if windowSettings.noCloseButton ~= true then
+		local closeBtn = new("ImageButton", {
+			Name = "windowButton",
+			Image = "rbxassetid://3926305904",
+			ImageRectSize = Vector2.new(24, 24),
+			ImageRectOffset = Vector2.new(284, 4),
+			Size = UDim2.new(0, 25, 0, 25),
+			Position = UDim2.new(1, -30, 0, 3),
+			BackgroundTransparency = 1,
+			ZIndex = 3,
+		}, newWindow)
+
+		closeBtn.MouseButton1Click:Connect(function()
+			newWindow.ClipsDescendants = true
+			newWindow:TweenSize(UDim2.new(0, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, UIAnimationSpeed, true)
+			task.wait(UIAnimationSpeed + 0.04)
+			newWindow:Destroy()
+		end)
+	end
+
+	-- content หลัก
+	local content = new("ScrollingFrame", {
+		Name = "main",
+		Active = true,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, -31),
+		Position = UDim2.new(0, 0, 0, 31),
+		ScrollBarImageColor3 = Color3.fromRGB(71, 71, 71),
+		ScrollBarThickness = 6,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	}, newWindow)
+
+	new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }, content)
+	new("UIListLayout", {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, 7),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, content)
+
+	local function clear()
+		for _, v in pairs(content:GetChildren()) do
+			if v:IsA("Frame") then
+				v:Destroy()
+			end
+		end
+	end
+
+	-- sidebar
+	if windowSettings.sidebar == true then
+		local sidebar = new("Frame", {
+			Name = "windowSidebar",
+			BorderSizePixel = 0,
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			Size = UDim2.new(0, 130, 1, -31),
+			Position = UDim2.new(0, 0, 0, 31),
+			Visible = false,
+			ZIndex = 2,
+		}, newWindow)
+		corner(sidebar, 7)
+
+		local tabs = new("ScrollingFrame", {
+			Name = "Tabs",
+			Active = true,
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0),
+			ScrollBarImageColor3 = Color3.fromRGB(0, 0, 0),
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ZIndex = 2,
+		}, sidebar)
+
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, tabs)
+		new("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingTop = UDim.new(0, 4) }, tabs)
+
+		local sideBtn = new("ImageButton", {
+			Name = "windowIcon",
+			Image = "rbxassetid://3926307971",
+			ImageRectSize = Vector2.new(36, 36),
+			ImageRectOffset = Vector2.new(404, 44),
+			Size = UDim2.new(0, 25, 0, 25),
+			Position = UDim2.new(0, 8, 0, 3),
+			BackgroundTransparency = 1,
+			ZIndex = 3,
+		}, newWindow)
+
+		local prevSize = sidebar.Size
+		local busy = false
+
+		sideBtn.MouseButton1Click:Connect(function()
+			if busy then return end
+			busy = true
+			local info = TweenInfo.new(UIAnimationSpeed, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+
+			if not sidebar.Visible then
+				sidebar.Size = UDim2.new(0, 0, 0, 0)
+				sidebar.Visible = true
+				sidebar:TweenSize(prevSize, Enum.EasingDirection.Out, Enum.EasingStyle.Sine, UIAnimationSpeed, true)
+				TweenService:Create(sideBtn, info, { Rotation = -90 }):Play()
+			else
+				TweenService:Create(sideBtn, info, { Rotation = 0 }):Play()
+				sidebar:TweenSize(UDim2.new(0, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Sine, UIAnimationSpeed, true)
+				task.wait(UIAnimationSpeed + 0.04)
+				sidebar.Visible = false
+			end
+			busy = false
+		end)
+
+		local mainName = windowSettings.sidebarMainName or "main"
+
+		local mainTab = new("TextButton", {
+			Name = "tab",
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			TextSize = 16,
+			FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+			TextColor3 = Color3.fromRGB(221, 221, 221),
+			Size = UDim2.new(0, 124, 0, 40),
+			Text = mainName,
+			ZIndex = 2,
+		}, tabs)
+
+		new("Frame", {
+			Name = "underline",
+			BorderSizePixel = 0,
+			BackgroundColor3 = Color3.fromRGB(151, 151, 151),
+			Size = UDim2.new(0, 110, 0, 1),
+			Position = UDim2.new(0.038, 0, 1, 0),
+			ZIndex = 2,
+		}, mainTab)
+
+		new("ImageButton", {
+			Name = "home",
+			ImageTransparency = 0.1,
+			Image = "rbxassetid://3926305904",
+			ImageRectSize = Vector2.new(36, 36),
+			ImageRectOffset = Vector2.new(964, 204),
+			Size = UDim2.new(0, 25, 0, 25),
+			Position = UDim2.new(0, 6, 0, 6),
+			BackgroundTransparency = 1,
+			ZIndex = 2,
+		}, mainTab)
+
+		mainTab.MouseButton1Click:Connect(function()
+			for _, v in pairs(newWindow:GetChildren()) do
+				if v:IsA("ScrollingFrame") then
+					v.Visible = false
+				end
+			end
+			content.Visible = true
+		end)
+	end
+
+	return {
+		newWindow;
+		toggleVisibility = toggleVisibility;
+		clear = clear;
+		setWindowLight = setWindowLight;
+		setWindowName = setWindowName;
+		destroy = function() newWindow:Destroy() end;
+	}
+end
+
+---------------------------------------------------------------------
+-- Tab + Sidebar
+---------------------------------------------------------------------
+function Kings.newTab(window, name)
+	local content = new("ScrollingFrame", {
+		Name = name,
+		Active = true,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, -31),
+		Position = UDim2.new(0, 0, 0, 31),
+		ScrollBarImageColor3 = Color3.fromRGB(71, 71, 71),
+		ScrollBarThickness = 6,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Visible = false,
+	}, window[1])
+
+	new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }, content)
+	new("UIListLayout", {
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, 7),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, content)
+
+	return {
+		content;
+		clear = function()
+			for _, v in pairs(content:GetChildren()) do
+				if v:IsA("Frame") then
+					v:Destroy()
+				end
+			end
+		end;
+		destroy = function() content:Destroy() end;
+	}
+end
+
+function Kings.newSidebarOption(window, tabToView, text, icon)
+	window = window[1]
+
+	local tab = new("TextButton", {
+		Name = "tab",
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		TextSize = 16,
+		FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+		TextColor3 = Color3.fromRGB(221, 221, 221),
+		Size = UDim2.new(0, 124, 0, 40),
+		Text = text,
+		ZIndex = 2,
+	}, window.windowSidebar.Tabs)
+
+	tab.MouseButton1Click:Connect(function()
+		for _, v in pairs(window:GetChildren()) do
+			if v:IsA("ScrollingFrame") then
+				v.Visible = false
+			end
+		end
+		tabToView[1].Visible = true
+	end)
+
+	new("Frame", {
+		Name = "underline",
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(151, 151, 151),
+		Size = UDim2.new(0, 110, 0, 1),
+		Position = UDim2.new(0.038, 0, 1, 0),
+		ZIndex = 2,
+	}, tab)
+
+	local iconBtn = new("ImageButton", {
+		Name = "home",
+		ImageTransparency = 0.1,
+		Size = UDim2.new(0, 25, 0, 25),
+		Position = UDim2.new(0, 6, 0, 6),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+	}, tab)
+
+	if icon == nil then
+		iconBtn.Image = "rbxassetid://3926305904"
+		iconBtn.ImageRectOffset = Vector2.new(964, 204)
+		iconBtn.ImageRectSize = Vector2.new(36, 36)
+	else
+		iconBtn.Image = icon[1]
+		iconBtn.ImageRectOffset = icon[2]
+		if icon[3] ~= nil then
+			iconBtn.ImageRectSize = icon[3]
+		end
+	end
+
+	return {
+		tab;
+		onclick = function(func)
+			tab.MouseButton1Click:Connect(func)
+			iconBtn.MouseButton1Click:Connect(func)
+		end;
+		destroy = function() tab:Destroy() end;
+	}
+end
+
+---------------------------------------------------------------------
+-- Elements
+---------------------------------------------------------------------
+local function baseElement(parent, name, height)
+	local f = new("Frame", {
+		Name = name,
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 0.9,
+		Size = UDim2.new(1, -26, 0, height),
+	}, parent)
+	corner(f, 7)
+	local s = stroke(f)
+	return f, s
+end
+
+local function commonFunctions(frame, uiStroke, label, field)
+	local t = {
+		frame;
+		setOutlineColor = function(c) uiStroke.Color = c end;
+		setBackgroundColor = function(c) frame.BackgroundColor3 = c end;
+		setTransparency = function(n) frame.BackgroundTransparency = n end;
+		destroy = function() frame:Destroy() end;
+	}
+	if label then
+		t.setText = function(txt) label.Text = txt end
+		t.getText = function() return label.Text end
+	end
+	return t
+end
+
+-- Text
+function Kings.newTextElement(window, tab, text)
+	local frame, uiStroke = baseElement(getTab(window, tab), "windowElementText", 80)
+
+	local label = new("TextLabel", {
+		TextWrapped = true,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		FontFace = gotham(),
+		TextSize = 15,
+		TextColor3 = Color3.fromRGB(221, 221, 221),
+		Size = UDim2.new(1, -20, 1, -12),
+		Position = UDim2.new(0, 10, 0, 6),
+		Text = text or "",
+	}, frame)
+
+	return commonFunctions(frame, uiStroke, label)
+end
+
+-- Button
+function Kings.newButtonElement(window, tab, text, buttonType)
+	local id, offset, size, color = "rbxassetid://3926305904", Vector2.new(604, 764), Vector2.new(36, 36), Color3.fromRGB(126, 255, 163)
+
+	if buttonType == 1 then
+		offset, size, color = Vector2.new(644, 724), Vector2.new(36, 36), Color3.fromRGB(220, 80, 80)
+	elseif buttonType == 2 then
+		offset, size, color = Vector2.new(116, 4), Vector2.new(24, 24), Color3.fromRGB(206, 220, 53)
+	end
+
+	local frame, uiStroke = baseElement(getTab(window, tab), "windowElementButton", 40)
+
+	local icon = new("ImageButton", {
+		Name = "icon",
+		ImageColor3 = color,
+		Image = id,
+		ImageRectSize = size,
+		ImageRectOffset = offset,
+		Size = UDim2.new(0, 25, 0, 25),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(1, -35, 0.5, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+	}, frame)
+
+	local btn = new("TextButton", {
+		TextWrapped = true,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		FontFace = gotham(),
+		TextSize = 15,
+		TextColor3 = Color3.fromRGB(221, 221, 221),
+		Size = UDim2.new(1, 0, 1, 0),
+		Text = text or "",
+	}, frame)
+
+	local t = commonFunctions(frame, uiStroke, btn)
+	t.onclick = function(func)
+		btn.MouseButton1Click:Connect(func)
+		icon.MouseButton1Click:Connect(func)
+	end
+	return t
+end
+
+-- Category
+function Kings.newCategory(window, tab, name)
+	local frame = new("Frame", {
+		Name = "Category",
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, -26, 0, 40),
+	}, getTab(window, tab))
+
+	new("TextLabel", {
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		FontFace = gotham(),
+		TextSize = 16,
+		TextColor3 = Color3.fromRGB(91, 91, 91),
+		Size = UDim2.new(1, 0, 1, 0),
+		Text = name or "",
+	}, frame)
+
+	return { frame; destroy = function() frame:Destroy() end }
+end
+
+-- Switch
+function Kings.newSwitchElement(window, tab, text, state)
+	state = state == true
+
+	local frame, uiStroke = baseElement(getTab(window, tab), "windowElementSwitch", 40)
+
+	local label = new("TextButton", {
+		TextWrapped = true,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		FontFace = gotham(),
+		TextSize = 15,
+		TextColor3 = Color3.fromRGB(221, 221, 221),
+		Size = UDim2.new(1, 0, 1, 0),
+		Text = text or "",
+	}, frame)
+
+	local stateImg = new("ImageButton", {
+		Name = "off",
+		Image = "rbxassetid://3926307971",
+		ImageRectSize = Vector2.new(36, 36),
+		Size = UDim2.new(0, 25, 0, 25),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(1, -35, 0.5, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+	}, frame)
+
+	local function render()
+		if state then
+			stateImg.ImageColor3 = Color3.fromRGB(118, 150, 255)
+			stateImg.ImageRectOffset = Vector2.new(764, 244)
+		else
+			stateImg.ImageColor3 = Color3.fromRGB(116, 116, 116)
+			stateImg.ImageRectOffset = Vector2.new(804, 124)
+		end
+	end
+	render()
+
+	local t = commonFunctions(frame, uiStroke, label)
+
+	t.getState = function() return state end
+	t.setState = function(v)
+		state = v == true
+		render()
+	end
+	t.switch = function()
+		state = not state
+		render()
+	end
+	-- กดแล้วสลับสถานะอัตโนมัติ และส่งค่า state ใหม่ให้ func
+	t.onclick = function(func)
+		local function handler()
+			state = not state
+			render()
+			task.spawn(func, state)
+		end
+		label.MouseButton1Click:Connect(handler)
+		stateImg.MouseButton1Click:Connect(handler)
+	end
+
+	return t
+end
+
+-- Input
+function Kings.newInputElement(window, tab, text, placeholder)
+	local frame, uiStroke = baseElement(getTab(window, tab), "windowElementInput", 60)
+
+	local label = new("TextLabel", {
+		TextWrapped = true,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		FontFace = gotham(),
+		TextSize = 15,
+		TextColor3 = Color3.fromRGB(221, 221, 221),
+		Size = UDim2.new(1, 0, 0, 35),
+		Text = text or "",
+	}, frame)
+
+	new("ImageButton", {
+		Name = "icon",
+		ImageColor3 = Color3.fromRGB(189, 72, 255),
+		Image = "rbxassetid://3926305904",
+		ImageRectSize = Vector2.new(36, 36),
+		ImageRectOffset = Vector2.new(764, 84),
+		Size = UDim2.new(0, 25, 0, 25),
+		Position = UDim2.new(1, -35, 0, 10),
+		BackgroundTransparency = 1,
+	}, frame)
+
+	local box = new("TextBox", {
+		BorderSizePixel = 0,
+		TextSize = 15,
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		PlaceholderColor3 = Color3.fromRGB(150, 150, 150),
+		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic),
+		PlaceholderText = placeholder or "",
+		ClearTextOnFocus = false,
+		Size = UDim2.new(1, 0, 0, 25),
+		Position = UDim2.new(0, 0, 0, 35),
+		Text = "",
+	}, frame)
+
+	local t = commonFunctions(frame, uiStroke, nil)
+	t.setText = function(txt) label.Text = txt end
+	t.getText = function() return label.Text end
+	t.setInput = function(v) box.Text = v end
+	t.getInput = function() return box.Text end
+	-- func(text, enterPressed) ถูกเรียกตอนเลิกพิมพ์
+	t.onchange = function(func)
+		box.FocusLost:Connect(function(enter)
+			func(box.Text, enter)
+		end)
+	end
+
+	return t
+end
+
+-- Slider
+function Kings.newSliderElement(window, tab, text, defaultValue)
+	local ORANGE = Color3.fromRGB(255, 161, 98)
+	local minV, maxV = 0, 100
+	local val = tonumber(defaultValue) or 0
+	local callbacks = {}
+
+	local frame = new("TextButton", {
+		Name = "windowElementSlider",
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 0.9,
+		Size = UDim2.new(1, -26, 0, 60),
+		Text = "",
+		AutoButtonColor = false,
+	}, getTab(window, tab))
+	corner(frame, 7)
+	local uiStroke = stroke(frame)
+
+	local label = new("TextLabel", {
+		TextWrapped = true,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		FontFace = gotham(),
+		TextSize = 15,
+		TextColor3 = Color3.fromRGB(221, 221, 221),
+		Size = UDim2.new(1, 0, 0, 40),
+		Text = text or "",
+	}, frame)
+
+	new("ImageButton", {
+		Name = "icon",
+		ImageColor3 = ORANGE,
+		Image = "rbxassetid://3926305904",
+		ImageRectSize = Vector2.new(36, 36),
+		ImageRectOffset = Vector2.new(4, 124),
+		Size = UDim2.new(0, 25, 0, 25),
+		Position = UDim2.new(1, -35, 0, 6),
+		BackgroundTransparency = 1,
+	}, frame)
+
+	local outline = new("Frame", {
+		Name = "sliderOutline",
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 0.9,
+		Size = UDim2.new(1, -36, 0, 8),
+		Position = UDim2.new(0, 18, 0, 42),
+	}, frame)
+	corner(outline, 7)
+	stroke(outline, ORANGE)
+
+	local fill = new("Frame", {
+		Name = "slider",
+		BorderSizePixel = 0,
+		BackgroundColor3 = ORANGE,
+		BackgroundTransparency = 0.1,
+		Size = UDim2.new(0, 0, 1, 0),
+	}, outline)
+	corner(fill, 7)
+
+	local title = text or ""
+
+	local function render()
+		local range = maxV - minV
+		local pct = range == 0 and 0 or (val - minV) / range
+		fill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0)
+		label.Text = title .. " [" .. tostring(val) .. "]"
+	end
+
+	local function apply(v, fire)
+		v = math.clamp(math.floor(v + 0.5), minV, maxV)
+		local changed = v ~= val
+		val = v
+		render()
+		if fire and changed then
+			for _, f in ipairs(callbacks) do
+				task.spawn(f, val)
+			end
+		end
+	end
+
+	local function updateFromX(x)
+		local w = outline.AbsoluteSize.X
+		if w <= 0 then return end
+		local rel = math.clamp((x - outline.AbsolutePosition.X) / w, 0, 1)
+		apply(minV + (maxV - minV) * rel, true)
+	end
+
+	local dragging = false
+
+	frame.InputBegan:Connect(function(input)
+		if isPress(input) then
+			dragging = true
+			updateFromX(input.Position.X)
+		end
+	end)
+
+	local c1 = UserInputService.InputChanged:Connect(function(input)
+		if dragging and isMove(input) then
+			updateFromX(input.Position.X)
+		end
+	end)
+
+	local c2 = UserInputService.InputEnded:Connect(function(input)
+		if isPress(input) then
+			dragging = false
+		end
+	end)
+
+	frame.Destroying:Connect(function()
+		c1:Disconnect()
+		c2:Disconnect()
+	end)
+
+	render()
+
+	local t = commonFunctions(frame, uiStroke, nil)
+	t.getValue = function() return val end -- คืนค่าเป็น number
+	t.setValue = function(v) apply(v, false) end
+	t.minValue = function(v) minV = v; apply(val, false) end
+	t.maxValue = function(v) maxV = v; apply(val, false) end
+	t.onchange = function(func) table.insert(callbacks, func) end
+
+	return t
+end
+
+return Kings
