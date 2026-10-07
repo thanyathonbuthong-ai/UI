@@ -1,0 +1,2404 @@
+--[[
+    ============================================================
+      UI Library — Windified (ระบบครบจาก Wind UI + หน้าตาเดิม)
+      Theme & Layout: Dark Purple / Glow / Sidebar (เหมือนเดิม)
+      Features: Toggle, Slider, Dropdown, Colorpicker, Keybind,
+                Input, Button, Label, Paragraph, Code, Section,
+                Divider, Line, Space, Dialog, Notify, Config,
+                Flags, Search, Rainbow, Unload, Minimize, Lock
+    ============================================================
+]]
+
+local WindowTable = {RainbowColorValue = 0, HueSelectionPosition = 0}
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = game:GetService("Players").LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local HttpService = game:GetService("HttpService")
+local GuiService = game:GetService("GuiService")
+local CoreGui = game:GetService("CoreGui")
+local CloseBind = Enum.KeyCode.RightControl
+local InputLock = false
+
+-- ============================================================
+--  Theme (คงสีเดิม — ขยายให้รองรับเปลี่ยนสีได้)
+-- ============================================================
+local Theme = {
+	Background   = Color3.fromRGB(21, 18, 45),
+	Row          = Color3.fromRGB(29, 26, 53),
+	RowHover     = Color3.fromRGB(33, 31, 56),
+	Field        = Color3.fromRGB(24, 21, 48),
+	FieldHover   = Color3.fromRGB(30, 27, 55),
+	Off          = Color3.fromRGB(74, 68, 94),
+	On           = Color3.fromRGB(135, 128, 176),
+	Accent       = Color3.fromRGB(27, 96, 186),
+	AccentDark   = Color3.fromRGB(18, 70, 140),
+	Text         = Color3.fromRGB(255, 255, 255),
+	SubText      = Color3.fromRGB(195, 195, 195),
+	Muted        = Color3.fromRGB(135, 128, 176),
+	Border       = Color3.fromRGB(31, 28, 54),
+	Glow         = Color3.fromRGB(21, 20, 45),
+	Shadow       = Color3.fromRGB(0, 0, 0),
+	Rainbow      = false,
+}
+
+local Flags = {}            -- [flagName] = element object
+local AllWindows = {}       -- เก็บ window ทั้งหมดสำหรับ Unload
+local Notifications = {}    -- เก็บ notification cards
+local ConfigFolder = "WindifiedUI_Configs"
+
+-- ============================================================
+--  Helpers
+-- ============================================================
+local function RegisterFlag(flag, obj)
+	if flag ~= nil then
+		Flags[flag] = obj
+	end
+	return obj
+end
+
+local function Tween(obj, props, t)
+	TweenService:Create(obj, TweenInfo.new(t or .3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props):Play()
+end
+
+local function Corner(parent, r)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r or 4)
+	c.Parent = parent
+	return c
+end
+
+local function Stroke(parent, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Theme.Off
+	s.Thickness = thickness or 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = parent
+	return s
+end
+
+local function Padding(parent, l, t, r, b)
+	local p = Instance.new("UIPadding")
+	p.PaddingLeft = UDim.new(0, l or 0)
+	p.PaddingTop = UDim.new(0, t or 0)
+	p.PaddingRight = UDim.new(0, r or 0)
+	p.PaddingBottom = UDim.new(0, b or 0)
+	p.Parent = parent
+	return p
+end
+
+local function ListLayout(parent, pad, sort)
+	local l = Instance.new("UIListLayout")
+	l.Padding = UDim.new(0, pad or 0)
+	l.SortOrder = sort or Enum.SortOrder.LayoutOrder
+	l.Parent = parent
+	return l
+end
+
+local function MakeRow(parent, className, height)
+	local R = Instance.new(className)
+	R.Name = "Row"
+	R.Parent = parent
+	R.BackgroundColor3 = Theme.Row
+	R.BorderSizePixel = 0
+	R.Size = UDim2.new(1, -14, 0, height)
+	if className == "TextButton" then
+		R.AutoButtonColor = false
+		R.Text = ""
+	end
+	Corner(R, 4)
+	return R
+end
+
+local function HoverRow(row)
+	row.MouseEnter:Connect(function()
+		if not row:GetAttribute("Locked") then
+			Tween(row, {BackgroundColor3 = Theme.RowHover})
+		end
+	end)
+	row.MouseLeave:Connect(function()
+		if not row:GetAttribute("Locked") then
+			Tween(row, {BackgroundColor3 = Theme.Row})
+		end
+	end)
+end
+
+local function RowTitle(parent, title, desc, rightPad)
+	rightPad = rightPad or 14
+	local T = Instance.new("TextLabel")
+	T.Name = "Title"
+	T.Parent = parent
+	T.BackgroundTransparency = 1
+	T.Position = UDim2.new(0, 14, 0, desc and 6 or 0)
+	T.Size = UDim2.new(1, -(14 + rightPad), 0, desc and 18 or 32)
+	T.Font = Enum.Font.GothamSemibold
+	T.Text = tostring(title or "")
+	T.TextColor3 = Theme.Text
+	T.TextSize = 14
+	T.TextXAlignment = Enum.TextXAlignment.Left
+	T.TextTruncate = Enum.TextTruncate.AtEnd
+	local D = nil
+	if desc then
+		D = Instance.new("TextLabel")
+		D.Name = "Desc"
+		D.Parent = parent
+		D.BackgroundTransparency = 1
+		D.Position = UDim2.new(0, 14, 0, 24)
+		D.Size = UDim2.new(1, -(14 + rightPad), 0, 16)
+		D.Font = Enum.Font.Gotham
+		D.Text = tostring(desc)
+		D.TextColor3 = Theme.Muted
+		D.TextSize = 12
+		D.TextXAlignment = Enum.TextXAlignment.Left
+		D.TextTruncate = Enum.TextTruncate.AtEnd
+	end
+	return T, D
+end
+
+local function SetLockedVisual(T, D, locked)
+	if T then T.TextTransparency = locked and 0.5 or 0 end
+	if D then D.TextTransparency = locked and 0.5 or 0 end
+end
+
+local function ResolveKey(v)
+	if typeof(v) == "EnumItem" then
+		return v
+	end
+	if type(v) == "string" then
+		local ok, kc = pcall(function()
+			return Enum.KeyCode[v]
+		end)
+		if ok then
+			return kc
+		end
+	end
+	return nil
+end
+
+-- Color utilities (จาก Wind UI — HSB/Rainbow)
+local function Color3ToHSB(c)
+	local r, g, b = c.R, c.G, c.B
+	local max, min = math.max(r, g, b), math.min(r, g, b)
+	local h, s, v = 0, 0, max
+	local d = max - min
+	if max ~= 0 then s = d / max end
+	if max == min then
+		h = 0
+	else
+		if max == r then h = (g - b) / d + (g < b and 6 or 0)
+		elseif max == g then h = (b - r) / d + 2
+		else h = (r - g) / d + 4 end
+		h = h / 6
+	end
+	return h, s, v
+end
+
+local function HSBToColor3(h, s, v)
+	local i = math.floor(h * 6)
+	local f = h * 6 - i
+	local p = v * (1 - s)
+	local q = v * (1 - f * s)
+	local t = v * (1 - (1 - f) * s)
+	i = i % 6
+	if i == 0 then return Color3.new(v, t, p)
+	elseif i == 1 then return Color3.new(q, v, p)
+	elseif i == 2 then return Color3.new(p, v, t)
+	elseif i == 3 then return Color3.new(p, q, v)
+	elseif i == 4 then return Color3.new(t, p, v)
+	else return Color3.new(v, p, q) end
+end
+
+local function LerpColor(a, b, t)
+	return Color3.new(
+		a.R + (b.R - a.R) * t,
+		a.G + (b.G - a.G) * t,
+		a.B + (b.B - a.B) * t
+	)
+end
+
+-- Rainbow loop (คงเดิม)
+coroutine.wrap(function()
+	while true do
+		RunService.Heartbeat:Wait()
+		WindowTable.RainbowColorValue = WindowTable.RainbowColorValue + 1 / 255
+		WindowTable.HueSelectionPosition = WindowTable.HueSelectionPosition + 1
+		if WindowTable.RainbowColorValue >= 1 then
+			WindowTable.RainbowColorValue = 0
+		end
+		if WindowTable.HueSelectionPosition == 93 then
+			WindowTable.HueSelectionPosition = 0
+		end
+		if Theme.Rainbow then
+			Theme.Accent = HSBToColor3(WindowTable.RainbowColorValue, 0.85, 1)
+		end
+	end
+end)()
+
+-- ============================================================
+--  Drag system (dragify — คงเดิมปรับปรุง)
+-- ============================================================
+local function dragify(Frame, GlowFrame)
+	local dragToggle, dragInput, dragStart, startPos = nil, nil, nil, nil
+	local function updateInput(input)
+		local delta = input.Position - dragStart
+		local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		TweenService:Create(Frame, TweenInfo.new(.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = newPos}):Play()
+		if GlowFrame then
+			TweenService:Create(GlowFrame, TweenInfo.new(.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = newPos}):Play()
+		end
+	end
+	Frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragToggle = true
+			dragStart = input.Position
+			startPos = Frame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragToggle = false
+				end
+			end)
+		end
+	end)
+	Frame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragToggle then
+			updateInput(input)
+		end
+	end)
+end
+
+-- ============================================================
+--  WindowTable — Main Library
+-- ============================================================
+-- WindowTable ถูกประกาศไว้แล้วด้านบน (มี RainbowColorValue, HueSelectionPosition)
+-- เพิ่ม methods ให้กับ WindowTable ได้เลยด้านล่างนี้
+
+function WindowTable:Window(Htitle, GMtitle, toclose)
+	CloseBind = toclose or Enum.KeyCode.RightControl
+
+	local Library = Instance.new("ScreenGui")
+	local MainFrameGlow = Instance.new("Frame")
+	local Glow1 = Instance.new("ImageLabel")
+	local Glow2 = Instance.new("ImageLabel")
+	local MainFrame = Instance.new("Frame")
+	local TitleBar = Instance.new("Frame")
+	local TitleText = Instance.new("TextLabel")
+	local SubTitleText = Instance.new("TextLabel")
+	local MinimizeBtn = Instance.new("TextButton")
+	local UnloadBtn = Instance.new("TextButton")
+	local SearchBar = Instance.new("Frame")
+	local SearchBox = Instance.new("TextBox")
+	local SearchIcon = Instance.new("TextLabel")
+	local LeftFrame = Instance.new("Frame")
+	local LeftFrameBtn = Instance.new("TextButton")
+	local LeftFrameBtnIcon = Instance.new("ImageLabel")
+	local LeftFrameLine = Instance.new("Frame")
+	local TabContainer = Instance.new("ScrollingFrame")
+	local TabListLayout = Instance.new("UIListLayout")
+	local TabPadding = Instance.new("UIPadding")
+	local ContentFrame = Instance.new("Frame")
+	local AllPages = Instance.new("Frame")
+	local pagesFolder = Instance.new("Folder")
+	local ShadowFrame = Instance.new("TextButton")
+
+	-- Services / locals
+	local uitoggled = false
+	local minimized = false
+	local leftExpanded = false
+	local Tabs = {}
+	local TabButtons = {}
+	local CurrentTab = nil
+	local TabOrder = 0
+
+	-- Setup ScreenGui
+	Library.Name = "WindifiedUI_" .. tostring(Htitle):gsub("%s", "")
+	Library.Parent = CoreGui
+	Library.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	Library.ResetOnSpawn = false
+	Library.IgnoreGuiInset = false
+	table.insert(AllWindows, Library)
+
+	-- Shadow / click-catcher (อยู่หลังสุด)
+	ShadowFrame.Name = "ShadowFrame"
+	ShadowFrame.Parent = Library
+	ShadowFrame.BackgroundTransparency = 1
+	ShadowFrame.Size = UDim2.new(1, 0, 1, 0)
+	ShadowFrame.ZIndex = 0
+	ShadowFrame.Text = ""
+	ShadowFrame.AutoButtonColor = false
+
+	-- Glow container (เหมือนเดิม)
+	MainFrameGlow.Name = "MainFrameGlow"
+	MainFrameGlow.Parent = Library
+	MainFrameGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+	MainFrameGlow.BackgroundColor3 = Theme.Background
+	MainFrameGlow.BackgroundTransparency = 1
+	MainFrameGlow.BorderSizePixel = 0
+	MainFrameGlow.Position = UDim2.new(0.5, 0, 0.5, 0)
+	MainFrameGlow.Size = UDim2.new(0, 0, 0, 0)
+	MainFrameGlow.ZIndex = 1
+
+	Glow1.Name = "Glow1"
+	Glow1.Parent = MainFrameGlow
+	Glow1.BackgroundTransparency = 1
+	Glow1.Position = UDim2.new(0, -15, 0, -15)
+	Glow1.Size = UDim2.new(1, 30, 1, 30)
+	Glow1.ZIndex = 0
+	Glow1.Image = "rbxassetid://5028857084"
+	Glow1.ImageColor3 = Theme.Glow
+	Glow1.ScaleType = Enum.ScaleType.Slice
+	Glow1.SliceCenter = Rect.new(24, 24, 276, 276)
+	Glow1.ImageTransparency = 1
+
+	Glow2.Name = "Glow2"
+	Glow2.Parent = MainFrameGlow
+	Glow2.BackgroundTransparency = 1
+	Glow2.Position = UDim2.new(0, -15, 0, -15)
+	Glow2.Size = UDim2.new(1, 30, 1, 30)
+	Glow2.ZIndex = 0
+	Glow2.Image = "rbxassetid://5028857084"
+	Glow2.ImageColor3 = Theme.Glow
+	Glow2.ScaleType = Enum.ScaleType.Slice
+	Glow2.SliceCenter = Rect.new(24, 24, 276, 276)
+	Glow2.ImageTransparency = 1
+
+	-- MainFrame (เหมือนเดิม 448x331)
+	MainFrame.Name = "MainFrame"
+	MainFrame.Parent = MainFrameGlow
+	MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	MainFrame.BackgroundColor3 = Theme.Background
+	MainFrame.BorderSizePixel = 0
+	MainFrame.Position = UDim2.new(0, 0, 0, 0)
+	MainFrame.Size = UDim2.new(0, 0, 0, 0)
+	MainFrame.ClipsDescendants = true
+	MainFrame.ZIndex = 2
+	Corner(MainFrame, 3)
+	Stroke(MainFrame, Theme.Border, 1)
+
+	-- TitleBar (เพิ่มเติม — ลากได้, มีชื่อ + ปุ่ม)
+	TitleBar.Name = "TitleBar"
+	TitleBar.Parent = MainFrame
+	TitleBar.BackgroundTransparency = 1
+	TitleBar.Position = UDim2.new(0, 41, 0, 0)
+	TitleBar.Size = UDim2.new(1, -41, 0, 32)
+	TitleBar.ZIndex = 3
+
+	TitleText.Name = "TitleText"
+	TitleText.Parent = TitleBar
+	TitleText.BackgroundTransparency = 1
+	TitleText.Position = UDim2.new(0, 12, 0, 0)
+	TitleText.Size = UDim2.new(1, -80, 0, 20)
+	TitleText.Font = Enum.Font.GothamBold
+	TitleText.Text = tostring(Htitle or "Window")
+	TitleText.TextColor3 = Theme.Text
+	TitleText.TextSize = 14
+	TitleText.TextXAlignment = Enum.TextXAlignment.Left
+	TitleText.ZIndex = 4
+
+	SubTitleText.Name = "SubTitleText"
+	SubTitleText.Parent = TitleBar
+	SubTitleText.BackgroundTransparency = 1
+	SubTitleText.Position = UDim2.new(0, 12, 0, 18)
+	SubTitleText.Size = UDim2.new(1, -80, 0, 12)
+	SubTitleText.Font = Enum.Font.Gotham
+	SubTitleText.Text = tostring(GMtitle or "")
+	SubTitleText.TextColor3 = Theme.Muted
+	SubTitleText.TextSize = 11
+	SubTitleText.TextXAlignment = Enum.TextXAlignment.Left
+	SubTitleText.ZIndex = 4
+
+	-- Minimize button
+	MinimizeBtn.Name = "MinimizeBtn"
+	MinimizeBtn.Parent = TitleBar
+	MinimizeBtn.BackgroundColor3 = Theme.Field
+	MinimizeBtn.Position = UDim2.new(1, -52, 0, 8)
+	MinimizeBtn.Size = UDim2.new(0, 18, 0, 18)
+	MinimizeBtn.Font = Enum.Font.GothamBold
+	MinimizeBtn.Text = "-"
+	MinimizeBtn.TextColor3 = Theme.Text
+	MinimizeBtn.TextSize = 14
+	MinimizeBtn.AutoButtonColor = false
+	MinimizeBtn.ZIndex = 4
+	Corner(MinimizeBtn, 4)
+
+	-- Unload button
+	UnloadBtn.Name = "UnloadBtn"
+	UnloadBtn.Parent = TitleBar
+	UnloadBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+	UnloadBtn.Position = UDim2.new(1, -28, 0, 8)
+	UnloadBtn.Size = UDim2.new(0, 18, 0, 18)
+	UnloadBtn.Font = Enum.Font.GothamBold
+	UnloadBtn.Text = "x"
+	UnloadBtn.TextColor3 = Theme.Text
+	UnloadBtn.TextSize = 12
+	UnloadBtn.AutoButtonColor = false
+	UnloadBtn.ZIndex = 4
+	Corner(UnloadBtn, 4)
+
+	-- Search bar (จาก Wind UI)
+	SearchBar.Name = "SearchBar"
+	SearchBar.Parent = MainFrame
+	SearchBar.BackgroundColor3 = Theme.Field
+	SearchBar.Position = UDim2.new(0, 41, 0, 34)
+	SearchBar.Size = UDim2.new(1, -55, 0, 24)
+	SearchBar.ZIndex = 3
+	Corner(SearchBar, 4)
+	Stroke(SearchBar, Theme.Border, 1)
+
+	SearchIcon.Name = "SearchIcon"
+	SearchIcon.Parent = SearchBar
+	SearchIcon.BackgroundTransparency = 1
+	SearchIcon.Position = UDim2.new(0, 6, 0, 0)
+	SearchIcon.Size = UDim2.new(0, 16, 1, 0)
+	SearchIcon.Font = Enum.Font.Gotham
+	SearchIcon.Text = "?"
+	SearchIcon.TextColor3 = Theme.Muted
+	SearchIcon.TextSize = 14
+	SearchIcon.ZIndex = 4
+
+	SearchBox.Name = "SearchBox"
+	SearchBox.Parent = SearchBar
+	SearchBox.BackgroundTransparency = 1
+	SearchBox.Position = UDim2.new(0, 26, 0, 0)
+	SearchBox.Size = UDim2.new(1, -32, 1, 0)
+	SearchBox.Font = Enum.Font.Gotham
+	SearchBox.PlaceholderText = "Search..."
+	SearchBox.PlaceholderColor3 = Theme.Muted
+	SearchBox.Text = ""
+	SearchBox.TextColor3 = Theme.Text
+	SearchBox.TextSize = 13
+	SearchBox.TextXAlignment = Enum.TextXAlignment.Left
+	SearchBox.ClearTextOnFocus = false
+	SearchBox.ZIndex = 4
+
+	-- LeftFrame (Sidebar — เหมือนเดิม 41px ขยายเป็น 144px)
+	LeftFrame.Name = "LeftFrame"
+	LeftFrame.Parent = MainFrame
+	LeftFrame.BackgroundColor3 = Color3.fromRGB(18, 15, 38)
+	LeftFrame.BorderSizePixel = 0
+	LeftFrame.ClipsDescendants = true
+	LeftFrame.Position = UDim2.new(0, 0, 0, 0)
+	LeftFrame.Size = UDim2.new(0, 41, 1, 0)
+	LeftFrame.ZIndex = 3
+	Corner(LeftFrame, 3)
+
+	LeftFrameLine.Name = "LeftFrameLine"
+	LeftFrameLine.Parent = LeftFrame
+	LeftFrameLine.BackgroundColor3 = Theme.Border
+	LeftFrameLine.BorderSizePixel = 0
+	LeftFrameLine.Position = UDim2.new(1, -1, 0, 0)
+	LeftFrameLine.Size = UDim2.new(0, 1, 1, 0)
+	LeftFrameLine.ZIndex = 4
+
+	-- ปุ่มกาง/พับ Sidebar
+	LeftFrameBtn.Name = "LeftFrameBtn"
+	LeftFrameBtn.Parent = LeftFrame
+	LeftFrameBtn.BackgroundTransparency = 1
+	LeftFrameBtn.Position = UDim2.new(0, 0, 0, 0)
+	LeftFrameBtn.Size = UDim2.new(1, 0, 0, 41)
+	LeftFrameBtn.AutoButtonColor = false
+	LeftFrameBtn.Text = ""
+	LeftFrameBtn.ZIndex = 5
+
+	LeftFrameBtnIcon.Name = "LeftFrameBtnIcon"
+	LeftFrameBtnIcon.Parent = LeftFrameBtn
+	LeftFrameBtnIcon.BackgroundTransparency = 1
+	LeftFrameBtnIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	LeftFrameBtnIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+	LeftFrameBtnIcon.Size = UDim2.new(0, 22, 0, 22)
+	LeftFrameBtnIcon.Rotation = 270
+	LeftFrameBtnIcon.Image = "rbxassetid://5844057859"
+	LeftFrameBtnIcon.ImageColor3 = Theme.Text
+	LeftFrameBtnIcon.ZIndex = 6
+
+	-- Tab container (ใน LeftFrame)
+	TabContainer.Name = "TabContainer"
+	TabContainer.Parent = LeftFrame
+	TabContainer.BackgroundTransparency = 1
+	TabContainer.BorderSizePixel = 0
+	TabContainer.Position = UDim2.new(0, 0, 0, 45)
+	TabContainer.Size = UDim2.new(1, 0, 1, -50)
+	TabContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+	TabContainer.ScrollBarThickness = 2
+	TabContainer.ScrollBarImageColor3 = Theme.Muted
+	TabContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	TabContainer.ZIndex = 4
+
+	TabPadding = Padding(TabContainer, 4, 4, 4, 4)
+	TabListLayout = ListLayout(TabContainer, 4, Enum.SortOrder.LayoutOrder)
+
+	-- ContentFrame / AllPages (เนื้อหาหลัก)
+	ContentFrame.Name = "ContentFrame"
+	ContentFrame.Parent = MainFrame
+	ContentFrame.BackgroundTransparency = 1
+	ContentFrame.Position = UDim2.new(0, 41, 0, 62)
+	ContentFrame.Size = UDim2.new(1, -48, 1, -68)
+	ContentFrame.ClipsDescendants = true
+	ContentFrame.ZIndex = 3
+
+	AllPages.Name = "AllPages"
+	AllPages.Parent = ContentFrame
+	AllPages.BackgroundTransparency = 1
+	AllPages.Size = UDim2.new(1, 0, 1, 0)
+	AllPages.ZIndex = 3
+
+	pagesFolder.Name = "pagesFolder"
+	pagesFolder.Parent = AllPages
+
+	-- ============================================================
+	--  Animations เปิดหน้าต่าง
+	-- ============================================================
+	task.spawn(function()
+		TweenService:Create(MainFrame, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(0, 448, 0, 331)}):Play()
+		TweenService:Create(MainFrameGlow, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(0, 448, 0, 331)}):Play()
+		TweenService:Create(Glow1, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 0}):Play()
+		TweenService:Create(Glow2, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 0}):Play()
+	end)
+
+	-- ============================================================
+	--  Drag (ลากหน้าต่างจาก TitleBar)
+	-- ============================================================
+	dragify(TitleBar, MainFrameGlow)
+
+	-- ============================================================
+	--  LeftFrame expand/collapse
+	-- ============================================================
+	LeftFrameBtn.MouseButton1Click:Connect(function()
+		leftExpanded = not leftExpanded
+		if leftExpanded then
+			Tween(LeftFrame, {Size = UDim2.new(0, 144, 1, 0)}, .25)
+			Tween(LeftFrameBtnIcon, {Rotation = 90}, .25)
+		else
+			Tween(LeftFrame, {Size = UDim2.new(0, 41, 1, 0)}, .25)
+			Tween(LeftFrameBtnIcon, {Rotation = 270}, .25)
+		end
+	end)
+
+	-- ============================================================
+	--  Minimize / Unload
+	-- ============================================================
+	MinimizeBtn.MouseButton1Click:Connect(function()
+		minimized = not minimized
+		if minimized then
+			Tween(MainFrame, {Size = UDim2.new(0, 448, 0, 32)}, .3)
+			Tween(MainFrameGlow, {Size = UDim2.new(0, 448, 0, 32)}, .3)
+			ContentFrame.Visible = false
+			SearchBar.Visible = false
+			LeftFrame.Visible = false
+		else
+			Tween(MainFrame, {Size = UDim2.new(0, 448, 0, 331)}, .3)
+			Tween(MainFrameGlow, {Size = UDim2.new(0, 448, 0, 331)}, .3)
+			task.delay(.15, function()
+				ContentFrame.Visible = true
+				SearchBar.Visible = true
+				LeftFrame.Visible = true
+			end)
+		end
+	end)
+
+	UnloadBtn.MouseButton1Click:Connect(function()
+		WindowTable:Unload()
+	end)
+
+	-- ============================================================
+	--  CloseBind (เปิด/ปิด UI ด้วยปุ่ม — คงเดิม)
+	-- ============================================================
+	UserInputService.InputBegan:Connect(function(io, p)
+		if p then return end
+		if io.KeyCode == CloseBind then
+			uitoggled = not uitoggled
+			if uitoggled then
+				TweenService:Create(MainFrame, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(0, 0, 0, 0)}):Play()
+				TweenService:Create(MainFrameGlow, TweenInfo.new(.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(0, 0, 0, 0)}):Play()
+				TweenService:Create(Glow1, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 1}):Play()
+				TweenService:Create(Glow2, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 1}):Play()
+				task.delay(.35, function() ShadowFrame.Visible = false end)
+			else
+				ShadowFrame.Visible = true
+				TweenService:Create(MainFrame, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(0, 448, 0, 331)}):Play()
+				TweenService:Create(MainFrameGlow, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(0, 448, 0, 331)}):Play()
+				TweenService:Create(Glow1, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 0}):Play()
+				TweenService:Create(Glow2, TweenInfo.new(.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 0}):Play()
+			end
+		end
+	end)
+
+
+	-- ============================================================
+	--  Search filter (จาก Wind UI — filter elements ตามชื่อ)
+	-- ============================================================
+	local AllElements = {} -- เก็บ element ทั้งหมดสำหรับ search: {row, titleText, page}
+	SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local query = SearchBox.Text:lower()
+		for _, entry in ipairs(AllElements) do
+			local match = query == "" or entry.title:lower():find(query, 1, true) ~= nil
+			entry.row.Visible = match
+			if entry.page then
+				-- ถ้า element ตรงกัน ให้แสดง page ที่มันอยู่ด้วย (optional highlight)
+			end
+		end
+		-- อัปเดต canvas size ของทุก page
+		for _, page in ipairs(pagesFolder:GetChildren()) do
+			if page:IsA("ScrollingFrame") then
+				page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 10)
+			end
+		end
+	end)
+
+	-- ============================================================
+	--  Tabs:Tab — สร้าง Tab + Page + ElementHandler
+	-- ============================================================
+	function Tabs:Tab(tabname)
+		TabOrder = TabOrder + 1
+		local order = TabOrder
+
+		-- Tab button (ใน LeftFrame)
+		local TabBtn = Instance.new("TextButton")
+		TabBtn.Name = "Tab_" .. tostring(tabname)
+		TabBtn.Parent = TabContainer
+		TabBtn.BackgroundColor3 = Theme.Field
+		TabBtn.BackgroundTransparency = 1
+		TabBtn.Size = UDim2.new(1, 0, 0, 36)
+		TabBtn.AutoButtonColor = false
+		TabBtn.Text = ""
+		TabBtn.LayoutOrder = order
+		TabBtn.ZIndex = 5
+		Corner(TabBtn, 4)
+
+		local TabIcon = Instance.new("TextLabel")
+		TabIcon.Name = "TabIcon"
+		TabIcon.Parent = TabBtn
+		TabIcon.BackgroundTransparency = 1
+		TabIcon.Position = UDim2.new(0, 0, 0, 0)
+		TabIcon.Size = UDim2.new(0, 41, 1, 0)
+		TabIcon.Font = Enum.Font.GothamBold
+		TabIcon.Text = tostring(tabname):sub(1, 1):upper()
+		TabIcon.TextColor3 = Theme.Muted
+		TabIcon.TextSize = 16
+		TabIcon.ZIndex = 6
+
+		local TabLabel = Instance.new("TextLabel")
+		TabLabel.Name = "TabLabel"
+		TabLabel.Parent = TabBtn
+		TabLabel.BackgroundTransparency = 1
+		TabLabel.Position = UDim2.new(0, 41, 0, 0)
+		TabLabel.Size = UDim2.new(1, -45, 1, 0)
+		TabLabel.Font = Enum.Font.GothamSemibold
+		TabLabel.Text = tostring(tabname)
+		TabLabel.TextColor3 = Theme.Muted
+		TabLabel.TextSize = 13
+		TabLabel.TextXAlignment = Enum.TextXAlignment.Left
+		TabLabel.TextTransparency = 1 -- ซ่อนตอน sidebar พับ
+		TabLabel.ZIndex = 6
+
+		-- Page (ScrollingFrame ใน AllPages)
+		local Page = Instance.new("ScrollingFrame")
+		Page.Name = "Page_" .. tostring(tabname)
+		Page.Parent = pagesFolder
+		Page.BackgroundTransparency = 1
+		Page.BorderSizePixel = 0
+		Page.Size = UDim2.new(1, 0, 1, 0)
+		Page.Visible = false
+		Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+		Page.ScrollBarThickness = 3
+		Page.ScrollBarImageColor3 = Theme.Muted
+		Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		Page.ScrollingDirection = Enum.ScrollingDirection.Y
+		Page.ZIndex = 4
+		Padding(Page, 7, 7, 7, 7)
+		local PageLayout = ListLayout(Page, 5, Enum.SortOrder.LayoutOrder)
+
+		-- อัปเดต canvas เมื่อ content เปลี่ยน
+		PageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+			Page.CanvasSize = UDim2.new(0, 0, 0, PageLayout.AbsoluteContentSize.Y + 14)
+		end)
+
+		-- เลือก tab แรกอัตโนมัติ
+		if CurrentTab == nil then
+			CurrentTab = Page
+			Page.Visible = true
+			TabBtn.BackgroundTransparency = 0
+			TabIcon.TextColor3 = Theme.Accent
+			TabLabel.TextColor3 = Theme.Text
+		end
+
+		-- คลิกสลับ tab
+		TabBtn.MouseButton1Click:Connect(function()
+			if CurrentTab == Page then return end
+			-- ซ่อน tab เดิม
+			if CurrentTab then
+				CurrentTab.Visible = false
+			end
+			for _, btn in ipairs(TabButtons) do
+				btn.button.BackgroundTransparency = 1
+				btn.icon.TextColor3 = Theme.Muted
+				btn.label.TextColor3 = Theme.Muted
+			end
+			-- แสดง tab ใหม่
+			CurrentTab = Page
+			Page.Visible = true
+			TabBtn.BackgroundTransparency = 0
+			TabIcon.TextColor3 = Theme.Accent
+			TabLabel.TextColor3 = Theme.Text
+		end)
+
+		-- Hover effect
+		TabBtn.MouseEnter:Connect(function()
+			if CurrentTab ~= Page then
+				Tween(TabBtn, {BackgroundColor3 = Theme.RowHover}, .15)
+				TabBtn.BackgroundTransparency = 0
+			end
+		end)
+		TabBtn.MouseLeave:Connect(function()
+			if CurrentTab ~= Page then
+				Tween(TabBtn, {BackgroundTransparency = 1}, .15)
+			end
+		end)
+
+		-- เมื่อ sidebar ขยาย/พับ → แสดง/ซ่อน TabLabel
+		LeftFrameBtn.MouseButton1Click:Connect(function()
+			task.delay(.1, function()
+				TabLabel.TextTransparency = leftExpanded and 0 or 1
+			end)
+		end)
+
+		table.insert(TabButtons, {button = TabBtn, icon = TabIcon, label = TabLabel, page = Page})
+
+		-- ============================================================
+		--  ElementHandler — สร้าง Elements ต่างๆ ใน Page นี้
+		-- ============================================================
+		local ElementHandler = {}
+		ElementHandler.__index = ElementHandler
+		local elementOrder = 0
+
+		local function nextOrder()
+			elementOrder = elementOrder + 1
+			return elementOrder
+		end
+
+		local function registerElement(row, title)
+			table.insert(AllElements, {row = row, title = tostring(title or ""), page = Page})
+		end
+
+
+		-- --------------------------------------------------------
+		--  Helper: parse args (รองรับทั้ง positional เก่า และ opts table แบบ Wind UI)
+		-- --------------------------------------------------------
+		local function parseArgs(...)
+			local args = {...}
+			local opts = {}
+			if type(args[1]) == "table" then
+				opts = args[1]
+			else
+				opts.Title = args[1]
+				if type(args[2]) == "table" then
+					for k, v in pairs(args[2]) do opts[k] = v end
+				else
+					opts.Default = args[2]
+				end
+				if #args >= 3 then opts.Min = args[2]; opts.Max = args[3] end
+				if #args >= 4 then opts.Default = args[4] end
+				if #args >= 5 and type(args[5]) == "table" then
+					for k, v in pairs(args[5]) do opts[k] = v end
+				end
+			end
+			return opts
+		end
+
+		-- --------------------------------------------------------
+		--  Button
+		-- --------------------------------------------------------
+		function ElementHandler:Button(a, b)
+			local opts = parseArgs(a, b)
+			local cb = opts.Callback or function() end
+			local height = opts.Desc and 44 or 32
+			local Row = MakeRow(Page, "TextButton", height)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title)
+			local T, D = RowTitle(Row, opts.Title, opts.Desc, 50)
+
+			local Indicator = Instance.new("Frame")
+			Indicator.Name = "Indicator"
+			Indicator.Parent = Row
+			Indicator.BackgroundColor3 = Theme.Accent
+			Indicator.Position = UDim2.new(1, -38, 0.5, -8)
+			Indicator.Size = UDim2.new(0, 24, 0, 16)
+			Corner(Indicator, 4)
+			local Arrow = Instance.new("TextLabel")
+			Arrow.Parent = Indicator
+			Arrow.BackgroundTransparency = 1
+			Arrow.Size = UDim2.new(1, 0, 1, 0)
+			Arrow.Font = Enum.Font.GothamBold
+			Arrow.Text = ">"
+			Arrow.TextColor3 = Theme.Text
+			Arrow.TextSize = 12
+			Arrow.ZIndex = 5
+
+			HoverRow(Row)
+
+			local function Flash()
+				Tween(Indicator, {BackgroundColor3 = Theme.On}, .1)
+				task.delay(.15, function() Tween(Indicator, {BackgroundColor3 = Theme.Accent}, .2) end)
+			end
+
+			Row.MouseButton1Click:Connect(function()
+				if Row:GetAttribute("Locked") then return end
+				Flash()
+				task.spawn(cb)
+			end)
+
+			local obj = {}
+			function obj:Highlight() Tween(Row, {BackgroundColor3 = Theme.AccentDark}, .2); task.delay(.4, function() Tween(Row, {BackgroundColor3 = Theme.Row}, .3) end) end
+			function obj:SetTitle(t) T.Text = tostring(t) end
+			function obj:SetDesc(t) if D then D.Text = tostring(t) end end
+			function obj:Lock() Row:SetAttribute("Locked", true); SetLockedVisual(T, D, true) end
+			function obj:Unlock() Row:SetAttribute("Locked", false); SetLockedVisual(T, D, false) end
+			function obj:Destroy() Row:Destroy() end
+			return obj
+		end
+
+		-- --------------------------------------------------------
+		--  Toggle
+		-- --------------------------------------------------------
+		function ElementHandler:Toggle(a, b)
+			local opts = parseArgs(a, b)
+			local cb = opts.Callback or function() end
+			local state = opts.Default == true
+			local height = opts.Desc and 44 or 32
+			local Row = MakeRow(Page, "TextButton", height)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title)
+			local T, D = RowTitle(Row, opts.Title, opts.Desc, 50)
+
+			local ToggleBg = Instance.new("Frame")
+			ToggleBg.Name = "ToggleBg"
+			ToggleBg.Parent = Row
+			ToggleBg.BackgroundColor3 = state and Theme.Accent or Theme.Off
+			ToggleBg.Position = UDim2.new(1, -40, 0.5, -9)
+			ToggleBg.Size = UDim2.new(0, 30, 0, 18)
+			Corner(ToggleBg, 9)
+
+			local Knob = Instance.new("Frame")
+			Knob.Name = "Knob"
+			Knob.Parent = ToggleBg
+			Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+			Knob.Position = state and UDim2.new(1, -4, 0.5, 0) or UDim2.new(0, 4, 0.5, 0)
+			Knob.Size = UDim2.new(0, 12, 0, 12)
+			Corner(Knob, 6)
+
+			HoverRow(Row)
+
+			local function Render(animate)
+				local t = animate and .2 or 0
+				Tween(ToggleBg, {BackgroundColor3 = state and Theme.Accent or Theme.Off}, t)
+				Tween(Knob, {Position = state and UDim2.new(1, -4, 0.5, 0) or UDim2.new(0, 4, 0.5, 0)}, t)
+			end
+
+			local function Fire() task.spawn(function() cb(state) end) end
+
+			Row.MouseButton1Click:Connect(function()
+				if Row:GetAttribute("Locked") then return end
+				state = not state
+				Render(true)
+				Fire()
+			end)
+
+			local obj = {}
+			function obj:Set(v, silent) state = (v == true); Render(true); if not silent then Fire() end end
+			function obj:Get() return state end
+			function obj:SetTitle(t) T.Text = tostring(t) end
+			function obj:SetDesc(t) if D then D.Text = tostring(t) end end
+			function obj:Lock() Row:SetAttribute("Locked", true); SetLockedVisual(T, D, true) end
+			function obj:Unlock() Row:SetAttribute("Locked", false); SetLockedVisual(T, D, false) end
+			function obj:Highlight() Tween(Row, {BackgroundColor3 = Theme.AccentDark}, .2); task.delay(.4, function() Tween(Row, {BackgroundColor3 = Theme.Row}, .3) end) end
+			function obj:Destroy() Row:Destroy() end
+			return RegisterFlag(opts.Flag, obj)
+		end
+
+		-- --------------------------------------------------------
+		--  Slider
+		-- --------------------------------------------------------
+		function ElementHandler:Slider(a, b, c, d, e)
+			local opts
+			if type(a) == "table" then
+				opts = a
+			else
+				opts = {Title = a, Min = tonumber(b), Max = tonumber(c), Default = tonumber(d)}
+				if type(e) == "table" then for k, v in pairs(e) do opts[k] = v end end
+			end
+			local min = opts.Min or 0
+			local max = opts.Max or 100
+			local value = opts.Default or min
+			local rounding = opts.Rounding or 0
+			local cb = opts.Callback or function() end
+			local suffix = opts.Suffix or ""
+			local height = opts.Desc and 52 or 42
+			local Row = MakeRow(Page, "Frame", height)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title)
+			local T, D = RowTitle(Row, opts.Title, opts.Desc, 80)
+
+			local ValueBox = Instance.new("TextBox")
+			ValueBox.Name = "ValueBox"
+			ValueBox.Parent = Row
+			ValueBox.BackgroundColor3 = Theme.Field
+			ValueBox.Position = UDim2.new(1, -70, 0, 6)
+			ValueBox.Size = UDim2.new(0, 56, 0, 20)
+			ValueBox.Font = Enum.Font.GothamSemibold
+			ValueBox.Text = tostring(value) .. suffix
+			ValueBox.TextColor3 = Theme.Text
+			ValueBox.TextSize = 12
+			ValueBox.ClearTextOnFocus = false
+			ValueBox.ZIndex = 5
+			Corner(ValueBox, 4)
+
+			local Track = Instance.new("Frame")
+			Track.Name = "Track"
+			Track.Parent = Row
+			Track.BackgroundColor3 = Theme.Field
+			Track.Position = UDim2.new(0, 14, 1, -12)
+			Track.Size = UDim2.new(1, -28, 0, 4)
+			Corner(Track, 2)
+
+			local Fill = Instance.new("Frame")
+			Fill.Name = "Fill"
+			Fill.Parent = Track
+			Fill.BackgroundColor3 = Theme.Accent
+			Fill.Size = UDim2.new(0, 0, 1, 0)
+			Corner(Fill, 2)
+
+			local Knob = Instance.new("Frame")
+			Knob.Name = "Knob"
+			Knob.Parent = Track
+			Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+			Knob.Position = UDim2.new(0, 0, 0.5, 0)
+			Knob.Size = UDim2.new(0, 12, 0, 12)
+			Corner(Knob, 6)
+
+			local Hit = Instance.new("TextButton")
+			Hit.Name = "Hit"
+			Hit.Parent = Track
+			Hit.BackgroundTransparency = 1
+			Hit.Size = UDim2.new(1, 0, 3, 0)
+			Hit.Position = UDim2.new(0, 0, -1, 0)
+			Hit.Text = ""
+			Hit.AutoButtonColor = false
+			Hit.ZIndex = 6
+
+			local function Snap(v)
+				v = math.clamp(v, min, max)
+				if rounding > 0 then
+					local mult = 10 ^ rounding
+					v = math.floor(v * mult + 0.5) / mult
+				else
+					v = math.floor(v + 0.5)
+				end
+				return v
+			end
+
+			local function Visual()
+				local ratio = (value - min) / (max - min)
+				Tween(Fill, {Size = UDim2.new(ratio, 0, 1, 0)}, .1)
+				Tween(Knob, {Position = UDim2.new(ratio, 0, 0.5, 0)}, .1)
+				ValueBox.Text = tostring(value) .. suffix
+			end
+
+			local function Apply(v, fire, onlyIfChanged)
+				v = Snap(v)
+				if onlyIfChanged and v == value then return end
+				value = v
+				Visual()
+				if fire then task.spawn(function() cb(value) end) end
+			end
+
+			Apply(value, false)
+
+			local dragging = false
+			local function Move(input)
+				local ratio = math.clamp((input.Position.X - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
+				Apply(min + ratio * (max - min), true, true)
+			end
+
+			Hit.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 and not Row:GetAttribute("Locked") then
+					dragging = true
+					InputLock = true
+					Move(input)
+				end
+			end)
+			UserInputService.InputChanged:Connect(function(input)
+				if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+					Move(input)
+				end
+			end)
+			UserInputService.InputEnded:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
+					dragging = false
+					InputLock = false
+				end
+			end)
+
+			ValueBox.FocusLost:Connect(function(enter)
+				local num = tonumber(ValueBox.Text:gsub("[^%d%-%+%.]", ""))
+				if num then
+					Apply(num, true)
+				else
+					ValueBox.Text = tostring(value) .. suffix
+				end
+			end)
+
+			local obj = {}
+			function obj:Set(v, silent) Apply(v, not silent) end
+			function obj:Change(v) Apply(v, true) end
+			function obj:Get() return value end
+			function obj:SetRange(mi, ma) min = mi; max = ma; Apply(value, false) end
+			function obj:Lock() Row:SetAttribute("Locked", true); SetLockedVisual(T, D, true) end
+			function obj:Unlock() Row:SetAttribute("Locked", false); SetLockedVisual(T, D, false) end
+			function obj:Destroy() Row:Destroy() end
+			return RegisterFlag(opts.Flag, obj)
+		end
+
+		-- --------------------------------------------------------
+		--  Divider / Line / Space / Label
+		-- --------------------------------------------------------
+		function ElementHandler:Divider(a)
+			local opts = type(a) == "table" and a or {Title = a}
+			local Row = Instance.new("Frame")
+			Row.Name = "Divider"
+			Row.Parent = Page
+			Row.BackgroundTransparency = 1
+			Row.Size = UDim2.new(1, -14, 0, opts.Title and 24 or 12)
+			Row.LayoutOrder = nextOrder()
+			if opts.Title then
+				local L = Instance.new("TextLabel")
+				L.Parent = Row
+				L.BackgroundTransparency = 1
+				L.Position = UDim2.new(0, 4, 0, 0)
+				L.Size = UDim2.new(1, -8, 1, 0)
+				L.Font = Enum.Font.GothamBold
+				L.Text = tostring(opts.Title):upper()
+				L.TextColor3 = Theme.Muted
+				L.TextSize = 11
+				L.TextXAlignment = Enum.TextXAlignment.Left
+				L.ZIndex = 4
+			else
+				local Line = Instance.new("Frame")
+				Line.Parent = Row
+				Line.BackgroundColor3 = Theme.Border
+				Line.BorderSizePixel = 0
+				Line.Position = UDim2.new(0, 4, 0.5, 0)
+				Line.Size = UDim2.new(1, -8, 0, 1)
+			end
+			return {Type = "Divider", Destroy = function() Row:Destroy() end}
+		end
+
+		function ElementHandler:Line()
+			return ElementHandler:Divider()
+		end
+
+		function ElementHandler:Space(a)
+			local h = tonumber(a) or 8
+			local Row = Instance.new("Frame")
+			Row.Parent = Page
+			Row.BackgroundTransparency = 1
+			Row.Size = UDim2.new(1, 0, 0, h)
+			Row.LayoutOrder = nextOrder()
+			return {Type = "Space", Destroy = function() Row:Destroy() end}
+		end
+
+		function ElementHandler:Label(a)
+			local opts = type(a) == "table" and a or {Text = a}
+			local text = opts.Text or opts.Title or ""
+			local Row = Instance.new("Frame")
+			Row.Parent = Page
+			Row.BackgroundTransparency = 1
+			Row.Size = UDim2.new(1, -14, 0, opts.Desc and 36 or 24)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, text)
+			local T = Instance.new("TextLabel")
+			T.Parent = Row
+			T.BackgroundTransparency = 1
+			T.Position = UDim2.new(0, 4, 0, 0)
+			T.Size = UDim2.new(1, -8, opts.Desc and 0, 18 or 1, 0)
+			T.Font = Enum.Font.GothamSemibold
+			T.Text = tostring(text)
+			T.TextColor3 = opts.Color or Theme.Text
+			T.TextSize = 13
+			T.TextXAlignment = Enum.TextXAlignment.Left
+			T.TextWrapped = true
+			T.ZIndex = 4
+			local D = nil
+			if opts.Desc then
+				D = Instance.new("TextLabel")
+				D.Parent = Row
+				D.BackgroundTransparency = 1
+				D.Position = UDim2.new(0, 4, 0, 20)
+				D.Size = UDim2.new(1, -8, 0, 14)
+				D.Font = Enum.Font.Gotham
+				D.Text = tostring(opts.Desc)
+				D.TextColor3 = Theme.Muted
+				D.TextSize = 11
+				D.TextXAlignment = Enum.TextXAlignment.Left
+				D.ZIndex = 4
+			end
+			local obj = {}
+			function obj:SetText(t) T.Text = tostring(t) end
+			function obj:SetColor(c) T.TextColor3 = c end
+			function obj:Destroy() Row:Destroy() end
+			return obj
+		end
+
+
+		-- --------------------------------------------------------
+		--  Dropdown (รองรับ Single + Multi select — จาก Wind UI)
+		-- --------------------------------------------------------
+		function ElementHandler:Dropdown(a, b, c)
+			local opts
+			if type(a) == "table" then
+				opts = a
+			else
+				opts = {Title = a, List = b}
+				if type(c) == "table" then for k, v in pairs(c) do opts[k] = v end end
+			end
+			local list = opts.List or opts.Options or {}
+			local multi = opts.Multi == true
+			local selected = {}
+			if opts.Default then
+				if multi and type(opts.Default) == "table" then
+					for _, v in ipairs(opts.Default) do selected[v] = true end
+				else
+					selected[tostring(opts.Default)] = true
+				end
+			end
+			local cb = opts.Callback or function() end
+			local height = opts.Desc and 44 or 32
+			local Row = MakeRow(Page, "Frame", height)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title)
+			local T, D = RowTitle(Row, opts.Title, opts.Desc, 120)
+
+			local Header = Instance.new("TextButton")
+			Header.Name = "Header"
+			Header.Parent = Row
+			Header.BackgroundColor3 = Theme.Field
+			Header.Position = UDim2.new(1, -110, 0.5, -11)
+			Header.Size = UDim2.new(0, 96, 0, 22)
+			Header.AutoButtonColor = false
+			Header.Text = ""
+			Header.ZIndex = 6
+			Corner(Header, 4)
+
+			local HeaderText = Instance.new("TextLabel")
+			HeaderText.Parent = Header
+			HeaderText.BackgroundTransparency = 1
+			HeaderText.Position = UDim2.new(0, 8, 0, 0)
+			HeaderText.Size = UDim2.new(1, -24, 1, 0)
+			HeaderText.Font = Enum.Font.Gotham
+			HeaderText.Text = multi and "Select..." or (next(selected) or "Select...")
+			HeaderText.TextColor3 = Theme.SubText
+			HeaderText.TextSize = 12
+			HeaderText.TextXAlignment = Enum.TextXAlignment.Left
+			HeaderText.TextTruncate = Enum.TextTruncate.AtEnd
+			HeaderText.ZIndex = 7
+
+			local Arrow = Instance.new("TextLabel")
+			Arrow.Parent = Header
+			Arrow.BackgroundTransparency = 1
+			Arrow.Position = UDim2.new(1, -18, 0, 0)
+			Arrow.Size = UDim2.new(0, 14, 1, 0)
+			Arrow.Font = Enum.Font.GothamBold
+			Arrow.Text = "v"
+			Arrow.TextColor3 = Theme.Muted
+			Arrow.TextSize = 10
+			Arrow.ZIndex = 7
+
+			-- Dropdown container (overlay อยู่ใน Library เพื่อไม่ให้ถูก ClipsDescendants ตัด)
+			local DropFrame = Instance.new("Frame")
+			DropFrame.Name = "DropFrame"
+			DropFrame.Parent = Library
+			DropFrame.BackgroundColor3 = Theme.Field
+			DropFrame.BorderSizePixel = 0
+			DropFrame.Size = UDim2.new(0, 96, 0, 0)
+			DropFrame.Visible = false
+			DropFrame.ZIndex = 20
+			Corner(DropFrame, 4)
+			Stroke(DropFrame, Theme.Border, 1)
+			local DropLayout = ListLayout(DropFrame, 2, Enum.SortOrder.LayoutOrder)
+			Padding(DropFrame, 3, 3, 3, 3)
+
+			local open = false
+			local function UpdateDisplay()
+				local keys = {}
+				for k in pairs(selected) do table.insert(keys, k) end
+				if #keys == 0 then
+					HeaderText.Text = "Select..."
+				elseif multi then
+					HeaderText.Text = #keys .. " selected"
+				else
+					HeaderText.Text = keys[1]
+				end
+			end
+
+			local function Build()
+				for _, child in ipairs(DropFrame:GetChildren()) do
+					if child:IsA("TextButton") then child:Destroy() end
+				end
+				local order = 0
+				for _, item in ipairs(list) do
+					local name = type(item) == "table" and (item.Title or item.Name or item.Value) or tostring(item)
+					local val = type(item) == "table" and (item.Value or name) or name
+					order = order + 1
+					local Opt = Instance.new("TextButton")
+					Opt.Parent = DropFrame
+					Opt.BackgroundColor3 = selected[val] and Theme.Accent or Theme.Field
+					Opt.BackgroundTransparency = selected[val] and 0 or 1
+					Opt.Size = UDim2.new(1, 0, 0, 22)
+					Opt.AutoButtonColor = false
+					Opt.Font = Enum.Font.Gotham
+					Opt.Text = "  " .. name
+					Opt.TextColor3 = selected[val] and Theme.Text or Theme.SubText
+					Opt.TextSize = 12
+					Opt.TextXAlignment = Enum.TextXAlignment.Left
+					Opt.LayoutOrder = order
+					Opt.ZIndex = 21
+					Corner(Opt, 3)
+					Opt.MouseEnter:Connect(function()
+						if not selected[val] then Opt.BackgroundTransparency = 0; Tween(Opt, {BackgroundColor3 = Theme.RowHover}, .1) end
+					end)
+					Opt.MouseLeave:Connect(function()
+						if not selected[val] then Tween(Opt, {BackgroundTransparency = 1}, .15) end
+					end)
+					Opt.MouseButton1Click:Connect(function()
+						if Row:GetAttribute("Locked") then return end
+						if multi then
+							selected[val] = not selected[val] or nil
+						else
+							selected = {[val] = true}
+						end
+						Build()
+						UpdateDisplay()
+						local out = multi and {} or val
+						if multi then for k in pairs(selected) do table.insert(out, k) end end
+						task.spawn(function() cb(out) end)
+						if not multi then
+							task.delay(.1, function()
+								open = false
+								DropFrame.Visible = false
+								Tween(Arrow, {Rotation = 0}, .15)
+							end)
+						end
+					end)
+				end
+				-- ปรับขนาด DropFrame
+				local h = math.min(#list * 24 + 10, 150)
+				Tween(DropFrame, {Size = UDim2.new(0, 96, 0, h)}, .2)
+			end
+
+			local function SetOpen(state)
+				if Row:GetAttribute("Locked") then return end
+				open = state
+				if open then
+					-- จัดตำแหน่ง DropFrame ใต้ Header (absolute เพราะอยู่ใน Library)
+					local pos = Header.AbsolutePosition + Vector2.new(Header.AbsoluteSize.X - 96, Header.AbsoluteSize.Y + 4)
+					DropFrame.Position = UDim2.new(0, pos.X, 0, pos.Y)
+					DropFrame.Visible = true
+					Build()
+					Tween(Arrow, {Rotation = 180}, .15)
+				else
+					Tween(DropFrame, {Size = UDim2.new(0, 96, 0, 0)}, .2)
+					Tween(Arrow, {Rotation = 0}, .15)
+					task.delay(.2, function() DropFrame.Visible = false end)
+				end
+			end
+
+			Header.MouseButton1Click:Connect(function() SetOpen(not open) end)
+			UpdateDisplay()
+
+			local obj = {}
+			function obj:Get()
+				if multi then local out = {}; for k in pairs(selected) do table.insert(out, k) end; return out end
+				return next(selected)
+			end
+			function obj:Set(v, silent)
+				if multi then selected = {}; if type(v) == "table" then for _, x in ipairs(v) do selected[x] = true end end
+				else selected = {[tostring(v)] = true} end
+				UpdateDisplay(); Build()
+				if not silent then task.spawn(function() cb(obj:Get()) end) end
+			end
+			function obj:Select(v, silent) obj:Set(v, silent) end
+			function obj:Refresh(newList) list = newList or {}; if open then Build() end end
+			function obj:Open() SetOpen(true) end
+			function obj:Close() SetOpen(false) end
+			function obj:Lock() Row:SetAttribute("Locked", true); SetLockedVisual(T, D, true) end
+			function obj:Unlock() Row:SetAttribute("Locked", false); SetLockedVisual(T, D, false) end
+			function obj:Destroy() Row:Destroy(); DropFrame:Destroy() end
+			return RegisterFlag(opts.Flag, obj)
+		end
+
+		-- --------------------------------------------------------
+		--  Input (Textbox)
+		-- --------------------------------------------------------
+		function ElementHandler:Input(a)
+			local opts = type(a) == "table" and a or {Title = a}
+			local cb = opts.Callback or function() end
+			local numeric = opts.Numeric == true
+			local height = opts.Desc and 44 or 32
+			local Row = MakeRow(Page, "Frame", height)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title)
+			local T, D = RowTitle(Row, opts.Title, opts.Desc, 140)
+
+			local Box = Instance.new("TextBox")
+			Box.Name = "Box"
+			Box.Parent = Row
+			Box.BackgroundColor3 = Theme.Field
+			Box.Position = UDim2.new(1, -130, 0.5, -11)
+			Box.Size = UDim2.new(0, 116, 0, 22)
+			Box.Font = Enum.Font.Gotham
+			Box.PlaceholderText = opts.PlaceholderText or "Type..."
+			Box.PlaceholderColor3 = Theme.Muted
+			Box.Text = opts.Default or ""
+			Box.TextColor3 = Theme.Text
+			Box.TextSize = 12
+			Box.ClearTextOnFocus = false
+			Box.ZIndex = 5
+			Corner(Box, 4)
+
+			Box.Focused:Connect(function()
+				Tween(Box, {BackgroundColor3 = Theme.FieldHover}, .15)
+			end)
+			Box.FocusLost:Connect(function(enter)
+				Tween(Box, {BackgroundColor3 = Theme.Field}, .15)
+				local val = Box.Text
+				if numeric then
+					local num = tonumber(val:gsub("[^%d%-%+%.]", ""))
+					val = num or 0
+					Box.Text = tostring(val)
+				end
+				task.spawn(function() cb(val, enter) end)
+			end)
+
+			local obj = {}
+			function obj:Set(v, silent) Box.Text = tostring(v); if not silent then task.spawn(function() cb(v) end) end end
+			function obj:Get() return Box.Text end
+			function obj:Lock() Row:SetAttribute("Locked", true); Box.ClearTextOnFocus = false; SetLockedVisual(T, D, true) end
+			function obj:Unlock() Row:SetAttribute("Locked", false); SetLockedVisual(T, D, false) end
+			function obj:Destroy() Row:Destroy() end
+			return RegisterFlag(opts.Flag, obj)
+		end
+
+		-- --------------------------------------------------------
+		--  Keybind (รองรับ Mode: Hold/Toggle/Always — จาก Wind UI)
+		-- --------------------------------------------------------
+		function ElementHandler:Keybind(a)
+			local opts = type(a) == "table" and a or {Title = a}
+			local cb = opts.Callback or function() end
+			local mode = opts.Mode or "Toggle" -- Hold, Toggle, Always
+			local currentKey = ResolveKey(opts.Default) or Enum.KeyCode.Unknown
+			local listening = false
+			local height = opts.Desc and 44 or 32
+			local Row = MakeRow(Page, "Frame", height)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title)
+			local T, D = RowTitle(Row, opts.Title, opts.Desc, 110)
+
+			local KeyBtn = Instance.new("TextButton")
+			KeyBtn.Name = "KeyBtn"
+			KeyBtn.Parent = Row
+			KeyBtn.BackgroundColor3 = Theme.Field
+			KeyBtn.Position = UDim2.new(1, -100, 0.5, -11)
+			KeyBtn.Size = UDim2.new(0, 86, 0, 22)
+			KeyBtn.AutoButtonColor = false
+			KeyBtn.Font = Enum.Font.GothamSemibold
+			KeyBtn.Text = currentKey.Name
+			KeyBtn.TextColor3 = Theme.Text
+			KeyBtn.TextSize = 12
+			KeyBtn.ZIndex = 5
+			Corner(KeyBtn, 4)
+
+			local function Show()
+				KeyBtn.Text = listening and "..." or (currentKey.Name or "None")
+				Tween(KeyBtn, {BackgroundColor3 = listening and Theme.Accent or Theme.Field}, .15)
+			end
+
+			KeyBtn.MouseButton1Click:Connect(function()
+				if Row:GetAttribute("Locked") then return end
+				listening = true
+				Show()
+			end)
+
+			UserInputService.InputBegan:Connect(function(input, gpe)
+				if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+					currentKey = input.KeyCode
+					listening = false
+					Show()
+					task.spawn(function() cb(currentKey) end)
+				elseif listening and input.UserInputType == Enum.UserInputType.MouseButton1 then
+					-- ใช้ปุ่มเมาส์ได้ด้วย (แปลงเป็น KeyCode ผ่าน Mouse)
+					currentKey = Enum.KeyCode.Unknown -- จำกัดแค่ keyboard
+					listening = false
+					Show()
+				end
+			end)
+
+			-- จำลอง Hold/Toggle mode
+			local held = false
+			UserInputService.InputBegan:Connect(function(input, gpe)
+				if gpe or listening then return end
+				if input.KeyCode == currentKey and currentKey ~= Enum.KeyCode.Unknown then
+					if mode == "Hold" then
+						held = true
+						task.spawn(function() cb(true) end)
+					elseif mode == "Toggle" then
+						held = not held
+						task.spawn(function() cb(held) end)
+					elseif mode == "Always" then
+						task.spawn(function() cb(true) end)
+					end
+				end
+			end)
+			UserInputService.InputEnded:Connect(function(input)
+				if mode == "Hold" and input.KeyCode == currentKey then
+					held = false
+					task.spawn(function() cb(false) end)
+				end
+			end)
+
+			Show()
+
+			local obj = {}
+			function obj:Set(v, silent) currentKey = ResolveKey(v) or Enum.KeyCode.Unknown; Show(); if not silent then task.spawn(function() cb(currentKey) end) end end
+			function obj:Get() return currentKey end
+			function obj:Lock() Row:SetAttribute("Locked", true); SetLockedVisual(T, D, true) end
+			function obj:Unlock() Row:SetAttribute("Locked", false); SetLockedVisual(T, D, false) end
+			function obj:Destroy() Row:Destroy() end
+			return RegisterFlag(opts.Flag, obj)
+		end
+
+
+		-- --------------------------------------------------------
+		--  Paragraph (หลายบรรทัด — จาก Wind UI)
+		-- --------------------------------------------------------
+		function ElementHandler:Paragraph(a)
+			local opts = type(a) == "table" and a or {Title = a}
+			local lines = opts.Lines or opts.Content or (opts.Title and {tostring(opts.Title)} or {""})
+			local Row = Instance.new("Frame")
+			Row.Parent = Page
+			Row.BackgroundTransparency = 1
+			Row.Size = UDim2.new(1, -14, 0, #lines * 16 + 10)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title or "Paragraph")
+			Padding(Row, 6, 5, 6, 5)
+			local layout = ListLayout(Row, 2, Enum.SortOrder.LayoutOrder)
+
+			local labels = {}
+			for i, line in ipairs(lines) do
+				local text = type(line) == "table" and line.Text or tostring(line)
+				local color = type(line) == "table" and line.Color or Theme.SubText
+				local L = Instance.new("TextLabel")
+				L.Parent = Row
+				L.BackgroundTransparency = 1
+				L.Size = UDim2.new(1, 0, 0, 14)
+				L.Font = Enum.Font.Gotham
+				L.Text = text
+				L.TextColor3 = color
+				L.TextSize = 12
+				L.TextXAlignment = Enum.TextXAlignment.Left
+				L.TextWrapped = true
+				L.AutomaticSize = Enum.AutomaticSize.Y
+				L.LayoutOrder = i
+				L.ZIndex = 4
+				table.insert(labels, L)
+			end
+
+			layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+				Row.Size = UDim2.new(1, -14, 0, layout.AbsoluteContentSize.Y + 10)
+			end)
+
+			local obj = {}
+			function obj:SetTitle(t) if labels[1] then labels[1].Text = tostring(t) end end
+			function obj:SetDesc(t) if labels[2] then labels[2].Text = tostring(t) end end
+			function obj:SetLines(newLines)
+				for _, l in ipairs(labels) do l:Destroy() end
+				labels = {}
+				for i, line in ipairs(newLines) do
+					local text = type(line) == "table" and line.Text or tostring(line)
+					local color = type(line) == "table" and line.Color or Theme.SubText
+					local L = Instance.new("TextLabel")
+					L.Parent = Row
+					L.BackgroundTransparency = 1
+					L.Size = UDim2.new(1, 0, 0, 14)
+					L.Font = Enum.Font.Gotham
+					L.Text = text
+					L.TextColor3 = color
+					L.TextSize = 12
+					L.TextXAlignment = Enum.TextXAlignment.Left
+					L.LayoutOrder = i
+					L.ZIndex = 4
+					table.insert(labels, L)
+				end
+			end
+			function obj:Destroy() Row:Destroy() end
+			return obj
+		end
+
+		-- --------------------------------------------------------
+		--  Code (พร้อมปุ่ม Copy — จาก Wind UI)
+		-- --------------------------------------------------------
+		function ElementHandler:Code(a)
+			local opts = type(a) == "table" and a or {Title = a}
+			local code = opts.Code or opts.Text or opts.Title or ""
+			local Row = Instance.new("Frame")
+			Row.Parent = Page
+			Row.BackgroundColor3 = Color3.fromRGB(15, 13, 32)
+			Row.Size = UDim2.new(1, -14, 0, 80)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title or "Code")
+			Corner(Row, 4)
+			Stroke(Row, Theme.Border, 1)
+
+			local CodeBox = Instance.new("TextBox")
+			CodeBox.Parent = Row
+			CodeBox.BackgroundTransparency = 1
+			CodeBox.Position = UDim2.new(0, 8, 0, 6)
+			CodeBox.Size = UDim2.new(1, -50, 1, -12)
+			CodeBox.Font = Enum.Font.Code
+			CodeBox.Text = tostring(code)
+			CodeBox.TextColor3 = Color3.fromRGB(180, 220, 255)
+			CodeBox.TextSize = 12
+			CodeBox.TextXAlignment = Enum.TextXAlignment.Left
+			CodeBox.TextYAlignment = Enum.TextYAlignment.Top
+			CodeBox.ClearTextOnFocus = false
+			CodeBox.MultiLine = true
+			CodeBox.TextWrapped = true
+			CodeBox.ZIndex = 5
+
+			local Copy = Instance.new("TextButton")
+			Copy.Parent = Row
+			Copy.BackgroundColor3 = Theme.Accent
+			Copy.Position = UDim2.new(1, -38, 0, 6)
+			Copy.Size = UDim2.new(0, 30, 0, 22)
+			Copy.AutoButtonColor = false
+			Copy.Font = Enum.Font.GothamBold
+			Copy.Text = "Copy"
+			Copy.TextColor3 = Theme.Text
+			Copy.TextSize = 10
+			Copy.ZIndex = 6
+			Corner(Copy, 4)
+
+			Copy.MouseButton1Click:Connect(function()
+				if setclipboard then
+					setclipboard(CodeBox.Text)
+				elseif writefile then
+					writefile("copied_code.txt", CodeBox.Text)
+				end
+				local old = Copy.Text
+				Copy.Text = "OK!"
+				Tween(Copy, {BackgroundColor3 = Color3.fromRGB(60, 160, 80)}, .15)
+				task.delay(1.2, function()
+					Copy.Text = old
+					Tween(Copy, {BackgroundColor3 = Theme.Accent}, .2)
+				end)
+			end)
+
+			local obj = {}
+			function obj:SetCode(t) CodeBox.Text = tostring(t) end
+			function obj:GetCode() return CodeBox.Text end
+			function obj:Destroy() Row:Destroy() end
+			return obj
+		end
+
+		-- --------------------------------------------------------
+		--  Section (พับ/ขยายได้ — มี ElementHandler ย่อย จาก Wind UI)
+		-- --------------------------------------------------------
+		function ElementHandler:Section(a)
+			local opts = type(a) == "table" and a or {Title = a}
+			local opened = opts.Default ~= false
+			local secOrder = nextOrder()
+
+			local Holder = Instance.new("Frame")
+			Holder.Parent = Page
+			Holder.BackgroundTransparency = 1
+			Holder.Size = UDim2.new(1, -14, 0, 30)
+			Holder.LayoutOrder = secOrder
+			Holder.AutomaticSize = Enum.AutomaticSize.Y
+			registerElement(Holder, opts.Title)
+			local secLayout = ListLayout(Holder, 4, Enum.SortOrder.LayoutOrder)
+
+			local Header = Instance.new("TextButton")
+			Header.Parent = Holder
+			Header.BackgroundColor3 = Theme.Field
+			Header.Size = UDim2.new(1, 0, 0, 28)
+			Header.AutoButtonColor = false
+			Header.Text = ""
+			Header.LayoutOrder = 0
+			Corner(Header, 4)
+
+			local HeaderText = Instance.new("TextLabel")
+			HeaderText.Parent = Header
+			HeaderText.BackgroundTransparency = 1
+			HeaderText.Position = UDim2.new(0, 10, 0, 0)
+			HeaderText.Size = UDim2.new(1, -30, 1, 0)
+			HeaderText.Font = Enum.Font.GothamBold
+			HeaderText.Text = tostring(opts.Title or "Section")
+			HeaderText.TextColor3 = Theme.Text
+			HeaderText.TextSize = 13
+			HeaderText.TextXAlignment = Enum.TextXAlignment.Left
+			HeaderText.ZIndex = 5
+
+			local Arrow = Instance.new("TextLabel")
+			Arrow.Parent = Header
+			Arrow.BackgroundTransparency = 1
+			Arrow.Position = UDim2.new(1, -22, 0, 0)
+			Arrow.Size = UDim2.new(0, 14, 1, 0)
+			Arrow.Font = Enum.Font.GothamBold
+			Arrow.Text = "v"
+			Arrow.TextColor3 = Theme.Muted
+			Arrow.TextSize = 10
+			Arrow.Rotation = opened and 0 or 270
+			Arrow.ZIndex = 5
+
+			local Content = Instance.new("Frame")
+			Content.Parent = Holder
+			Content.BackgroundTransparency = 1
+			Content.Size = UDim2.new(1, 0, 0, 0)
+			Content.Visible = opened
+			Content.LayoutOrder = 1
+			Content.ClipsDescendants = true
+			local contentLayout = ListLayout(Content, 5, Enum.SortOrder.LayoutOrder)
+			Padding(Content, 6, 0, 0, 0)
+
+			contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+				if opened then
+					Tween(Content, {Size = UDim2.new(1, 0, 0, contentLayout.AbsoluteContentSize.Y)}, .2)
+				end
+			end)
+
+			local function SetOpened(state)
+				opened = state
+				Content.Visible = true
+				Arrow.Rotation = opened and 0 or 270
+				if opened then
+					Tween(Content, {Size = UDim2.new(1, 0, 0, contentLayout.AbsoluteContentSize.Y)}, .25)
+				else
+					Tween(Content, {Size = UDim2.new(1, 0, 0, 0)}, .25)
+					task.delay(.25, function() if not opened then Content.Visible = false end end)
+				end
+			end
+
+			Header.MouseEnter:Connect(function() Tween(Header, {BackgroundColor3 = Theme.RowHover}, .15) end)
+			Header.MouseLeave:Connect(function() Tween(Header, {BackgroundColor3 = Theme.Field}, .15) end)
+			Header.MouseButton1Click:Connect(function() SetOpened(not opened) end)
+
+			if opened then
+				Content.Size = UDim2.new(1, 0, 0, 0)
+			end
+
+			-- สร้าง ElementHandler ย่อยสำหรับใส่ element ใน Section
+			local secHandler = {}
+			local secElementOrder = 0
+			local function secNextOrder() secElementOrder = secElementOrder + 1; return secElementOrder end
+
+			-- Proxy: สร้าง element ใน Content แทน Page
+			local origPage = Page
+			Page = Content -- สลับไป Content ชั่วคราว
+			local origNextOrder = nextOrder
+			nextOrder = secNextOrder
+
+			-- คัดลอก methods ทั้งหมดจาก ElementHandler ไปยัง secHandler (สร้างใน Content)
+			for name, fn in pairs(ElementHandler) do
+				if type(fn) == "function" and name ~= "__index" then
+					secHandler[name] = function(self, ...)
+						local oldPage = Page
+						local oldNext = nextOrder
+						Page = Content
+						nextOrder = secNextOrder
+						local result = fn(ElementHandler, ...)
+						Page = oldPage
+						nextOrder = oldNext
+						return result
+					end
+				end
+			end
+
+			Page = origPage -- คืนค่า
+			nextOrder = origNextOrder
+
+			local sec = {}
+			sec.Container = secHandler
+			function sec:SetTitle(t) HeaderText.Text = tostring(t) end
+			function sec:Open() SetOpened(true) end
+			function sec:Close() SetOpened(false) end
+			function sec:Destroy() Holder:Destroy() end
+			return sec
+		end
+
+
+		-- --------------------------------------------------------
+		--  Colorpicker (ครบ: SV square + Hue + RGB/HEX + Rainbow + Sync)
+		-- --------------------------------------------------------
+		function ElementHandler:Colorpicker(a, b, c)
+			local opts
+			if type(a) == "table" then
+				opts = a
+			else
+				opts = {Title = a, Default = b}
+				if type(c) == "table" then for k, v in pairs(c) do opts[k] = v end end
+			end
+			local cb = opts.Callback or function() end
+			local currentColor = opts.Default or Theme.Accent
+			local rainbow = opts.Rainbow == true
+			local height = opts.Desc and 44 or 32
+			local Row = MakeRow(Page, "Frame", height)
+			Row.LayoutOrder = nextOrder()
+			registerElement(Row, opts.Title)
+			local T, D = RowTitle(Row, opts.Title, opts.Desc, 60)
+
+			local ColorBtn = Instance.new("TextButton")
+			ColorBtn.Name = "ColorBtn"
+			ColorBtn.Parent = Row
+			ColorBtn.BackgroundColor3 = currentColor
+			ColorBtn.Position = UDim2.new(1, -44, 0.5, -10)
+			ColorBtn.Size = UDim2.new(0, 30, 0, 20)
+			ColorBtn.AutoButtonColor = false
+			ColorBtn.Text = ""
+			ColorBtn.ZIndex = 5
+			Corner(ColorBtn, 4)
+			Stroke(ColorBtn, Theme.Border, 1)
+
+			-- Picker Popup (overlay อยู่เหนือทุกอย่าง)
+			local Picker = Instance.new("Frame")
+			Picker.Name = "ColorPickerPopup"
+			Picker.Parent = Library
+			Picker.BackgroundColor3 = Theme.Background
+			Picker.BorderSizePixel = 0
+			Picker.Size = UDim2.new(0, 230, 0, 220)
+			Picker.Visible = false
+			Picker.ZIndex = 100
+			Corner(Picker, 6)
+			Stroke(Picker, Theme.Border, 1)
+			Padding(Picker, 10, 10, 10, 10)
+
+			local SV = Instance.new("ImageButton")
+			SV.Name = "SV"
+			SV.Parent = Picker
+			SV.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+			SV.Position = UDim2.new(0, 0, 0, 0)
+			SV.Size = UDim2.new(0, 140, 0, 140)
+			SV.AutoButtonColor = false
+			SV.Image = "rbxassetid://2001828859" -- saturation-value gradient
+			SV.ScaleType = Enum.ScaleType.Fit
+			SV.ZIndex = 101
+			Corner(SV, 4)
+
+			local SVCursor = Instance.new("Frame")
+			SVCursor.Parent = SV
+			SVCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			SVCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+			SVCursor.Size = UDim2.new(0, 10, 0, 10)
+			SVCursor.ZIndex = 102
+			Corner(SVCursor, 5)
+			Stroke(SVCursor, Color3.fromRGB(0, 0, 0), 1)
+
+			local Hue = Instance.new("ImageButton")
+			Hue.Name = "Hue"
+			Hue.Parent = Picker
+			Hue.BackgroundTransparency = 1
+			Hue.Position = UDim2.new(0, 150, 0, 0)
+			Hue.Size = UDim2.new(0, 20, 0, 140)
+			Hue.AutoButtonColor = false
+			Hue.Image = "rbxassetid://1840539269" -- hue gradient
+			Hue.ScaleType = Enum.ScaleType.Fit
+			Hue.ZIndex = 101
+			Corner(Hue, 4)
+
+			local HueCursor = Instance.new("Frame")
+			HueCursor.Parent = Hue
+			HueCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			HueCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+			HueCursor.Size = UDim2.new(1, 4, 0, 4)
+			HueCursor.ZIndex = 102
+			Corner(HueCursor, 2)
+
+			-- RGB / HEX inputs
+			local function MakeInput(name, x, y, w)
+				local f = Instance.new("Frame")
+				f.Parent = Picker
+				f.BackgroundColor3 = Theme.Field
+				f.Position = UDim2.new(0, x, 0, y)
+				f.Size = UDim2.new(0, w, 0, 22)
+				f.ZIndex = 101
+				Corner(f, 3)
+				local tb = Instance.new("TextBox")
+				tb.Parent = f
+				tb.BackgroundTransparency = 1
+				tb.Size = UDim2.new(1, -4, 1, 0)
+				tb.Position = UDim2.new(0, 2, 0, 0)
+				tb.Font = Enum.Font.Gotham
+				tb.Text = ""
+				tb.TextColor3 = Theme.Text
+				tb.TextSize = 11
+				tb.ClearTextOnFocus = false
+				tb.ZIndex = 102
+				return tb
+			end
+
+			local Rbox = MakeInput("R", 0, 150, 45)
+			local Gbox = MakeInput("G", 50, 150, 45)
+			local Bbox = MakeInput("B", 100, 150, 45)
+			local HEXbox = MakeInput("HEX", 150, 150, 70)
+			local RainbowToggle = Instance.new("TextButton")
+			RainbowToggle.Parent = Picker
+			RainbowToggle.BackgroundColor3 = rainbow and Theme.Accent or Theme.Field
+			RainbowToggle.Position = UDim2.new(0, 0, 0, 180)
+			RainbowToggle.Size = UDim2.new(0, 70, 0, 22)
+			RainbowToggle.AutoButtonColor = false
+			RainbowToggle.Font = Enum.Font.GothamSemibold
+			RainbowToggle.Text = "Rainbow"
+			RainbowToggle.TextColor3 = Theme.Text
+			RainbowToggle.TextSize = 11
+			RainbowToggle.ZIndex = 101
+			Corner(RainbowToggle, 3)
+
+			local DoneBtn = Instance.new("TextButton")
+			DoneBtn.Parent = Picker
+			DoneBtn.BackgroundColor3 = Theme.Accent
+			DoneBtn.Position = UDim2.new(1, -70, 0, 180)
+			DoneBtn.Size = UDim2.new(0, 60, 0, 22)
+			DoneBtn.AutoButtonColor = false
+			DoneBtn.Font = Enum.Font.GothamBold
+			DoneBtn.Text = "Done"
+			DoneBtn.TextColor3 = Theme.Text
+			DoneBtn.TextSize = 11
+			DoneBtn.ZIndex = 101
+			Corner(DoneBtn, 3)
+
+			local h, s, v = Color3ToHSB(currentColor)
+			local open = false
+
+			local function UpdateColor()
+				currentColor = HSBToColor3(h, s, v)
+				ColorBtn.BackgroundColor3 = currentColor
+				SV.BackgroundColor3 = HSBToColor3(h, 1, 1)
+				SVCursor.Position = UDim2.new(s, 0, 1 - v, 0)
+				HueCursor.Position = UDim2.new(0.5, 0, h, 0)
+				Rbox.Text = tostring(math.floor(currentColor.R * 255))
+				Gbox.Text = tostring(math.floor(currentColor.G * 255))
+				Bbox.Text = tostring(math.floor(currentColor.B * 255))
+				HEXbox.Text = string.format("%02X%02X%02X", math.floor(currentColor.R*255), math.floor(currentColor.G*255), math.floor(currentColor.B*255))
+				task.spawn(function() cb(currentColor) end)
+			end
+
+			local function BindDrag(gui, onMove)
+				local dragging = false
+				gui.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 then
+						dragging = true
+						onMove(input)
+					end
+				end)
+				UserInputService.InputChanged:Connect(function(input)
+					if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+						onMove(input)
+					end
+				end)
+				UserInputService.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+				end)
+			end
+
+			BindDrag(SV, function(input)
+				local rel = Vector2.new(
+					math.clamp((input.Position.X - SV.AbsolutePosition.X) / SV.AbsoluteSize.X, 0, 1),
+					math.clamp((input.Position.Y - SV.AbsolutePosition.Y) / SV.AbsoluteSize.Y, 0, 1)
+				)
+				s = rel.X; v = 1 - rel.Y
+				UpdateColor()
+			end)
+
+			BindDrag(Hue, function(input)
+				h = math.clamp((input.Position.Y - Hue.AbsolutePosition.Y) / Hue.AbsoluteSize.Y, 0, 1)
+				UpdateColor()
+			end)
+
+			local function FromRGB()
+				local r = tonumber(Rbox.Text) or 0
+				local g = tonumber(Gbox.Text) or 0
+				local b = tonumber(Bbox.Text) or 0
+				currentColor = Color3.fromRGB(math.clamp(r,0,255), math.clamp(g,0,255), math.clamp(b,0,255))
+				h, s, v = Color3ToHSB(currentColor)
+				UpdateColor()
+			end
+			Rbox.FocusLost:Connect(FromRGB); Gbox.FocusLost:Connect(FromRGB); Bbox.FocusLost:Connect(FromRGB)
+			HEXbox.FocusLost:Connect(function()
+				local hex = HEXbox.Text:gsub("#", "")
+				if #hex == 6 then
+					local r = tonumber(hex:sub(1,2), 16) or 0
+					local g = tonumber(hex:sub(3,4), 16) or 0
+					local b = tonumber(hex:sub(5,6), 16) or 0
+					currentColor = Color3.fromRGB(r, g, b)
+					h, s, v = Color3ToHSB(currentColor)
+					UpdateColor()
+				end
+			end)
+
+			RainbowToggle.MouseButton1Click:Connect(function()
+				rainbow = not rainbow
+				RainbowToggle.BackgroundColor3 = rainbow and Theme.Accent or Theme.Field
+			end)
+
+			-- Rainbow loop สำหรับ colorpicker นี้
+			local rainbowConn
+			if rainbow then
+				rainbowConn = RunService.Heartbeat:Connect(function()
+					if rainbow and open then
+						h = WindowTable.RainbowColorValue
+						UpdateColor()
+					end
+				end)
+			end
+
+			local function OpenPicker()
+				if Row:GetAttribute("Locked") then return end
+				open = true
+				-- จัดตำแหน่งใกล้ ColorBtn
+				local pos = ColorBtn.AbsolutePosition
+				Picker.Position = UDim2.new(0, math.clamp(pos.X - 100, 10, workspace.CurrentCamera.ViewportSize.X - 240), 0, math.clamp(pos.Y + 30, 10, workspace.CurrentCamera.ViewportSize.Y - 230))
+				Picker.Visible = true
+				UpdateColor()
+			end
+			local function ClosePicker()
+				open = false
+				Picker.Visible = false
+			end
+
+			ColorBtn.MouseButton1Click:Connect(function()
+				if open then ClosePicker() else OpenPicker() end
+			end)
+			DoneBtn.MouseButton1Click:Connect(ClosePicker)
+
+			UpdateColor()
+
+			local obj = {}
+			function obj:Get() return currentColor end
+			function obj:Set(c, silent)
+				currentColor = c
+				h, s, v = Color3ToHSB(c)
+				UpdateColor()
+				if silent then -- ห้าม fire ซ้ำ
+				end
+			end
+			function obj:SetRainbow(state) rainbow = state == true; RainbowToggle.BackgroundColor3 = rainbow and Theme.Accent or Theme.Field end
+			function obj:GetRainbow() return rainbow end
+			function obj:Lock() Row:SetAttribute("Locked", true); SetLockedVisual(T, D, true) end
+			function obj:Unlock() Row:SetAttribute("Locked", false); SetLockedVisual(T, D, false) end
+			function obj:Destroy() Row:Destroy(); Picker:Destroy(); if rainbowConn then rainbowConn:Disconnect() end end
+			return RegisterFlag(opts.Flag, obj)
+		end
+
+		-- ปิด ElementHandler — คืนออกไป
+		return ElementHandler
+	end -- end Tabs:Tab
+
+
+	-- ============================================================
+	--  Tabs:TabLine (เส้นแบ่งใน tab list — คงเดิม)
+	-- ============================================================
+	function Tabs:TabLine(txt)
+		local Line = Instance.new("Frame")
+		Line.Parent = TabContainer
+		Line.BackgroundColor3 = Theme.Border
+		Line.BorderSizePixel = 0
+		Line.Size = UDim2.new(1, -8, 0, 1)
+		Line.LayoutOrder = TabOrder + 100
+		Line.ZIndex = 5
+		if txt then
+			local L = Instance.new("TextLabel")
+			L.Parent = Line
+			L.BackgroundTransparency = 1
+			L.Position = UDim2.new(0, 4, 0, -8)
+			L.Size = UDim2.new(1, -8, 0, 16)
+			L.Font = Enum.Font.GothamBold
+			L.Text = tostring(txt):upper()
+			L.TextColor3 = Theme.Muted
+			L.TextSize = 10
+			L.TextXAlignment = Enum.TextXAlignment.Left
+			L.TextTransparency = 1
+			L.ZIndex = 6
+			LeftFrameBtn.MouseButton1Click:Connect(function()
+				task.delay(.1, function() L.TextTransparency = leftExpanded and 0 or 1 end)
+			end)
+		end
+		return Line
+	end
+
+	-- ============================================================
+	--  Tabs:Dialog (Popup ยืนยัน — จาก Wind UI)
+	-- ============================================================
+	function Tabs:Dialog(opts)
+		opts = opts or {}
+		local overlay = Instance.new("TextButton")
+		overlay.Parent = Library
+		overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		overlay.BackgroundTransparency = 0.5
+		overlay.Size = UDim2.new(1, 0, 1, 0)
+		overlay.Text = ""
+		overlay.AutoButtonColor = false
+		overlay.ZIndex = 200
+
+		local Card = Instance.new("Frame")
+		Card.Parent = overlay
+		Card.AnchorPoint = Vector2.new(0.5, 0.5)
+		Card.Position = UDim2.new(0.5, 0, 0.5, 0)
+		Card.BackgroundColor3 = Theme.Background
+		Card.Size = UDim2.new(0, 300, 0, 160)
+		Card.ZIndex = 201
+		Corner(Card, 6)
+		Stroke(Card, Theme.Border, 1)
+
+		local Title = Instance.new("TextLabel")
+		Title.Parent = Card
+		Title.BackgroundTransparency = 1
+		Title.Position = UDim2.new(0, 14, 0, 12)
+		Title.Size = UDim2.new(1, -28, 0, 22)
+		Title.Font = Enum.Font.GothamBold
+		Title.Text = opts.Title or "Dialog"
+		Title.TextColor3 = Theme.Text
+		Title.TextSize = 15
+		Title.TextXAlignment = Enum.TextXAlignment.Left
+		Title.ZIndex = 202
+
+		local Body = Instance.new("TextLabel")
+		Body.Parent = Card
+		Body.BackgroundTransparency = 1
+		Body.Position = UDim2.new(0, 14, 0, 40)
+		Body.Size = UDim2.new(1, -28, 0, 70)
+		Body.Font = Enum.Font.Gotham
+		Body.Text = opts.Body or opts.Text or ""
+		Body.TextColor3 = Theme.SubText
+		Body.TextSize = 13
+		Body.TextXAlignment = Enum.TextXAlignment.Left
+		Body.TextYAlignment = Enum.TextYAlignment.Top
+		Body.TextWrapped = true
+		Body.ZIndex = 202
+
+		local function Close()
+			Tween(Card, {Size = UDim2.new(0, 0, 0, 0)}, .2)
+			Tween(overlay, {BackgroundTransparency = 1}, .2)
+			task.delay(.2, function() overlay:Destroy() end)
+		end
+
+		local buttons = opts.Buttons or {
+			{Text = "OK", Color = Theme.Accent, Callback = function() end},
+		}
+		local btnW = math.floor((272 - (#buttons - 1) * 8) / #buttons)
+		for i, b in ipairs(buttons) do
+			local Btn = Instance.new("TextButton")
+			Btn.Parent = Card
+			Btn.BackgroundColor3 = b.Color or Theme.Accent
+			Btn.Position = UDim2.new(0, 14 + (i - 1) * (btnW + 8), 1, -40)
+			Btn.Size = UDim2.new(0, btnW, 0, 28)
+			Btn.AutoButtonColor = false
+			Btn.Font = Enum.Font.GothamSemibold
+			Btn.Text = b.Text or "OK"
+			Btn.TextColor3 = Theme.Text
+			Btn.TextSize = 13
+			Btn.ZIndex = 202
+			Corner(Btn, 4)
+			Btn.MouseButton1Click:Connect(function()
+				task.spawn(function() if b.Callback then b.Callback() end end)
+				if b.Close ~= false then Close() end
+			end)
+		end
+
+		overlay.MouseButton1Click:Connect(function()
+			if opts.CloseOnOverlay ~= false then Close() end
+		end)
+
+		-- Animate in
+		Card.Size = UDim2.new(0, 0, 0, 0)
+		Tween(Card, {Size = UDim2.new(0, 300, 0, 160)}, .25)
+
+		return {Close = Close}
+	end
+
+	-- ============================================================
+	--  Tabs:Notify (เรียกผ่าน WindowTable)
+	-- ============================================================
+	function Tabs:Notify(title, text, duration, ntype)
+		return WindowTable:Notify(title, text, duration, ntype)
+	end
+
+	return Tabs
+end -- end WindowTable:Window
+
+-- ============================================================
+--  WindowTable:Notify (Notification system — จาก Wind UI)
+-- ============================================================
+function WindowTable:Notify(title, text, duration, ntype)
+	duration = duration or 5
+	ntype = ntype or "info"
+	local colors = {
+		info = Theme.Accent,
+		success = Color3.fromRGB(60, 160, 80),
+		warning = Color3.fromRGB(220, 160, 40),
+		error = Color3.fromRGB(200, 60, 60),
+	}
+	local accent = colors[ntype] or Theme.Accent
+
+	-- หา ScreenGui ตัวแรกสุดสำหรับแสดง notification
+	local gui = AllWindows[#AllWindows]
+	if not gui then
+		gui = Instance.new("ScreenGui")
+		gui.Name = "WindifiedUI_Notifications"
+		gui.Parent = CoreGui
+		gui.ResetOnSpawn = false
+		table.insert(AllWindows, gui)
+	end
+
+	local Container
+	for _, c in ipairs(gui:GetChildren()) do
+		if c.Name == "NotificationContainer" then Container = c; break end
+	end
+	if not Container then
+		Container = Instance.new("Frame")
+		Container.Name = "NotificationContainer"
+		Container.Parent = gui
+		Container.BackgroundTransparency = 1
+		Container.Position = UDim2.new(1, -10, 1, -10)
+		Container.AnchorPoint = Vector2.new(1, 1)
+		Container.Size = UDim2.new(0, 300, 1, -20)
+		Container.ZIndex = 500
+		local layout = ListLayout(Container, 6, Enum.SortOrder.LayoutOrder)
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	end
+
+	local Card = Instance.new("Frame")
+	Card.Parent = Container
+	Card.BackgroundColor3 = Theme.Background
+	Card.Size = UDim2.new(0, 280, 0, 0)
+	Card.AutomaticSize = Enum.AutomaticSize.Y
+	Card.ZIndex = 501
+	Corner(Card, 6)
+	Stroke(Card, accent, 1.5)
+	Padding(Card, 10, 10, 10, 10)
+
+	local AccentBar = Instance.new("Frame")
+	AccentBar.Parent = Card
+	AccentBar.BackgroundColor3 = accent
+	AccentBar.Position = UDim2.new(0, -10, 0, 0)
+	AccentBar.Size = UDim2.new(0, 3, 1, 0)
+	AccentBar.ZIndex = 502
+
+	local TitleLbl = Instance.new("TextLabel")
+	TitleLbl.Parent = Card
+	TitleLbl.BackgroundTransparency = 1
+	TitleLbl.Size = UDim2.new(1, 0, 0, 18)
+	TitleLbl.Font = Enum.Font.GothamBold
+	TitleLbl.Text = tostring(title or "Notification")
+	TitleLbl.TextColor3 = Theme.Text
+	TitleLbl.TextSize = 13
+	TitleLbl.TextXAlignment = Enum.TextXAlignment.Left
+	TitleLbl.LayoutOrder = 1
+	TitleLbl.ZIndex = 502
+
+	local TextLbl = Instance.new("TextLabel")
+	TextLbl.Parent = Card
+	TextLbl.BackgroundTransparency = 1
+	TextLbl.Size = UDim2.new(1, 0, 0, 0)
+	TextLbl.AutomaticSize = Enum.AutomaticSize.Y
+	TextLbl.Font = Enum.Font.Gotham
+	TextLbl.Text = tostring(text or "")
+	TextLbl.TextColor3 = Theme.SubText
+	TextLbl.TextSize = 12
+	TextLbl.TextXAlignment = Enum.TextXAlignment.Left
+	TextLbl.TextWrapped = true
+	TextLbl.LayoutOrder = 2
+	TextLbl.ZIndex = 502
+
+	Card.MouseEnter:Connect(function() Tween(Card, {BackgroundColor3 = Theme.RowHover}, .15) end)
+	Card.MouseLeave:Connect(function() Tween(Card, {BackgroundColor3 = Theme.Background}, .15) end)
+
+	local function dismiss()
+		Tween(Card, {Size = UDim2.new(0, 0, 0, Card.AbsoluteSize.Y), BackgroundTransparency = 1}, .25)
+		Tween(TitleLbl, {TextTransparency = 1}, .2)
+		Tween(TextLbl, {TextTransparency = 1}, .2)
+		task.delay(.3, function() Card:Destroy() end)
+	end
+
+	Card.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then dismiss() end
+	end)
+
+	-- Animate in
+	Tween(Card, {Size = UDim2.new(0, 280, 0, Card.AbsoluteSize.Y)}, .3)
+	if duration > 0 then
+		task.delay(duration, dismiss)
+	end
+
+	return {Close = dismiss}
+end
+
+-- ============================================================
+--  Flags
+-- ============================================================
+function WindowTable:GetFlag(flag)
+	return Flags[flag]
+end
+
+function WindowTable:SetFlag(flag, value)
+	local obj = Flags[flag]
+	if obj and obj.Set then
+		obj:Set(value)
+	end
+end
+
+-- ============================================================
+--  Config System (Save/Load — จาก Wind UI รองรับทุก element)
+-- ============================================================
+local function configPath(name)
+	return ConfigFolder .. "/" .. tostring(name) .. ".json"
+end
+
+function WindowTable:SaveConfig(name)
+	name = name or "default"
+	local data = {}
+	for flag, obj in pairs(Flags) do
+		local ok, val = pcall(function() return obj:Get() end)
+		if ok then
+			if typeof(val) == "Color3" then
+				data[flag] = {__type = "Color3", r = val.R, g = val.G, b = val.B}
+			elseif typeof(val) == "EnumItem" then
+				data[flag] = {__type = "Enum", enum = tostring(val.EnumType), name = val.Name}
+			elseif type(val) == "table" then
+				data[flag] = {__type = "table", value = val}
+			else
+				data[flag] = val
+			end
+		end
+	end
+	local json = HttpService:JSONEncode(data)
+	local ok = pcall(function()
+		if not isfolder(ConfigFolder) then makefolder(ConfigFolder) end
+		writefile(configPath(name), json)
+	end)
+	return ok
+end
+
+function WindowTable:LoadConfig(name)
+	name = name or "default"
+	local ok, data = pcall(function()
+		local raw = readfile(configPath(name))
+		return HttpService:JSONDecode(raw)
+	end)
+	if not ok or type(data) ~= "table" then return false end
+	for flag, val in pairs(data) do
+		local obj = Flags[flag]
+		if obj and obj.Set then
+			local realVal = val
+			if type(val) == "table" and val.__type then
+				if val.__type == "Color3" then
+					realVal = Color3.new(val.r, val.g, val.b)
+				elseif val.__type == "Enum" then
+					local ok2, enum = pcall(function() return Enum[val.enum][val.name] end)
+					if ok2 then realVal = enum else realVal = nil end
+				elseif val.__type == "table" then
+					realVal = val.value
+				end
+			end
+			if realVal ~= nil then
+				pcall(function() obj:Set(realVal, true) end)
+			end
+		end
+	end
+	return true
+end
+
+function WindowTable:DeleteConfig(name)
+	name = name or "default"
+	return pcall(function() delfile(configPath(name)) end)
+end
+
+function WindowTable:ListConfigs()
+	local list = {}
+	local ok = pcall(function()
+		for _, f in ipairs(listfiles(ConfigFolder)) do
+			if f:match("%.json$") then
+				table.insert(list, f:match("([^/]+)%.json$"))
+			end
+		end
+	end)
+	return list
+end
+
+-- ============================================================
+--  Theme / Accent / Rainbow (จาก Wind UI)
+-- ============================================================
+function WindowTable:SetAccent(color)
+	Theme.Accent = color
+	Theme.AccentDark = Color3.new(color.R * 0.7, color.G * 0.7, color.B * 0.7)
+end
+
+function WindowTable:SetRainbow(state)
+	Theme.Rainbow = state == true
+end
+
+function WindowTable:SetTheme(newTheme)
+	for k, v in pairs(newTheme or {}) do
+		if Theme[k] ~= nil then
+			Theme[k] = v
+		end
+	end
+end
+
+function WindowTable:GetTheme()
+	return Theme
+end
+
+-- ============================================================
+--  Unload (ทำลาย UI ทั้งหมด — จาก Wind UI)
+-- ============================================================
+function WindowTable:Unload()
+	for _, gui in ipairs(AllWindows) do
+		pcall(function() gui:Destroy() end)
+	end
+	AllWindows = {}
+	Flags = {}
+end
+
+function WindowTable:Destroy()
+	WindowTable:Unload()
+end
+
+-- ============================================================
+--  Toggle UI เปิด/ปิดด้วยโปรแกรม
+-- ============================================================
+function WindowTable:Toggle()
+	-- จะทำงานกับ window ล่าสุด
+	local gui = AllWindows[#AllWindows]
+	if not gui then return end
+	local glow = gui:FindFirstChild("MainFrameGlow")
+	if glow then
+		local mf = glow:FindFirstChild("MainFrame")
+		if mf then
+			local hidden = mf.Size.X.Offset < 100
+			if hidden then
+				Tween(mf, {Size = UDim2.new(0, 448, 0, 331)}, .3)
+				Tween(glow, {Size = UDim2.new(0, 448, 0, 331)}, .3)
+			else
+				Tween(mf, {Size = UDim2.new(0, 0, 0, 0)}, .3)
+				Tween(glow, {Size = UDim2.new(0, 0, 0, 0)}, .3)
+			end
+		end
+	end
+end
+
+return WindowTable
