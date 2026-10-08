@@ -4688,4 +4688,4 @@ function WindowTable:LoadConfig(name)
 	return true
 end
 
-return Halo UI
+return WindowTable
