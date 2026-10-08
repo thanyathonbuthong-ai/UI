@@ -1,0 +1,2615 @@
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    local startT = os.clock()
+    while not LocalPlayer and (os.clock() - startT) < 5 do
+        LocalPlayer = Players.LocalPlayer
+        task.wait(0.1)
+    end
+end
+if not LocalPlayer then return end
+
+local Camera = workspace.CurrentCamera
+if not Camera then
+    local startC = os.clock()
+    while not Camera and (os.clock() - startC) < 5 do
+        Camera = workspace.CurrentCamera
+        task.wait(0.1)
+    end
+end
+if not Camera then
+    Camera = workspace:FindFirstChildOfClass("Camera") or workspace:WaitForChild("Camera", 5)
+end
+
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    if workspace.CurrentCamera then
+        Camera = workspace.CurrentCamera
+    end
+end)
+
+local Terrain = workspace:FindFirstChildOfClass("Terrain") or workspace.Terrain
+
+local function pakGui()
+    if gethui then
+        local ok, h = pcall(gethui)
+        if ok and h and typeof(h) == "Instance" then
+            local canUse = pcall(function()
+                local test = Instance.new("ScreenGui")
+                test.Parent = h
+                test:Destroy()
+            end)
+            if canUse then return h end
+        end
+    end
+    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+    if pg then return pg end
+    local coreGui = nil
+    pcall(function() coreGui = game:GetService("CoreGui") end)
+    if coreGui then
+        local canUseCore = pcall(function()
+            local test = Instance.new("ScreenGui")
+            test.Parent = coreGui
+            test:Destroy()
+        end)
+        if canUseCore then return coreGui end
+    end
+    return nil
+end
+
+local guiParent = pakGui()
+if not guiParent then
+    local w = os.clock()
+    while not guiParent and (os.clock() - w) < 8 do
+        guiParent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        task.wait(0.2)
+    end
+end
+if not guiParent then return end
+
+do
+    local function cleanOld(c)
+        if c and typeof(c) == "Instance" then
+            pcall(function()
+                local old = c:FindFirstChild("ShadersUI")
+                if old then old:Destroy() end
+            end)
+        end
+    end
+    cleanOld(guiParent)
+    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if pg and pg ~= guiParent then cleanOld(pg) end
+    pcall(function()
+        local coreG = game:GetService("CoreGui")
+        if coreG and coreG ~= guiParent then cleanOld(coreG) end
+    end)
+    local oldRainFolder = workspace:FindFirstChild("RainFX")
+    if oldRainFolder then oldRainFolder:Destroy() end
+end
+
+local Thema = {
+    Bg       = Color3.fromRGB(24, 24, 27),
+    Top      = Color3.fromRGB(18, 18, 20),
+    Side     = Color3.fromRGB(20, 20, 22),
+    Btn      = Color3.fromRGB(30, 30, 34),
+    BtnHover = Color3.fromRGB(40, 40, 46),
+    TabAct   = Color3.fromRGB(48, 48, 56),
+    Border   = Color3.fromRGB(45, 45, 52),
+    Text     = Color3.fromRGB(225, 225, 230),
+    Dim      = Color3.fromRGB(130, 130, 135),
+    Green    = Color3.fromRGB(75, 180, 100),
+    Red      = Color3.fromRGB(190, 60, 60),
+}
+
+local function kopieer(str)
+    local fn = setclipboard or toclipboard or set_clipboard or (syn and syn.set_clipboard) or (Clipboard and Clipboard.set)
+    if fn then
+        local ok = pcall(fn, str)
+        if ok then return true end
+    end
+    return false
+end
+
+local RaycastExcludeType = (function()
+    local ok, val = pcall(function() return Enum.RaycastFilterType.Exclude end)
+    if ok and val then return val end
+    local ok2, val2 = pcall(function() return Enum.RaycastFilterType.Blacklist end)
+    if ok2 and val2 then return val2 end
+    return 0
+end)()
+
+local ShadersState = {
+    OriginalLighting = {
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+        Brightness = Lighting.Brightness,
+        ClockTime = Lighting.ClockTime,
+        FogColor = Lighting.FogColor,
+        FogEnd = Lighting.FogEnd,
+        FogStart = Lighting.FogStart,
+        GlobalShadows = Lighting.GlobalShadows,
+        ShadowSoftness = Lighting.ShadowSoftness,
+        ExposureCompensation = Lighting.ExposureCompensation,
+        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+        GeographicLatitude = Lighting.GeographicLatitude
+    },
+    OriginalCamera = {
+        CameraType = Camera.CameraType,
+        FieldOfView = Camera.FieldOfView
+    },
+    DeveloperEffects = {},
+    DevPresetsStripped = false,
+    OriginalMaterials = {},
+    OriginalCastShadows = {},
+    FXAAGodraysEnabled = true,
+    FXAABlurSize = 2,
+    ReflectionsEnabled = false,
+    ReflectionIntensity = 0.45,
+    RainEnabled = false,
+    RainIntensity = 1,
+    AutoFocusEnabled = false,
+    VignetteEnabled = false,
+    DeepShadowsEnabled = false,
+    ForceCastShadowEnabled = false,
+    MotionBlurEnabled = false,
+    MotionBlurScale = 0.5,
+    SSAOEnabled = false,
+    SSAOIntensity = 0.7,
+    LetterboxEnabled = false,
+    FilmGrainEnabled = false,
+    GrainOpacity = 0.25,
+    AberrationEnabled = false,
+    AberrationStrength = 0.5,
+    VignetteOpacity = 0.6,
+    WetFloorEnabled = false,
+    WetnessIntensity = 0.6,
+    ActivePreset = "Default",
+    CinematicEnabled = false,
+    CinematicSpeed = 35,
+    FreezePoseEnabled = true,
+    HoldRMBToSteer = true,
+    FrozenTracks = {},
+    FrozenParts = {},
+    PreviousCameraType = Enum.CameraType.Custom,
+    PreviousCameraSubject = nil,
+    SetCinematicToggleUI = nil,
+    Connections = {}
+}
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ShadersUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999999
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.IgnoreGuiInset = true
+
+local parentOk = pcall(function()
+    ScreenGui.Parent = guiParent
+end)
+if not parentOk or not ScreenGui.Parent then
+    pcall(function()
+        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+        ScreenGui.Parent = pg
+    end)
+end
+
+local DevCache = Instance.new("Folder")
+DevCache.Name = "LightingCache"
+DevCache.Parent = ScreenGui
+
+local function ontkoppelOntwikkelaar()
+    if not ShadersState.DevPresetsStripped then
+        ShadersState.DevPresetsStripped = true
+        for _, obj in ipairs(Lighting:GetChildren()) do
+            if obj:IsA("PostEffect") or obj:IsA("Atmosphere") or obj:IsA("Sky") then
+                if not ShadersState.DeveloperEffects[obj] then
+                    local hasEnabled = pcall(function() return obj.Enabled end)
+                    ShadersState.DeveloperEffects[obj] = {
+                        Parent = obj.Parent,
+                        Enabled = hasEnabled and obj.Enabled or nil
+                    }
+                end
+                pcall(function()
+                    if obj:IsA("Sky") or obj:IsA("Atmosphere") then
+                        obj.Parent = DevCache
+                    elseif obj:IsA("PostEffect") then
+                        obj.Enabled = false
+                    end
+                end)
+            end
+        end
+    end
+end
+
+local function herstelOntwikkelaar()
+    if ShadersState.DevPresetsStripped then
+        ShadersState.DevPresetsStripped = false
+        for obj, data in pairs(ShadersState.DeveloperEffects) do
+            if obj then
+                pcall(function()
+                    if data.Parent and data.Parent.Parent then
+                        obj.Parent = data.Parent
+                    else
+                        obj.Parent = Lighting
+                    end
+                    if data.Enabled ~= nil then
+                        obj.Enabled = data.Enabled
+                    end
+                end)
+            end
+        end
+        ShadersState.DeveloperEffects = {}
+        local o = ShadersState.OriginalLighting
+        Lighting.Ambient = o.Ambient
+        Lighting.OutdoorAmbient = o.OutdoorAmbient
+        Lighting.Brightness = o.Brightness
+        Lighting.ClockTime = o.ClockTime
+        Lighting.FogColor = o.FogColor
+        Lighting.FogEnd = o.FogEnd
+        Lighting.FogStart = o.FogStart
+        Lighting.GlobalShadows = o.GlobalShadows
+        Lighting.ShadowSoftness = o.ShadowSoftness
+        Lighting.ExposureCompensation = o.ExposureCompensation
+        Lighting.EnvironmentDiffuseScale = o.EnvironmentDiffuseScale
+        Lighting.EnvironmentSpecularScale = o.EnvironmentSpecularScale
+        Lighting.GeographicLatitude = o.GeographicLatitude
+    end
+end
+
+local function melding(tekst) end
+
+local function toonTip(tekst) end
+local function verbergTip() end
+
+local VenusLib = {}
+VenusLib.open = true
+
+do
+    local TweenService = game:GetService("TweenService")
+    local UserInputService = game:GetService("UserInputService")
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+
+    local VenusTheme = {
+        WindowBackground = Color3.fromRGB(30, 30, 30),
+        WindowBorder     = Color3.fromRGB(45, 45, 45),
+        Accent           = Color3.fromRGB(113, 93, 133),
+        TabBackground    = Color3.fromRGB(20, 20, 20),
+        TabBorder        = Color3.fromRGB(45, 45, 45),
+        TabActive        = Color3.fromRGB(28, 28, 28),
+        SectionBackground= Color3.fromRGB(18, 18, 18),
+        SectionBorder    = Color3.fromRGB(35, 35, 35),
+        Text             = Color3.fromRGB(200, 200, 200),
+        DisabledText     = Color3.fromRGB(110, 110, 110),
+        ObjectBackground = Color3.fromRGB(25, 25, 25),
+        ObjectBorder     = Color3.fromRGB(35, 35, 35),
+        DropdownBg       = Color3.fromRGB(19, 19, 19),
+        White            = Color3.fromRGB(255, 255, 255),
+    }
+
+    local function tw(obj, props, t)
+        local info = TweenInfo.new(t or 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local anim = TweenService:Create(obj, info, props)
+        anim:Play()
+        return anim
+    end
+
+    local function getGuiContainer()
+        if gethui then
+            local ok, h = pcall(gethui)
+            if ok and h and typeof(h) == "Instance" then return h end
+        end
+        local pGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if pGui then return pGui end
+        local cGui = nil
+        pcall(function() cGui = game:GetService("CoreGui") end)
+        if cGui then return cGui end
+        return LocalPlayer:WaitForChild("PlayerGui", 5)
+    end
+
+    local RootGui = nil
+    local MainWindow = nil
+
+    function VenusLib:Close(forceState)
+        if forceState ~= nil then
+            VenusLib.open = forceState
+        else
+            VenusLib.open = not VenusLib.open
+        end
+        if MainWindow then
+            MainWindow.Visible = VenusLib.open
+        end
+    end
+
+    function VenusLib:Watermark(text)
+        if not RootGui then return end
+        local wm = RootGui:FindFirstChild("VenusWatermark")
+        if wm then wm:Destroy() end
+
+        local wmFrame = Instance.new("Frame")
+        wmFrame.Name = "VenusWatermark"
+        wmFrame.Size = UDim2.new(0, 260, 0, 22)
+        wmFrame.Position = UDim2.new(0, 16, 0, 16)
+        wmFrame.BackgroundColor3 = VenusTheme.TabBackground
+        wmFrame.BorderSizePixel = 1
+        wmFrame.BorderColor3 = VenusTheme.WindowBorder
+        wmFrame.ZIndex = 200
+        wmFrame.Parent = RootGui
+
+        local line = Instance.new("Frame")
+        line.Size = UDim2.new(0, 2, 1, 0)
+        line.BackgroundColor3 = VenusTheme.Accent
+        line.BorderSizePixel = 0
+        line.Parent = wmFrame
+
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -12, 1, 0)
+        lbl.Position = UDim2.new(0, 8, 0, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = text
+        lbl.TextColor3 = VenusTheme.Text
+        lbl.Font = Enum.Font.RobotoMono
+        lbl.TextSize = 11
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.Parent = wmFrame
+    end
+
+    function VenusLib:Load(options)
+        options = options or {}
+        local winName = options.name or "AikHub"
+        local sizeX = options.sizex or 740
+        local sizeY = options.sizey or 660
+
+        local container = getGuiContainer()
+        RootGui = Instance.new("ScreenGui")
+        RootGui.Name = "Venus_Native_UI"
+        RootGui.ResetOnSpawn = false
+        RootGui.DisplayOrder = 999990
+        RootGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        RootGui.IgnoreGuiInset = true
+        pcall(function() RootGui.Parent = container end)
+        if not RootGui.Parent then
+            pcall(function() RootGui.Parent = LocalPlayer:WaitForChild("PlayerGui", 5) end)
+        end
+
+        MainWindow = Instance.new("Frame")
+        MainWindow.Name = "MainWindow"
+        MainWindow.Size = UDim2.new(0, sizeX, 0, sizeY)
+        MainWindow.Position = UDim2.new(0.5, -sizeX / 2, 0.5, -sizeY / 2)
+        MainWindow.BackgroundColor3 = VenusTheme.WindowBackground
+        MainWindow.BorderSizePixel = 1
+        MainWindow.BorderColor3 = VenusTheme.WindowBorder
+        MainWindow.ClipsDescendants = true
+        MainWindow.Visible = true
+        MainWindow.Parent = RootGui
+
+        local mwStroke = Instance.new("UIStroke")
+        mwStroke.Color = VenusTheme.WindowBorder
+        mwStroke.Thickness = 1
+        mwStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        mwStroke.Parent = MainWindow
+
+        local TitleBar = Instance.new("Frame")
+        TitleBar.Name = "TitleBar"
+        TitleBar.Size = UDim2.new(1, 0, 0, 26)
+        TitleBar.BackgroundColor3 = VenusTheme.TabBackground
+        TitleBar.BorderSizePixel = 0
+        TitleBar.Parent = MainWindow
+
+        local tbStroke = Instance.new("UIStroke")
+        tbStroke.Color = VenusTheme.WindowBorder
+        tbStroke.Thickness = 1
+        tbStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        tbStroke.Parent = TitleBar
+
+        local TitleText = Instance.new("TextLabel")
+        TitleText.Size = UDim2.new(1, -50, 1, 0)
+        TitleText.Position = UDim2.new(0, 10, 0, 0)
+        TitleText.BackgroundTransparency = 1
+        TitleText.Text = winName
+        TitleText.TextColor3 = VenusTheme.Text
+        TitleText.Font = Enum.Font.RobotoMono
+        TitleText.TextSize = 12
+        TitleText.TextXAlignment = Enum.TextXAlignment.Left
+        TitleText.Parent = TitleBar
+
+        local CloseBtn = Instance.new("TextButton")
+        CloseBtn.Size = UDim2.new(0, 18, 0, 18)
+        CloseBtn.Position = UDim2.new(1, -22, 0.5, -9)
+        CloseBtn.BackgroundColor3 = VenusTheme.ObjectBackground
+        CloseBtn.BorderSizePixel = 1
+        CloseBtn.BorderColor3 = VenusTheme.ObjectBorder
+        CloseBtn.Text = "X"
+        CloseBtn.TextColor3 = VenusTheme.DisabledText
+        CloseBtn.Font = Enum.Font.RobotoMono
+        CloseBtn.TextSize = 11
+        CloseBtn.AutoButtonColor = false
+        CloseBtn.Parent = TitleBar
+
+        CloseBtn.MouseEnter:Connect(function()
+            CloseBtn.BackgroundColor3 = Color3.fromRGB(190, 50, 50)
+            CloseBtn.TextColor3 = VenusTheme.White
+        end)
+        CloseBtn.MouseLeave:Connect(function()
+            CloseBtn.BackgroundColor3 = VenusTheme.ObjectBackground
+            CloseBtn.TextColor3 = VenusTheme.DisabledText
+        end)
+        CloseBtn.MouseButton1Click:Connect(function()
+            VenusLib:Close(false)
+        end)
+
+        local isDragging = false
+        local dragStart = nil
+        local startPos = nil
+
+        TitleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = true
+                dragStart = input.Position
+                startPos = MainWindow.Position
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = false
+            end
+        end)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local delta = input.Position - dragStart
+                MainWindow.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+
+        local TabBar = Instance.new("Frame")
+        TabBar.Name = "TabBar"
+        TabBar.Size = UDim2.new(1, -12, 0, 26)
+        TabBar.Position = UDim2.new(0, 6, 0, 30)
+        TabBar.BackgroundColor3 = VenusTheme.TabBackground
+        TabBar.BorderSizePixel = 1
+        TabBar.BorderColor3 = VenusTheme.TabBorder
+        TabBar.Parent = MainWindow
+
+        local tabListLayout = Instance.new("UIListLayout")
+        tabListLayout.FillDirection = Enum.FillDirection.Horizontal
+        tabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        tabListLayout.Padding = UDim.new(0, 1)
+        tabListLayout.Parent = TabBar
+
+        local TabContainer = Instance.new("Frame")
+        TabContainer.Name = "TabContainer"
+        TabContainer.Size = UDim2.new(1, -12, 1, -64)
+        TabContainer.Position = UDim2.new(0, 6, 0, 58)
+        TabContainer.BackgroundTransparency = 1
+        TabContainer.Parent = MainWindow
+
+        local WindowObj = {}
+        local AllTabButtons = {}
+        local AllTabPages = {}
+
+        function WindowObj:Tab(tabName)
+            local TabPage = Instance.new("Frame")
+            TabPage.Name = tabName .. "Page"
+            TabPage.Size = UDim2.new(1, 0, 1, 0)
+            TabPage.BackgroundTransparency = 1
+            TabPage.Visible = (#AllTabPages == 0)
+            TabPage.Parent = TabContainer
+            table.insert(AllTabPages, TabPage)
+
+            local ColLeft = Instance.new("ScrollingFrame")
+            ColLeft.Name = "LeftColumn"
+            ColLeft.Size = UDim2.new(0.5, -4, 1, 0)
+            ColLeft.Position = UDim2.new(0, 0, 0, 0)
+            ColLeft.BackgroundTransparency = 1
+            ColLeft.BorderSizePixel = 0
+            ColLeft.ScrollBarThickness = 3
+            ColLeft.ScrollBarImageColor3 = VenusTheme.Accent
+            ColLeft.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            ColLeft.CanvasSize = UDim2.new(0, 0, 0, 0)
+            ColLeft.Parent = TabPage
+
+            local leftLayout = Instance.new("UIListLayout")
+            leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            leftLayout.Padding = UDim.new(0, 8)
+            leftLayout.Parent = ColLeft
+
+            local leftPad = Instance.new("UIPadding")
+            leftPad.PaddingRight = UDim.new(0, 4)
+            leftPad.PaddingTop = UDim.new(0, 2)
+            leftPad.Parent = ColLeft
+
+            local ColRight = Instance.new("ScrollingFrame")
+            ColRight.Name = "RightColumn"
+            ColRight.Size = UDim2.new(0.5, -4, 1, 0)
+            ColRight.Position = UDim2.new(0.5, 4, 0, 0)
+            ColRight.BackgroundTransparency = 1
+            ColRight.BorderSizePixel = 0
+            ColRight.ScrollBarThickness = 3
+            ColRight.ScrollBarImageColor3 = VenusTheme.Accent
+            ColRight.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            ColRight.CanvasSize = UDim2.new(0, 0, 0, 0)
+            ColRight.Parent = TabPage
+
+            local rightLayout = Instance.new("UIListLayout")
+            rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            rightLayout.Padding = UDim.new(0, 8)
+            rightLayout.Parent = ColRight
+
+            local rightPad = Instance.new("UIPadding")
+            rightPad.PaddingRight = UDim.new(0, 4)
+            rightPad.PaddingTop = UDim.new(0, 2)
+            rightPad.Parent = ColRight
+
+            local TabBtn = Instance.new("TextButton")
+            TabBtn.Name = tabName .. "Btn"
+            TabBtn.Size = UDim2.new(0, 0, 1, 0)
+            TabBtn.AutomaticSize = Enum.AutomaticSize.X
+            TabBtn.BackgroundColor3 = (#AllTabButtons == 0) and VenusTheme.TabActive or VenusTheme.TabBackground
+            TabBtn.BorderSizePixel = 0
+            TabBtn.Text = tabName
+            TabBtn.TextColor3 = (#AllTabButtons == 0) and VenusTheme.Text or VenusTheme.DisabledText
+            TabBtn.Font = Enum.Font.RobotoMono
+            TabBtn.TextSize = 11
+            TabBtn.AutoButtonColor = false
+            TabBtn.Parent = TabBar
+
+            local tabBtnPad = Instance.new("UIPadding")
+            tabBtnPad.PaddingLeft = UDim.new(0, 10)
+            tabBtnPad.PaddingRight = UDim.new(0, 10)
+            tabBtnPad.Parent = TabBtn
+
+            local tabBtnObj = { Btn = TabBtn, Page = TabPage }
+            table.insert(AllTabButtons, tabBtnObj)
+
+            TabBtn.MouseButton1Click:Connect(function()
+                for _, item in ipairs(AllTabButtons) do
+                    local isCur = (item == tabBtnObj)
+                    item.Page.Visible = isCur
+                    item.Btn.BackgroundColor3 = isCur and VenusTheme.TabActive or VenusTheme.TabBackground
+                    item.Btn.TextColor3 = isCur and VenusTheme.Text or VenusTheme.DisabledText
+                end
+            end)
+
+            local TabObj = {}
+
+            function TabObj:Section(secOptions)
+                secOptions = secOptions or {}
+                local secName = secOptions.name or "Section"
+                local secSide = secOptions.side or "left"
+                local parentCol = (secSide == "right") and ColRight or ColLeft
+
+                local SecBox = Instance.new("Frame")
+                SecBox.Name = secName .. "Section"
+                SecBox.Size = UDim2.new(1, 0, 0, 0)
+                SecBox.AutomaticSize = Enum.AutomaticSize.Y
+                SecBox.BackgroundColor3 = VenusTheme.SectionBackground
+                SecBox.BorderSizePixel = 1
+                SecBox.BorderColor3 = VenusTheme.SectionBorder
+                SecBox.Parent = parentCol
+
+                local secHeader = Instance.new("Frame")
+                secHeader.Name = "Header"
+                secHeader.Size = UDim2.new(1, 0, 0, 20)
+                secHeader.BackgroundColor3 = VenusTheme.ObjectBackground
+                secHeader.BorderSizePixel = 0
+                secHeader.Parent = SecBox
+
+                local secTitle = Instance.new("TextLabel")
+                secTitle.Size = UDim2.new(1, -12, 1, 0)
+                secTitle.Position = UDim2.new(0, 8, 0, 0)
+                secTitle.BackgroundTransparency = 1
+                secTitle.Text = string.upper(secName)
+                secTitle.TextColor3 = VenusTheme.Accent
+                secTitle.Font = Enum.Font.RobotoMono
+                secTitle.TextSize = 10
+                secTitle.TextXAlignment = Enum.TextXAlignment.Left
+                secTitle.Parent = secHeader
+
+                local secDivider = Instance.new("Frame")
+                secDivider.Size = UDim2.new(1, 0, 0, 1)
+                secDivider.Position = UDim2.new(0, 0, 1, 0)
+                secDivider.BackgroundColor3 = VenusTheme.SectionBorder
+                secDivider.BorderSizePixel = 0
+                secDivider.Parent = secHeader
+
+                local SecContent = Instance.new("Frame")
+                SecContent.Name = "Content"
+                SecContent.Size = UDim2.new(1, 0, 0, 0)
+                SecContent.Position = UDim2.new(0, 0, 0, 22)
+                SecContent.AutomaticSize = Enum.AutomaticSize.Y
+                SecContent.BackgroundTransparency = 1
+                SecContent.Parent = SecBox
+
+                local secContentLayout = Instance.new("UIListLayout")
+                secContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                secContentLayout.Padding = UDim.new(0, 4)
+                secContentLayout.Parent = SecContent
+
+                local secContentPad = Instance.new("UIPadding")
+                secContentPad.PaddingTop = UDim.new(0, 6)
+                secContentPad.PaddingBottom = UDim.new(0, 6)
+                secContentPad.PaddingLeft = UDim.new(0, 8)
+                secContentPad.PaddingRight = UDim.new(0, 8)
+                secContentPad.Parent = SecContent
+
+                local SecObj = {}
+
+                function SecObj:Button(btnOptions)
+                    btnOptions = btnOptions or {}
+                    local bName = btnOptions.name or "Button"
+                    local bCallback = btnOptions.callback or function() end
+
+                    local btn = Instance.new("TextButton")
+                    btn.Size = UDim2.new(1, 0, 0, 22)
+                    btn.BackgroundColor3 = VenusTheme.ObjectBackground
+                    btn.BorderSizePixel = 1
+                    btn.BorderColor3 = VenusTheme.ObjectBorder
+                    btn.Text = bName
+                    btn.TextColor3 = VenusTheme.Text
+                    btn.Font = Enum.Font.RobotoMono
+                    btn.TextSize = 11
+                    btn.AutoButtonColor = false
+                    btn.Parent = SecContent
+
+                    btn.MouseEnter:Connect(function() btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35) end)
+                    btn.MouseLeave:Connect(function() btn.BackgroundColor3 = VenusTheme.ObjectBackground end)
+                    btn.MouseButton1Click:Connect(function()
+                        task.spawn(bCallback)
+                    end)
+                    return btn
+                end
+
+                function SecObj:Toggle(toggleOptions)
+                    toggleOptions = toggleOptions or {}
+                    local tName = toggleOptions.name or "Toggle"
+                    local state = toggleOptions.default or false
+                    local tCallback = toggleOptions.callback or function() end
+
+                    local row = Instance.new("TextButton")
+                    row.Size = UDim2.new(1, 0, 0, 20)
+                    row.BackgroundTransparency = 1
+                    row.Text = ""
+                    row.Parent = SecContent
+
+                    local box = Instance.new("Frame")
+                    box.Size = UDim2.new(0, 13, 0, 13)
+                    box.Position = UDim2.new(0, 0, 0.5, -6)
+                    box.BackgroundColor3 = state and VenusTheme.Accent or VenusTheme.ObjectBackground
+                    box.BorderSizePixel = 1
+                    box.BorderColor3 = VenusTheme.ObjectBorder
+                    box.Parent = row
+
+                    local lbl = Instance.new("TextLabel")
+                    lbl.Size = UDim2.new(1, -22, 1, 0)
+                    lbl.Position = UDim2.new(0, 20, 0, 0)
+                    lbl.BackgroundTransparency = 1
+                    lbl.Text = tName
+                    lbl.TextColor3 = state and VenusTheme.White or VenusTheme.Text
+                    lbl.Font = Enum.Font.RobotoMono
+                    lbl.TextSize = 11
+                    lbl.TextXAlignment = Enum.TextXAlignment.Left
+                    lbl.Parent = row
+
+                    local function applyToggle(val)
+                        state = val
+                        box.BackgroundColor3 = state and VenusTheme.Accent or VenusTheme.ObjectBackground
+                        lbl.TextColor3 = state and VenusTheme.White or VenusTheme.Text
+                        task.spawn(tCallback, state)
+                    end
+
+                    row.MouseButton1Click:Connect(function()
+                        applyToggle(not state)
+                    end)
+
+                    local ctrl = {}
+                    function ctrl:Toggle(val)
+                        if val == nil then val = not state end
+                        applyToggle(val)
+                    end
+                    return ctrl
+                end
+
+                function SecObj:Slider(sliderOptions)
+                    sliderOptions = sliderOptions or {}
+                    local sName = sliderOptions.name or "Slider"
+                    local minV = sliderOptions.min or 0
+                    local maxV = sliderOptions.max or 100
+                    local val = sliderOptions.default or minV
+                    local float = sliderOptions.float or 1
+                    local sCallback = sliderOptions.callback or function() end
+
+                    local container = Instance.new("Frame")
+                    container.Size = UDim2.new(1, 0, 0, 34)
+                    container.BackgroundTransparency = 1
+                    container.Parent = SecContent
+
+                    local titleLbl = Instance.new("TextLabel")
+                    titleLbl.Size = UDim2.new(1, -60, 0, 16)
+                    titleLbl.BackgroundTransparency = 1
+                    titleLbl.Text = sName
+                    titleLbl.TextColor3 = VenusTheme.Text
+                    titleLbl.Font = Enum.Font.RobotoMono
+                    titleLbl.TextSize = 11
+                    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+                    titleLbl.Parent = container
+
+                    local valLbl = Instance.new("TextLabel")
+                    valLbl.Size = UDim2.new(0, 56, 0, 16)
+                    valLbl.Position = UDim2.new(1, -56, 0, 0)
+                    valLbl.BackgroundTransparency = 1
+                    valLbl.Text = tostring(val)
+                    valLbl.TextColor3 = VenusTheme.Accent
+                    valLbl.Font = Enum.Font.RobotoMono
+                    valLbl.TextSize = 11
+                    valLbl.TextXAlignment = Enum.TextXAlignment.Right
+                    valLbl.Parent = container
+
+                    local bar = Instance.new("Frame")
+                    bar.Size = UDim2.new(1, 0, 0, 8)
+                    bar.Position = UDim2.new(0, 0, 0, 20)
+                    bar.BackgroundColor3 = VenusTheme.ObjectBackground
+                    bar.BorderSizePixel = 1
+                    bar.BorderColor3 = VenusTheme.ObjectBorder
+                    bar.Parent = container
+
+                    local fill = Instance.new("Frame")
+                    local initRatio = math.clamp((val - minV) / (maxV - minV), 0, 1)
+                    fill.Size = UDim2.new(initRatio, 0, 1, 0)
+                    fill.BackgroundColor3 = VenusTheme.Accent
+                    fill.BorderSizePixel = 0
+                    fill.Parent = bar
+
+                    local isSliding = false
+                    local function updateSlide(inputX)
+                        local barAbsPos = bar.AbsolutePosition.X
+                        local barAbsWidth = bar.AbsoluteSize.X
+                        local ratio = math.clamp((inputX - barAbsPos) / barAbsWidth, 0, 1)
+                        local rawVal = minV + (maxV - minV) * ratio
+                        if float == 1 then
+                            val = math.round(rawVal)
+                        else
+                            val = math.round(rawVal / float) * float
+                        end
+                        valLbl.Text = tostring(val)
+                        fill.Size = UDim2.new(ratio, 0, 1, 0)
+                        task.spawn(sCallback, val)
+                    end
+
+                    bar.InputBegan:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            isSliding = true
+                            updateSlide(input.Position.X)
+                        end
+                    end)
+
+                    UserInputService.InputEnded:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            isSliding = false
+                        end
+                    end)
+
+                    UserInputService.InputChanged:Connect(function(input)
+                        if isSliding and input.UserInputType == Enum.UserInputType.MouseMovement then
+                            updateSlide(input.Position.X)
+                        end
+                    end)
+
+                    return container
+                end
+
+                function SecObj:Box(boxOptions)
+                    boxOptions = boxOptions or {}
+                    local bName = boxOptions.name or "Box"
+                    local defaultVal = boxOptions.default or ""
+                    local placeholder = boxOptions.placeholder or ""
+                    local bCallback = boxOptions.callback or function() end
+
+                    local container = Instance.new("Frame")
+                    container.Size = UDim2.new(1, 0, 0, 42)
+                    container.BackgroundTransparency = 1
+                    container.Parent = SecContent
+
+                    local titleLbl = Instance.new("TextLabel")
+                    titleLbl.Size = UDim2.new(1, 0, 0, 16)
+                    titleLbl.BackgroundTransparency = 1
+                    titleLbl.Text = bName
+                    titleLbl.TextColor3 = VenusTheme.Text
+                    titleLbl.Font = Enum.Font.RobotoMono
+                    titleLbl.TextSize = 11
+                    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+                    titleLbl.Parent = container
+
+                    local tb = Instance.new("TextBox")
+                    tb.Size = UDim2.new(1, 0, 0, 22)
+                    tb.Position = UDim2.new(0, 0, 0, 18)
+                    tb.BackgroundColor3 = VenusTheme.ObjectBackground
+                    tb.BorderSizePixel = 1
+                    tb.BorderColor3 = VenusTheme.ObjectBorder
+                    tb.Text = defaultVal
+                    tb.PlaceholderText = placeholder
+                    tb.PlaceholderColor3 = VenusTheme.DisabledText
+                    tb.TextColor3 = VenusTheme.Text
+                    tb.Font = Enum.Font.RobotoMono
+                    tb.TextSize = 11
+                    tb.ClearTextOnFocus = false
+                    tb.Parent = container
+
+                    tb.FocusLost:Connect(function(enterPressed)
+                        task.spawn(bCallback, tb.Text)
+                    end)
+
+                    return tb
+                end
+
+                function SecObj:Dropdown(dropOptions)
+                    dropOptions = dropOptions or {}
+                    local dName = dropOptions.name or "Dropdown"
+                    local list = dropOptions.content or {}
+                    local defaultVal = dropOptions.default or (list[1] or "[None]")
+                    local dCallback = dropOptions.callback or function() end
+
+                    local container = Instance.new("Frame")
+                    container.Size = UDim2.new(1, 0, 0, 42)
+                    container.BackgroundTransparency = 1
+                    container.Parent = SecContent
+
+                    local titleLbl = Instance.new("TextLabel")
+                    titleLbl.Size = UDim2.new(1, 0, 0, 16)
+                    titleLbl.BackgroundTransparency = 1
+                    titleLbl.Text = dName
+                    titleLbl.TextColor3 = VenusTheme.Text
+                    titleLbl.Font = Enum.Font.RobotoMono
+                    titleLbl.TextSize = 11
+                    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+                    titleLbl.Parent = container
+
+                    local dropBtn = Instance.new("TextButton")
+                    dropBtn.Size = UDim2.new(1, 0, 0, 22)
+                    dropBtn.Position = UDim2.new(0, 0, 0, 18)
+                    dropBtn.BackgroundColor3 = VenusTheme.ObjectBackground
+                    dropBtn.BorderSizePixel = 1
+                    dropBtn.BorderColor3 = VenusTheme.ObjectBorder
+                    dropBtn.Text = tostring(defaultVal)
+                    dropBtn.TextColor3 = VenusTheme.Text
+                    dropBtn.Font = Enum.Font.RobotoMono
+                    dropBtn.TextSize = 11
+                    dropBtn.AutoButtonColor = false
+                    dropBtn.Parent = container
+
+                    local arrow = Instance.new("TextLabel")
+                    arrow.Size = UDim2.new(0, 18, 1, 0)
+                    arrow.Position = UDim2.new(1, -20, 0, 0)
+                    arrow.BackgroundTransparency = 1
+                    arrow.Text = "v"
+                    arrow.TextColor3 = VenusTheme.DisabledText
+                    arrow.Font = Enum.Font.RobotoMono
+                    arrow.TextSize = 10
+                    arrow.Parent = dropBtn
+
+                    local dropList = Instance.new("ScrollingFrame")
+                    dropList.Size = UDim2.new(1, 0, 0, math.min(#list * 22, 110))
+                    dropList.Position = UDim2.new(0, 0, 1, 2)
+                    dropList.BackgroundColor3 = VenusTheme.DropdownBg
+                    dropList.BorderSizePixel = 1
+                    dropList.BorderColor3 = VenusTheme.ObjectBorder
+                    dropList.ScrollBarThickness = 3
+                    dropList.ScrollBarImageColor3 = VenusTheme.Accent
+                    dropList.CanvasSize = UDim2.new(0, 0, 0, #list * 22)
+                    dropList.Visible = false
+                    dropList.ZIndex = 50
+                    dropList.Parent = dropBtn
+
+                    local dropLayout = Instance.new("UIListLayout")
+                    dropLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                    dropLayout.Parent = dropList
+
+                    local function rebuildOptions()
+                        for _, c in ipairs(dropList:GetChildren()) do
+                            if c:IsA("TextButton") then c:Destroy() end
+                        end
+                        for _, item in ipairs(list) do
+                            local optBtn = Instance.new("TextButton")
+                            optBtn.Size = UDim2.new(1, 0, 0, 22)
+                            optBtn.BackgroundColor3 = VenusTheme.DropdownBg
+                            optBtn.BorderSizePixel = 0
+                            optBtn.Text = tostring(item)
+                            optBtn.TextColor3 = VenusTheme.Text
+                            optBtn.Font = Enum.Font.RobotoMono
+                            optBtn.TextSize = 11
+                            optBtn.ZIndex = 51
+                            optBtn.Parent = dropList
+
+                            optBtn.MouseEnter:Connect(function() optBtn.BackgroundColor3 = VenusTheme.ObjectBackground end)
+                            optBtn.MouseLeave:Connect(function() optBtn.BackgroundColor3 = VenusTheme.DropdownBg end)
+                            optBtn.MouseButton1Click:Connect(function()
+                                dropBtn.Text = tostring(item)
+                                dropList.Visible = false
+                                task.spawn(dCallback, item)
+                            end)
+                        end
+                    end
+                    rebuildOptions()
+
+                    dropBtn.MouseButton1Click:Connect(function()
+                        dropList.Visible = not dropList.Visible
+                    end)
+
+                    local dropCtrl = {}
+                    function dropCtrl:Refresh(newList)
+                        list = newList or {}
+                        rebuildOptions()
+                        dropList.CanvasSize = UDim2.new(0, 0, 0, #list * 22)
+                        dropList.Size = UDim2.new(1, 0, 0, math.min(#list * 22, 110))
+                    end
+                    return dropCtrl
+                end
+
+                function SecObj:Label(labelText)
+                    local lbl = Instance.new("TextLabel")
+                    lbl.Size = UDim2.new(1, 0, 0, 18)
+                    lbl.BackgroundTransparency = 1
+                    lbl.Text = tostring(labelText)
+                    lbl.TextColor3 = VenusTheme.Text
+                    lbl.Font = Enum.Font.RobotoMono
+                    lbl.TextSize = 11
+                    lbl.TextXAlignment = Enum.TextXAlignment.Left
+                    lbl.Parent = SecContent
+                    return lbl
+                end
+
+                function SecObj:Separator(sepText)
+                    local sep = Instance.new("Frame")
+                    sep.Size = UDim2.new(1, 0, 0, 12)
+                    sep.BackgroundTransparency = 1
+                    sep.Parent = SecContent
+
+                    local line = Instance.new("Frame")
+                    line.Size = UDim2.new(1, 0, 0, 1)
+                    line.Position = UDim2.new(0, 0, 0.5, 0)
+                    line.BackgroundColor3 = VenusTheme.SectionBorder
+                    line.BorderSizePixel = 0
+                    line.Parent = sep
+                    return sep
+                end
+
+                return SecObj
+            end
+
+            return TabObj
+        end
+
+        return WindowObj
+    end
+end
+
+
+local Window = VenusLib:Load{
+    name = "AikHub Shaders",
+    sizex = 720,
+    sizey = 660,
+    theme = "Default",
+    folder = "AikShaders",
+    extension = "cfg"
+}
+
+pcall(function()
+    VenusLib:Watermark("AikHub | discord.gg/P7fuzYj5xK")
+end)
+
+local FloatToggle = Instance.new("TextButton")
+FloatToggle.Name = "ShaderToggleBadge"
+FloatToggle.Size = UDim2.new(0, 56, 0, 22)
+FloatToggle.Position = UDim2.new(0, 8, 0.5, 48)
+FloatToggle.BackgroundColor3 = Thema.Top
+FloatToggle.BorderSizePixel = 1
+FloatToggle.BorderColor3 = Thema.Border
+FloatToggle.Text = "[SHADERS]"
+FloatToggle.TextColor3 = Thema.Text
+FloatToggle.Font = Enum.Font.Gotham
+FloatToggle.TextSize = 9
+FloatToggle.AutoButtonColor = false
+FloatToggle.ZIndex = 150
+FloatToggle.Parent = ScreenGui
+
+do
+    local ftDragging, ftStart, ftPos = false, nil, nil
+    FloatToggle.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            ftDragging = true
+            ftStart = inp.Position
+            ftPos = FloatToggle.Position
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then ftDragging = false end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if ftDragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+            local d = inp.Position - ftStart
+            FloatToggle.Position = UDim2.new(ftPos.X.Scale, ftPos.X.Offset + d.X, ftPos.Y.Scale, ftPos.Y.Offset + d.Y)
+        end
+    end)
+    FloatToggle.MouseEnter:Connect(function() FloatToggle.BackgroundColor3 = Thema.BtnHover end)
+    FloatToggle.MouseLeave:Connect(function() FloatToggle.BackgroundColor3 = Thema.Top end)
+end
+
+local isVisible = true
+local function zetZichtbaar(v)
+    if v == nil then v = not isVisible end
+    if VenusLib and VenusLib.Close then
+        if (v and not VenusLib.open) or (not v and VenusLib.open) then
+            VenusLib:Close()
+        end
+    end
+    isVisible = (VenusLib and VenusLib.open) or false
+end
+
+FloatToggle.MouseButton1Click:Connect(function()
+    zetZichtbaar()
+end)
+
+local ShaderTabMap = {
+    ["Presets"] = "Presets",
+    ["Lighting"] = "Lighting",
+    ["Sky Settings"] = "Sky",
+    ["Shadows"] = "Lighting",
+    ["GodRays"] = "Lighting",
+    ["PBR"] = "Materials",
+    ["Weather/skybox"] = "Weather",
+    ["PFX"] = "PostFX",
+    ["Photo Tool"] = "Camera",
+    ["Credits"] = "Credits"
+}
+
+local CreatedShaderTabs = {}
+local function getOrCreateShaderTab(name)
+    if not CreatedShaderTabs[name] then
+        CreatedShaderTabs[name] = Window:Tab(name)
+    end
+    return CreatedShaderTabs[name]
+end
+
+local ShaderTabOrder = {"Presets", "Lighting", "Sky", "Materials", "Weather", "PostFX", "Camera", "Credits"}
+for _, tName in ipairs(ShaderTabOrder) do
+    getOrCreateShaderTab(tName)
+end
+
+local AllTabs = {}
+local function maakTab(name)
+    local targetVTabName = ShaderTabMap[name] or name
+    local vTab = getOrCreateShaderTab(targetVTabName)
+
+    local dummyPage = Instance.new("Frame")
+    dummyPage.Name = name .. "Page"
+    dummyPage.Size = UDim2.new(0, 0, 0, 0)
+    dummyPage.Visible = false
+    dummyPage.BackgroundTransparency = 1
+    dummyPage.Parent = ScreenGui
+
+    local tabObj = {
+        Name = name,
+        TargetTabName = targetVTabName,
+        VTab = vTab,
+        Page = dummyPage,
+        CurrentSection = nil,
+        CurrentSide = "left",
+        LeftCount = 0,
+        RightCount = 0
+    }
+
+    function tabObj:VoegSectieToe(label)
+        local side = "left"
+        if tabObj.LeftCount > tabObj.RightCount then
+            side = "right"
+        end
+        local sectionTitle = label
+        if name ~= targetVTabName and not string.find(string.lower(label), string.lower(name)) then
+            sectionTitle = name .. ": " .. label
+        end
+        local sec = vTab:Section{
+            name = sectionTitle,
+            side = side
+        }
+        tabObj.CurrentSection = sec
+        tabObj.CurrentSide = side
+        return sec
+    end
+    tabObj.AddSection = tabObj.VoegSectieToe
+
+    function tabObj:VoegKnopToe(label, cb)
+        if not tabObj.CurrentSection then
+            tabObj:VoegSectieToe("Main")
+        end
+        if tabObj.CurrentSide == "left" then
+            tabObj.LeftCount = tabObj.LeftCount + 1
+        else
+            tabObj.RightCount = tabObj.RightCount + 1
+        end
+        return tabObj.CurrentSection:Button{
+            name = label,
+            callback = function()
+                if cb then task.spawn(cb) end
+            end
+        }
+    end
+    tabObj.AddButton = tabObj.VoegKnopToe
+
+    function tabObj:VoegSchakelaarToe(label, default, cb)
+        if not tabObj.CurrentSection then
+            tabObj:VoegSectieToe("Main")
+        end
+        if tabObj.CurrentSide == "left" then
+            tabObj.LeftCount = tabObj.LeftCount + 1
+        else
+            tabObj.RightCount = tabObj.RightCount + 1
+        end
+        local state = default or false
+        local vToggle = tabObj.CurrentSection:Toggle{
+            name = label,
+            default = state,
+            callback = function(val)
+                if cb then task.spawn(cb, val) end
+            end
+        }
+        local function setToggle(val)
+            if vToggle and vToggle.Toggle then
+                vToggle:Toggle(val)
+            end
+        end
+        return setToggle
+    end
+    tabObj.AddToggle = tabObj.VoegSchakelaarToe
+
+    function tabObj:VoegSchuifToe(label, minV, maxV, defaultV, cb)
+        if not tabObj.CurrentSection then
+            tabObj:VoegSectieToe("Main")
+        end
+        if tabObj.CurrentSide == "left" then
+            tabObj.LeftCount = tabObj.LeftCount + 1.4
+        else
+            tabObj.RightCount = tabObj.RightCount + 1.4
+        end
+        local val = defaultV or minV
+        minV = minV or 0
+        maxV = maxV or 100
+        return tabObj.CurrentSection:Slider{
+            name = label,
+            min = minV,
+            max = maxV,
+            default = val,
+            float = 1,
+            callback = function(v)
+                if cb then task.spawn(cb, v) end
+            end
+        }
+    end
+    tabObj.AddSlider = tabObj.VoegSchuifToe
+
+    function tabObj:VoegInvoerToe(placeholder, btnTxt, cb)
+        if not tabObj.CurrentSection then
+            tabObj:VoegSectieToe("Input")
+        end
+        if tabObj.CurrentSide == "left" then
+            tabObj.LeftCount = tabObj.LeftCount + 1.5
+        else
+            tabObj.RightCount = tabObj.RightCount + 1.5
+        end
+        local textVal = ""
+        tabObj.CurrentSection:Box{
+            name = btnTxt or "Input",
+            default = "",
+            placeholder = placeholder or "",
+            callback = function(str)
+                textVal = str
+            end
+        }
+        tabObj.CurrentSection:Button{
+            name = "Submit: " .. (btnTxt or "Load"),
+            callback = function()
+                if cb then task.spawn(cb, textVal) end
+            end
+        }
+    end
+    tabObj.AddInput = tabObj.VoegInvoerToe
+
+    function tabObj:VoegLabelToe(text)
+        if not tabObj.CurrentSection then
+            tabObj:VoegSectieToe("Main")
+        end
+        return tabObj.CurrentSection:Label(text)
+    end
+    tabObj.AddLabel = tabObj.VoegLabelToe
+
+    table.insert(AllTabs, tabObj)
+    return tabObj
+end
+
+local CC = Instance.new("ColorCorrectionEffect")
+CC.Name = "ColorCorrection"
+CC.Parent = Lighting
+
+local Bloom = Instance.new("BloomEffect")
+Bloom.Name = "Bloom"
+Bloom.Parent = Lighting
+
+local SunRays = Instance.new("SunRaysEffect")
+SunRays.Name = "SunRays"
+SunRays.Intensity = 0.25
+SunRays.Spread = 0.8
+SunRays.Enabled = true
+SunRays.Parent = Lighting
+
+local FXAABlur = Instance.new("BlurEffect")
+FXAABlur.Name = "Blur"
+FXAABlur.Size = 2
+FXAABlur.Enabled = true
+FXAABlur.Parent = Lighting
+
+local DOF = Instance.new("DepthOfFieldEffect")
+DOF.Name = "DepthOfField"
+DOF.FarIntensity = 0.35
+DOF.FocusDistance = 50
+DOF.InFocusRadius = 25
+DOF.NearIntensity = 0.35
+DOF.Enabled = false
+DOF.Parent = Lighting
+
+local Atmosphere = Instance.new("Atmosphere")
+Atmosphere.Name = "Atmosphere"
+Atmosphere.Glare = 0
+Atmosphere.Parent = Lighting
+
+local Clouds = Terrain:FindFirstChildOfClass("Clouds")
+if not Clouds then
+    Clouds = Instance.new("Clouds")
+    Clouds.Name = "Clouds"
+    Clouds.Cover = 0.5
+    Clouds.Density = 0.7
+    Clouds.Parent = Terrain
+end
+
+local Sky = Instance.new("Sky")
+Sky.Name = "Sky"
+Sky.CelestialBodiesShown = true
+
+local RainFolder = Instance.new("Folder")
+RainFolder.Name = "RainFX"
+RainFolder.Parent = workspace
+
+local VignetteFrame = Instance.new("ImageLabel")
+VignetteFrame.Name = "Vignette"
+VignetteFrame.Size = UDim2.new(1, 0, 1, 0)
+VignetteFrame.BackgroundTransparency = 1
+VignetteFrame.Image = "rbxassetid://4576475446"
+VignetteFrame.ImageColor3 = Color3.fromRGB(0, 0, 0)
+VignetteFrame.ImageTransparency = 1
+VignetteFrame.ZIndex = 1
+VignetteFrame.Parent = ScreenGui
+
+local LetterboxTop = Instance.new("Frame")
+LetterboxTop.Name = "LetterboxTop"
+LetterboxTop.Size = UDim2.new(1, 0, 0, 0)
+LetterboxTop.Position = UDim2.new(0, 0, 0, 0)
+LetterboxTop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+LetterboxTop.BorderSizePixel = 0
+LetterboxTop.Visible = false
+LetterboxTop.ZIndex = 99990
+LetterboxTop.Parent = ScreenGui
+
+local LetterboxBottom = Instance.new("Frame")
+LetterboxBottom.Name = "LetterboxBottom"
+LetterboxBottom.AnchorPoint = Vector2.new(0, 1)
+LetterboxBottom.Size = UDim2.new(1, 0, 0, 0)
+LetterboxBottom.Position = UDim2.new(0, 0, 1, 0)
+LetterboxBottom.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+LetterboxBottom.BorderSizePixel = 0
+LetterboxBottom.Visible = false
+LetterboxBottom.ZIndex = 99990
+LetterboxBottom.Parent = ScreenGui
+
+local FilmGrainFrame = Instance.new("ImageLabel")
+FilmGrainFrame.Name = "FilmGrain"
+FilmGrainFrame.Size = UDim2.new(1, 24, 1, 24)
+FilmGrainFrame.Position = UDim2.new(0, -12, 0, -12)
+FilmGrainFrame.BackgroundTransparency = 1
+FilmGrainFrame.Image = "rbxassetid://12975548281"
+FilmGrainFrame.ScaleType = Enum.ScaleType.Tile
+FilmGrainFrame.TileSize = UDim2.new(0, 128, 0, 128)
+FilmGrainFrame.ImageColor3 = Color3.fromRGB(245, 245, 245)
+FilmGrainFrame.ImageTransparency = 1
+FilmGrainFrame.ZIndex = 99980
+FilmGrainFrame.Parent = ScreenGui
+
+local AberrationFrame = Instance.new("Frame")
+AberrationFrame.Name = "ChromaticAberration"
+AberrationFrame.Size = UDim2.new(1, 0, 1, 0)
+AberrationFrame.BackgroundTransparency = 1
+AberrationFrame.Visible = false
+AberrationFrame.ZIndex = 2
+AberrationFrame.Parent = ScreenGui
+
+local AberrationRed = Instance.new("Frame")
+AberrationRed.Name = "RedFringe"
+AberrationRed.Size = UDim2.new(1, 0, 1, 0)
+AberrationRed.Position = UDim2.new(0, -2, 0, 0)
+AberrationRed.BackgroundTransparency = 1
+AberrationRed.BorderSizePixel = 0
+AberrationRed.Parent = AberrationFrame
+
+local AberrationRedStroke = Instance.new("UIStroke")
+AberrationRedStroke.Color = Color3.fromRGB(255, 40, 60)
+AberrationRedStroke.Thickness = 3
+AberrationRedStroke.Transparency = 0.75
+AberrationRedStroke.Parent = AberrationRed
+
+local AberrationCyan = Instance.new("Frame")
+AberrationCyan.Name = "CyanFringe"
+AberrationCyan.Size = UDim2.new(1, 0, 1, 0)
+AberrationCyan.Position = UDim2.new(0, 2, 0, 0)
+AberrationCyan.BackgroundTransparency = 1
+AberrationCyan.BorderSizePixel = 0
+AberrationCyan.Parent = AberrationFrame
+
+local AberrationCyanStroke = Instance.new("UIStroke")
+AberrationCyanStroke.Color = Color3.fromRGB(40, 220, 255)
+AberrationCyanStroke.Thickness = 3
+AberrationCyanStroke.Transparency = 0.75
+AberrationCyanStroke.Parent = AberrationCyan
+
+local prevCamLook = Camera.CFrame.LookVector
+local prevCamPos = Camera.CFrame.Position
+local currentMotionBlurSize = 0
+local currentOcclusionFactor = 0
+
+RunService.RenderStepped:Connect(function(dt)
+    if not Camera then return end
+    local vp = Camera.ViewportSize
+    local camPos = Camera.CFrame.Position
+    local camLook = Camera.CFrame.LookVector
+    local dtClamp = math.clamp(dt, 0.001, 0.1)
+
+    if ShadersState.MotionBlurEnabled then
+        local lookDelta = (camLook - prevCamLook).Magnitude / dtClamp
+        local posDelta = (camPos - prevCamPos).Magnitude / dtClamp
+        local motionEnergy = math.clamp((lookDelta * 1.6) + (posDelta * 0.04), 0, 1)
+        local targetBlur = motionEnergy * (ShadersState.MotionBlurScale * 22)
+        currentMotionBlurSize = currentMotionBlurSize + (targetBlur - currentMotionBlurSize) * math.clamp(dt * 12, 0, 1)
+
+        local base = ShadersState.FXAAGodraysEnabled and ShadersState.FXAABlurSize or 0
+        local finalSize = math.clamp(math.round(base + currentMotionBlurSize), 0, 56)
+        FXAABlur.Size = finalSize
+        FXAABlur.Enabled = finalSize > 0
+    end
+    prevCamLook = camLook
+    prevCamPos = camPos
+
+    if ShadersState.SSAOEnabled then
+        Lighting.ShadowSoftness = 0.02
+        local rayParams = RaycastParams.new()
+        pcall(function() rayParams.FilterType = RaycastExcludeType end)
+        local filterList = {RainFolder}
+        if LocalPlayer.Character then table.insert(filterList, LocalPlayer.Character) end
+        rayParams.FilterDescendantsInstances = filterList
+
+        local offsets = {
+            Vector3.new(0, -5, 0),
+            Vector3.new(-4, -3, 0),
+            Vector3.new(4, -3, 0),
+            Vector3.new(0, 4, 0),
+            Vector3.new(0, 0, -5)
+        }
+        local hits = 0
+        for _, off in ipairs(offsets) do
+            local dir = Camera.CFrame:VectorToWorldSpace(off)
+            if workspace:Raycast(camPos, dir, rayParams) then
+                hits = hits + 1
+            end
+        end
+
+        local occRatio = (hits / #offsets) * ShadersState.SSAOIntensity
+        currentOcclusionFactor = currentOcclusionFactor + (occRatio - currentOcclusionFactor) * math.clamp(dt * 6, 0, 1)
+        local baseDiffuse = ShadersState.OriginalLighting.EnvironmentDiffuseScale or 1
+        Lighting.EnvironmentDiffuseScale = math.clamp(baseDiffuse * (1 - currentOcclusionFactor * 0.65), 0.1, 1)
+    end
+
+    if ShadersState.FilmGrainEnabled then
+        FilmGrainFrame.ImageTransparency = math.clamp(1 - (ShadersState.GrainOpacity * 0.32), 0, 1)
+        FilmGrainFrame.Position = UDim2.new(0, math.random(-4, 4) - 12, 0, math.random(-4, 4) - 12)
+    else
+        FilmGrainFrame.ImageTransparency = 1
+    end
+
+    if ShadersState.LetterboxEnabled then
+        LetterboxTop.Visible = true
+        LetterboxBottom.Visible = true
+        local targetH = math.max(0, math.floor((vp.Y - (vp.X / 2.39)) * 0.5))
+        if targetH < 10 then targetH = math.floor(vp.Y * 0.1) end
+        LetterboxTop.Size = LetterboxTop.Size:Lerp(UDim2.new(1, 0, 0, targetH), math.clamp(dt * 10, 0, 1))
+        LetterboxBottom.Size = LetterboxBottom.Size:Lerp(UDim2.new(1, 0, 0, targetH), math.clamp(dt * 10, 0, 1))
+    else
+        LetterboxTop.Size = UDim2.new(1, 0, 0, 0)
+        LetterboxBottom.Size = UDim2.new(1, 0, 0, 0)
+        LetterboxTop.Visible = false
+        LetterboxBottom.Visible = false
+    end
+
+    if ShadersState.AberrationEnabled then
+        AberrationFrame.Visible = true
+        local trans = math.clamp(1 - (ShadersState.AberrationStrength * 0.55), 0, 1)
+        AberrationRedStroke.Transparency = trans
+        AberrationCyanStroke.Transparency = trans
+        local off = math.clamp(math.round(ShadersState.AberrationStrength * 3.5), 1, 5)
+        AberrationRed.Position = UDim2.new(0, -off, 0, 0)
+        AberrationCyan.Position = UDim2.new(0, off, 0, 0)
+    else
+        AberrationFrame.Visible = false
+    end
+end)
+
+local cinematicConn = nil
+local cinematicKeys = {
+    W = false,
+    A = false,
+    S = false,
+    D = false,
+    E = false,
+    Q = false,
+    Space = false,
+    LeftShift = false,
+    LeftControl = false
+}
+local rmbHeld = false
+local camYaw = 0
+local camPitch = 0
+local camPos = Vector3.zero
+local targetCamPos = Vector3.zero
+local schakelFilmCamera = nil
+local richtCameraOpKarakter = nil
+
+UserInputService.InputEnded:Connect(function(inp)
+    if ShadersState.CinematicEnabled then
+        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+            rmbHeld = false
+            pcall(function()
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            end)
+        end
+        if inp.KeyCode == Enum.KeyCode.W then cinematicKeys.W = false end
+        if inp.KeyCode == Enum.KeyCode.A then cinematicKeys.A = false end
+        if inp.KeyCode == Enum.KeyCode.S then cinematicKeys.S = false end
+        if inp.KeyCode == Enum.KeyCode.D then cinematicKeys.D = false end
+        if inp.KeyCode == Enum.KeyCode.E then cinematicKeys.E = false end
+        if inp.KeyCode == Enum.KeyCode.Q then cinematicKeys.Q = false end
+        if inp.KeyCode == Enum.KeyCode.Space then cinematicKeys.Space = false end
+        if inp.KeyCode == Enum.KeyCode.LeftShift then cinematicKeys.LeftShift = false end
+        if inp.KeyCode == Enum.KeyCode.LeftControl then cinematicKeys.LeftControl = false end
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(inp)
+    if ShadersState.CinematicEnabled and inp.UserInputType == Enum.UserInputType.MouseMovement then
+        if rmbHeld or not ShadersState.HoldRMBToSteer then
+            local delta = inp.Delta
+            local sens = 0.0032
+            camYaw = camYaw - delta.X * sens
+            camPitch = math.clamp(camPitch - delta.Y * sens, -math.rad(88), math.rad(88))
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(inp, gpe)
+    if not gpe and inp.KeyCode == Enum.KeyCode.RightShift then
+        zetZichtbaar(not isVisible)
+    end
+    if not gpe and inp.KeyCode == Enum.KeyCode.T then
+        if schakelFilmCamera then
+            schakelFilmCamera(not ShadersState.CinematicEnabled)
+        end
+    end
+    if not gpe and inp.KeyCode == Enum.KeyCode.H and ShadersState.CinematicEnabled then
+        zetZichtbaar(not isVisible)
+    end
+    if ShadersState.CinematicEnabled then
+        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+            rmbHeld = true
+            pcall(function()
+                UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+            end)
+        end
+        if not gpe then
+            if inp.KeyCode == Enum.KeyCode.W then cinematicKeys.W = true end
+            if inp.KeyCode == Enum.KeyCode.A then cinematicKeys.A = true end
+            if inp.KeyCode == Enum.KeyCode.S then cinematicKeys.S = true end
+            if inp.KeyCode == Enum.KeyCode.D then cinematicKeys.D = true end
+            if inp.KeyCode == Enum.KeyCode.E then cinematicKeys.E = true end
+            if inp.KeyCode == Enum.KeyCode.Q then cinematicKeys.Q = true end
+            if inp.KeyCode == Enum.KeyCode.Space then cinematicKeys.Space = true end
+            if inp.KeyCode == Enum.KeyCode.LeftShift then cinematicKeys.LeftShift = true end
+            if inp.KeyCode == Enum.KeyCode.LeftControl then cinematicKeys.LeftControl = true end
+        end
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if ShadersState.CinematicEnabled and schakelFilmCamera then
+        schakelFilmCamera(false)
+    end
+end)
+
+local function zetLichtTechnologie(tech)
+    pcall(function()
+        if sethiddenproperty then
+            sethiddenproperty(Lighting, "Technology", tech)
+        else
+            Lighting.Technology = tech
+        end
+    end)
+end
+
+local function zetFXAAZonnestralen(enabled)
+    ShadersState.FXAAGodraysEnabled = enabled
+    if enabled then
+        SunRays.Enabled = true
+        FXAABlur.Enabled = true
+        FXAABlur.Size = ShadersState.FXAABlurSize
+    else
+        FXAABlur.Enabled = false
+    end
+end
+
+local function zetReflectieNiveau(v)
+    ShadersState.ReflectionIntensity = v
+    if ShadersState.ReflectionsEnabled then
+        for part in pairs(ShadersState.OriginalMaterials) do
+            if part and part.Parent then
+                pcall(function() part.Reflectance = v end)
+            end
+        end
+    end
+end
+
+local function pasLuchtToe(textures)
+    if not textures then
+        if Sky then Sky.Parent = DevCache end
+        return
+    end
+    Sky.SkyboxBk = textures.Bk or ""
+    Sky.SkyboxDn = textures.Dn or ""
+    Sky.SkyboxFt = textures.Ft or ""
+    Sky.SkyboxLf = textures.Lf or ""
+    Sky.SkyboxRt = textures.Rt or ""
+    Sky.SkyboxUp = textures.Up or ""
+    Sky.Parent = Lighting
+    melding("skybox loaded")
+end
+
+local function pasVoorinstellingToe(name)
+    ShadersState.ActivePreset = name
+    ShadersState.LetterboxEnabled = false
+    LetterboxTop.Size = UDim2.new(1, 0, 0, 0)
+    LetterboxBottom.Size = UDim2.new(1, 0, 0, 0)
+    LetterboxTop.Visible = false
+    LetterboxBottom.Visible = false
+    Atmosphere.Glare = 0
+    if name == "RTX4090" then
+        ontkoppelOntwikkelaar()
+        zetLichtTechnologie(Enum.Technology.Future)
+        CC.Brightness = 0.02
+        CC.Contrast = 0.32
+        CC.Saturation = 0.18
+        CC.TintColor = Color3.fromRGB(252, 252, 255)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.38
+        Bloom.Size = 18
+        Bloom.Threshold = 0.92
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.28
+        SunRays.Spread = 0.82
+        zetFXAAZonnestralen(true)
+        Atmosphere.Density = 0.16
+        Atmosphere.Offset = 0.22
+        Atmosphere.Haze = 0.08
+        Atmosphere.Color = Color3.fromRGB(190, 215, 250)
+        Atmosphere.Decay = Color3.fromRGB(250, 205, 150)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 2.7
+        Lighting.ExposureCompensation = 0.08
+        Lighting.ShadowSoftness = 0.01
+        Lighting.Ambient = Color3.fromRGB(60, 65, 78)
+        Lighting.OutdoorAmbient = Color3.fromRGB(125, 130, 142)
+        ShadersState.SSAOEnabled = true
+        ShadersState.SSAOIntensity = 0.85
+        ShadersState.FilmGrainEnabled = true
+        ShadersState.GrainOpacity = 0.18
+        zetReflecties(true)
+        zetReflectieNiveau(0.55)
+        melding("applied Preset 1")
+    elseif name == "UE5Lumen" then
+        ontkoppelOntwikkelaar()
+        zetLichtTechnologie(Enum.Technology.Future)
+        CC.Brightness = 0.01
+        CC.Contrast = 0.18
+        CC.Saturation = 0.14
+        CC.TintColor = Color3.fromRGB(250, 252, 255)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.45
+        Bloom.Size = 24
+        Bloom.Threshold = 0.88
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.25
+        SunRays.Spread = 0.85
+        zetFXAAZonnestralen(true)
+        Atmosphere.Density = 0.2
+        Atmosphere.Offset = 0.2
+        Atmosphere.Haze = 0.12
+        Atmosphere.Color = Color3.fromRGB(185, 215, 255)
+        Atmosphere.Decay = Color3.fromRGB(245, 200, 155)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 2.5
+        Lighting.ExposureCompensation = 0.05
+        Lighting.ShadowSoftness = 0.15
+        Lighting.Ambient = Color3.fromRGB(70, 75, 85)
+        Lighting.OutdoorAmbient = Color3.fromRGB(130, 135, 145)
+        Lighting.EnvironmentDiffuseScale = 1.0
+        Lighting.EnvironmentSpecularScale = 0.9
+        zetScherpstelling(true)
+        melding("applied Preset 2")
+    elseif name == "Cyberpunk2077" then
+        ontkoppelOntwikkelaar()
+        zetLichtTechnologie(Enum.Technology.Future)
+        CC.Brightness = -0.04
+        CC.Contrast = 0.48
+        CC.Saturation = 0.42
+        CC.TintColor = Color3.fromRGB(225, 238, 255)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.85
+        Bloom.Size = 30
+        Bloom.Threshold = 0.72
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.35
+        SunRays.Spread = 0.92
+        zetFXAAZonnestralen(true)
+        Atmosphere.Density = 0.38
+        Atmosphere.Offset = 0.12
+        Atmosphere.Haze = 0.22
+        Atmosphere.Color = Color3.fromRGB(115, 155, 255)
+        Atmosphere.Decay = Color3.fromRGB(255, 55, 130)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 1.7
+        Lighting.ExposureCompensation = -0.1
+        Lighting.ClockTime = 22.5
+        Lighting.ShadowSoftness = 0.18
+        Lighting.Ambient = Color3.fromRGB(28, 32, 52)
+        Lighting.OutdoorAmbient = Color3.fromRGB(55, 65, 95)
+        ShadersState.FilmGrainEnabled = true
+        ShadersState.GrainOpacity = 0.22
+        ShadersState.AberrationEnabled = true
+        ShadersState.AberrationStrength = 0.45
+        zetReflecties(true)
+        zetReflectieNiveau(0.75)
+        melding("applied Preset 3")
+    elseif name == "IMAX70mm" then
+        ontkoppelOntwikkelaar()
+        zetLichtTechnologie(Enum.Technology.Future)
+        CC.Brightness = -0.02
+        CC.Contrast = 0.24
+        CC.Saturation = 0.1
+        CC.TintColor = Color3.fromRGB(255, 248, 238)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.3
+        Bloom.Size = 18
+        Bloom.Threshold = 0.9
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.2
+        SunRays.Spread = 0.8
+        zetFXAAZonnestralen(true)
+        Lighting.Brightness = 2.4
+        Lighting.ExposureCompensation = 0.0
+        Lighting.ShadowSoftness = 0.12
+        ShadersState.FilmGrainEnabled = true
+        ShadersState.GrainOpacity = 0.35
+        ShadersState.MotionBlurEnabled = true
+        ShadersState.MotionBlurScale = 0.65
+        ShadersState.VignetteEnabled = true
+        VignetteFrame.ImageTransparency = 0.55
+        ShadersState.AberrationEnabled = true
+        ShadersState.AberrationStrength = 0.22
+        melding("applied Preset 4")
+    elseif name == "NordicFrostbite" then
+        ontkoppelOntwikkelaar()
+        zetLichtTechnologie(Enum.Technology.Future)
+        CC.Brightness = 0.04
+        CC.Contrast = 0.36
+        CC.Saturation = -0.12
+        CC.TintColor = Color3.fromRGB(235, 245, 255)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.4
+        Bloom.Size = 20
+        Bloom.Threshold = 0.88
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.3
+        SunRays.Spread = 0.85
+        zetFXAAZonnestralen(true)
+        Atmosphere.Density = 0.28
+        Atmosphere.Offset = 0.3
+        Atmosphere.Haze = 0.15
+        Atmosphere.Color = Color3.fromRGB(160, 210, 255)
+        Atmosphere.Decay = Color3.fromRGB(220, 240, 255)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 2.8
+        Lighting.ClockTime = 9.0
+        Lighting.ShadowSoftness = 0.02
+        Lighting.Ambient = Color3.fromRGB(70, 80, 95)
+        Lighting.OutdoorAmbient = Color3.fromRGB(130, 145, 160)
+        ShadersState.AberrationEnabled = true
+        ShadersState.AberrationStrength = 0.35
+        zetReflecties(true)
+        zetReflectieNiveau(0.5)
+        melding("applied Preset 5")
+    elseif name == "HyperRealism" then
+        ontkoppelOntwikkelaar()
+        zetLichtTechnologie(Enum.Technology.Future)
+        CC.Brightness = 0.01
+        CC.Contrast = 0.16
+        CC.Saturation = 0.08
+        CC.TintColor = Color3.fromRGB(254, 254, 255)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.28
+        Bloom.Size = 14
+        Bloom.Threshold = 0.94
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.22
+        SunRays.Spread = 0.8
+        zetFXAAZonnestralen(true)
+        Lighting.Brightness = 2.5
+        Lighting.ExposureCompensation = 0.02
+        Lighting.ShadowSoftness = 0.03
+        ShadersState.SSAOEnabled = true
+        ShadersState.SSAOIntensity = 0.7
+        ShadersState.MotionBlurEnabled = true
+        ShadersState.MotionBlurScale = 0.35
+        melding("applied Preset 6")
+    elseif name == "BSL" then
+        ontkoppelOntwikkelaar()
+        CC.Brightness = 0.0
+        CC.Contrast = 0.15
+        CC.Saturation = 0.22
+        CC.TintColor = Color3.fromRGB(255, 252, 245)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.35
+        Bloom.Size = 16
+        Bloom.Threshold = 0.88
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.18
+        SunRays.Spread = 0.8
+        zetFXAAZonnestralen(true)
+        Atmosphere.Density = 0.22
+        Atmosphere.Offset = 0.25
+        Atmosphere.Haze = 0.1
+        Atmosphere.Color = Color3.fromRGB(195, 220, 250)
+        Atmosphere.Decay = Color3.fromRGB(255, 210, 160)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 2.4
+        Lighting.ExposureCompensation = 0.0
+        Lighting.ShadowSoftness = 0.12
+        Lighting.Ambient = Color3.fromRGB(75, 78, 88)
+        Lighting.OutdoorAmbient = Color3.fromRGB(130, 135, 145)
+        zetLichtTechnologie(Enum.Technology.Future)
+        melding("applied BSL")
+    elseif name == "SEUS" then
+        ontkoppelOntwikkelaar()
+        CC.Brightness = 0.02
+        CC.Contrast = 0.3
+        CC.Saturation = 0.18
+        CC.TintColor = Color3.fromRGB(250, 250, 255)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.45
+        Bloom.Size = 22
+        Bloom.Threshold = 0.92
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.22
+        SunRays.Spread = 0.85
+        zetFXAAZonnestralen(true)
+        Atmosphere.Density = 0.18
+        Atmosphere.Offset = 0.2
+        Atmosphere.Haze = 0.05
+        Atmosphere.Color = Color3.fromRGB(180, 210, 255)
+        Atmosphere.Decay = Color3.fromRGB(240, 195, 150)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 2.6
+        Lighting.ExposureCompensation = 0.1
+        Lighting.ShadowSoftness = 0.05
+        Lighting.Ambient = Color3.fromRGB(65, 70, 82)
+        Lighting.OutdoorAmbient = Color3.fromRGB(120, 125, 135)
+        zetLichtTechnologie(Enum.Technology.Future)
+        melding("applied SEUS")
+    elseif name == "Cyberpunk" then
+        ontkoppelOntwikkelaar()
+        CC.Brightness = -0.05
+        CC.Contrast = 0.45
+        CC.Saturation = 0.5
+        CC.TintColor = Color3.fromRGB(230, 240, 255)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.9
+        Bloom.Size = 28
+        Bloom.Threshold = 0.75
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.3
+        SunRays.Spread = 0.9
+        zetFXAAZonnestralen(true)
+        Atmosphere.Density = 0.35
+        Atmosphere.Offset = 0.1
+        Atmosphere.Haze = 0.2
+        Atmosphere.Color = Color3.fromRGB(120, 160, 255)
+        Atmosphere.Decay = Color3.fromRGB(255, 60, 120)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 1.6
+        Lighting.ExposureCompensation = -0.15
+        Lighting.ShadowSoftness = 0.2
+        Lighting.Ambient = Color3.fromRGB(30, 35, 55)
+        Lighting.OutdoorAmbient = Color3.fromRGB(60, 70, 100)
+        zetLichtTechnologie(Enum.Technology.Future)
+        melding("applied Cyberpunk")
+    elseif name == "GoldenHour" then
+        ontkoppelOntwikkelaar()
+        CC.Brightness = 0.04
+        CC.Contrast = 0.2
+        CC.Saturation = 0.35
+        CC.TintColor = Color3.fromRGB(255, 235, 205)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.65
+        Bloom.Size = 24
+        Bloom.Threshold = 0.8
+        SunRays.Enabled = true
+        SunRays.Intensity = 0.4
+        SunRays.Spread = 0.95
+        zetFXAAZonnestralen(true)
+        Atmosphere.Density = 0.3
+        Atmosphere.Offset = 0.4
+        Atmosphere.Haze = 0.25
+        Atmosphere.Color = Color3.fromRGB(255, 185, 110)
+        Atmosphere.Decay = Color3.fromRGB(210, 95, 45)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 2.8
+        Lighting.ExposureCompensation = 0.15
+        Lighting.ClockTime = 17.6
+        Lighting.ShadowSoftness = 0.25
+        Lighting.Ambient = Color3.fromRGB(90, 75, 65)
+        Lighting.OutdoorAmbient = Color3.fromRGB(150, 125, 95)
+        zetLichtTechnologie(Enum.Technology.Future)
+        melding("applied Preset 7")
+    elseif name == "RainyNoir" then
+        ontkoppelOntwikkelaar()
+        CC.Brightness = -0.06
+        CC.Contrast = 0.25
+        CC.Saturation = -0.35
+        CC.TintColor = Color3.fromRGB(205, 215, 230)
+        Bloom.Enabled = true
+        Bloom.Intensity = 0.2
+        Bloom.Size = 12
+        Bloom.Threshold = 0.9
+        SunRays.Enabled = false
+        zetFXAAZonnestralen(false)
+        Atmosphere.Density = 0.45
+        Atmosphere.Offset = 0.1
+        Atmosphere.Haze = 0.35
+        Atmosphere.Color = Color3.fromRGB(150, 165, 185)
+        Atmosphere.Decay = Color3.fromRGB(120, 135, 150)
+        Atmosphere.Glare = 0
+        Lighting.Brightness = 1.4
+        Lighting.ExposureCompensation = -0.2
+        Lighting.ShadowSoftness = 0.5
+        Lighting.Ambient = Color3.fromRGB(45, 50, 60)
+        Lighting.OutdoorAmbient = Color3.fromRGB(75, 85, 95)
+        zetLichtTechnologie(Enum.Technology.Future)
+        melding("applied Preset 8")
+    elseif name == "Default" then
+        herstelOntwikkelaar()
+        CC.Brightness = 0
+        CC.Contrast = 0
+        CC.Saturation = 0
+        CC.TintColor = Color3.fromRGB(255, 255, 255)
+        Bloom.Enabled = false
+        SunRays.Enabled = false
+        FXAABlur.Enabled = false
+        DOF.Enabled = false
+        ShadersState.SSAOEnabled = false
+        ShadersState.MotionBlurEnabled = false
+        ShadersState.LetterboxEnabled = false
+        ShadersState.FilmGrainEnabled = false
+        ShadersState.AberrationEnabled = false
+        ShadersState.VignetteEnabled = false
+        VignetteFrame.ImageTransparency = 1
+        zetReflecties(false)
+        Atmosphere.Density = 0.3
+        Atmosphere.Haze = 0
+        Atmosphere.Color = Color3.fromRGB(199, 199, 199)
+        Atmosphere.Decay = Color3.fromRGB(106, 112, 125)
+        Atmosphere.Glare = 0
+        local o = ShadersState.OriginalLighting
+        Lighting.Ambient = o.Ambient
+        Lighting.OutdoorAmbient = o.OutdoorAmbient
+        Lighting.Brightness = o.Brightness
+        Lighting.ClockTime = o.ClockTime
+        Lighting.FogColor = o.FogColor
+        Lighting.FogEnd = o.FogEnd
+        Lighting.FogStart = o.FogStart
+        Lighting.GlobalShadows = o.GlobalShadows
+        Lighting.ShadowSoftness = o.ShadowSoftness
+        Lighting.ExposureCompensation = o.ExposureCompensation
+        pasLuchtToe(nil)
+        melding("reverted to vanilla")
+    end
+end
+
+local function zetHemel(name, customAssetId)
+    if name == "Custom" and customAssetId then
+        pasLuchtToe({
+            Bk = customAssetId,
+            Dn = customAssetId,
+            Ft = customAssetId,
+            Lf = customAssetId,
+            Rt = customAssetId,
+            Up = customAssetId
+        })
+    else
+        pasLuchtToe(nil)
+    end
+end
+
+local function zetDiepeSchaduwen(enabled)
+    ShadersState.DeepShadowsEnabled = enabled
+    if enabled then
+        Lighting.GlobalShadows = true
+        Lighting.OutdoorAmbient = Color3.fromRGB(
+            math.max(0, Lighting.OutdoorAmbient.R * 255 - 45),
+            math.max(0, Lighting.OutdoorAmbient.G * 255 - 45),
+            math.max(0, Lighting.OutdoorAmbient.B * 255 - 45)
+        )
+        Lighting.ShadowSoftness = 0.05
+        melding("deep shadows on")
+    else
+        local o = ShadersState.OriginalLighting
+        Lighting.OutdoorAmbient = o.OutdoorAmbient
+        Lighting.ShadowSoftness = o.ShadowSoftness
+        melding("deep shadows off")
+    end
+end
+
+local function forceerSchaduwWorp(enabled)
+    ShadersState.ForceCastShadowEnabled = enabled
+    if not enabled then
+        for part, state in pairs(ShadersState.OriginalCastShadows) do
+            if part and part.Parent then
+                pcall(function() part.CastShadow = state end)
+            end
+        end
+        ShadersState.OriginalCastShadows = {}
+        melding("shadow cast reset")
+        return
+    end
+
+    local count = 0
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            if ShadersState.OriginalCastShadows[obj] == nil then
+                ShadersState.OriginalCastShadows[obj] = obj.CastShadow
+            end
+            if not obj.CastShadow then
+                obj.CastShadow = true
+                count = count + 1
+            end
+        end
+    end
+    melding("shadow cast forced")
+end
+
+local function zetReflecties(enabled)
+    ShadersState.ReflectionsEnabled = enabled
+    if not enabled then
+        for part, props in pairs(ShadersState.OriginalMaterials) do
+            if part and part.Parent then
+                pcall(function()
+                    part.Material = props.Material
+                    part.Reflectance = props.Reflectance
+                end)
+            end
+        end
+        ShadersState.OriginalMaterials = {}
+        melding("materials reset")
+        return
+    end
+
+    local targetMaterials = {
+        [Enum.Material.Metal] = true,
+        [Enum.Material.CorrodedMetal] = true,
+        [Enum.Material.DiamondPlate] = true,
+        [Enum.Material.Foil] = true,
+        [Enum.Material.Glass] = true,
+        [Enum.Material.SmoothPlastic] = true,
+        [Enum.Material.Plastic] = true,
+        [Enum.Material.Marble] = true,
+        [Enum.Material.Granite] = true
+    }
+    local count = 0
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and targetMaterials[obj.Material] then
+            if not ShadersState.OriginalMaterials[obj] then
+                ShadersState.OriginalMaterials[obj] = {
+                    Material = obj.Material,
+                    Reflectance = obj.Reflectance
+                }
+                count = count + 1
+            end
+            pcall(function()
+                if obj.Material ~= Enum.Material.Glass and obj.Material ~= Enum.Material.Metal then
+                    obj.Material = Enum.Material.Glass
+                end
+                obj.Reflectance = ShadersState.ReflectionIntensity
+            end)
+        end
+    end
+    melding("reflections enabled")
+end
+
+local function zetRegenEffect(enabled)
+    ShadersState.RainEnabled = enabled
+    RainFolder:ClearAllChildren()
+    if ShadersState.Connections.Rain then
+        ShadersState.Connections.Rain:Disconnect()
+        ShadersState.Connections.Rain = nil
+    end
+    if not enabled then
+        melding("rain stopped")
+        return
+    end
+
+    local emitterPart = Instance.new("Part")
+    emitterPart.Name = "RainEmitterBox"
+    emitterPart.Size = Vector3.new(60, 2, 60)
+    emitterPart.Transparency = 1
+    emitterPart.Anchored = true
+    emitterPart.CanCollide = false
+    emitterPart.CanTouch = false
+    emitterPart.CanQuery = false
+    emitterPart.Parent = RainFolder
+
+    local pe = Instance.new("ParticleEmitter")
+    pe.Name = "RainStreaks"
+    pe.Rate = 450 * ShadersState.RainIntensity
+    pe.Speed = NumberRange.new(85, 115)
+    pe.Lifetime = NumberRange.new(0.6, 0.9)
+    pe.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.15),
+        NumberSequenceKeypoint.new(1, 0.1)
+    })
+    pe.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.4),
+        NumberSequenceKeypoint.new(1, 0.8)
+    })
+    pe.Color = ColorSequence.new(Color3.fromRGB(200, 225, 255))
+    pe.EmissionDirection = Enum.NormalId.Bottom
+    pe.SpreadAngle = Vector2.new(2, 2)
+    pe.Parent = emitterPart
+
+    ShadersState.Connections.Rain = RunService.RenderStepped:Connect(function()
+        if not ShadersState.RainEnabled or not Camera then return end
+        emitterPart.Position = Camera.CFrame.Position + Vector3.new(0, 30, 0)
+    end)
+    melding("rain enabled")
+end
+
+local function zetScherpstelling(enabled)
+    ShadersState.AutoFocusEnabled = enabled
+    DOF.Enabled = enabled
+    if ShadersState.Connections.DOF then
+        ShadersState.Connections.DOF:Disconnect()
+        ShadersState.Connections.DOF = nil
+    end
+    if not enabled then return end
+
+    ShadersState.Connections.DOF = RunService.RenderStepped:Connect(function()
+        if not ShadersState.AutoFocusEnabled or not Camera then return end
+        local camPos = Camera.CFrame.Position
+        local camLook = Camera.CFrame.LookVector
+        local params = RaycastParams.new()
+        pcall(function() params.FilterType = RaycastExcludeType end)
+        local filterList = {RainFolder}
+        local char = LocalPlayer.Character
+        if char then table.insert(filterList, char) end
+        params.FilterDescendantsInstances = filterList
+
+        local hit = workspace:Raycast(camPos, camLook * 300, params)
+        local targetDist = hit and hit.Distance or 50
+        DOF.FocusDistance = math.clamp(DOF.FocusDistance + (targetDist - DOF.FocusDistance) * 0.15, 5, 250)
+    end)
+end
+
+local function bevriesHouding(freeze)
+    if freeze then
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                local anim = hum:FindFirstChildOfClass("Animator")
+                local tracks = anim and anim:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
+                for _, t in ipairs(tracks) do
+                    pcall(function()
+                        t:AdjustSpeed(0)
+                        table.insert(ShadersState.FrozenTracks, t)
+                    end)
+                end
+                hum.PlatformStand = true
+                hum.AutoRotate = false
+            end
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and not part.Anchored then
+                    part.Anchored = true
+                    table.insert(ShadersState.FrozenParts, part)
+                end
+            end
+        end
+    else
+        for _, part in ipairs(ShadersState.FrozenParts) do
+            if part and part.Parent then
+                pcall(function() part.Anchored = false end)
+            end
+        end
+        ShadersState.FrozenParts = {}
+        for _, t in ipairs(ShadersState.FrozenTracks) do
+            pcall(function() t:AdjustSpeed(1) end)
+        end
+        ShadersState.FrozenTracks = {}
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.PlatformStand = false
+                hum.AutoRotate = true
+            end
+        end
+    end
+end
+
+richtCameraOpKarakter = function()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")
+    if not root then return end
+    local frontPos = root.Position + root.CFrame.LookVector * 7 + Vector3.new(0, 1.2, 0)
+    targetCamPos = frontPos
+    camPos = frontPos
+    local dir = (root.Position + Vector3.new(0, 0.8, 0) - frontPos).Unit
+    camYaw = math.atan2(-dir.X, -dir.Z)
+    camPitch = math.asin(math.clamp(dir.Y, -0.9999, 0.9999))
+    Camera.CFrame = CFrame.new(camPos) * CFrame.Angles(0, camYaw, 0) * CFrame.Angles(camPitch, 0, 0)
+end
+
+schakelFilmCamera = function(enabled)
+    if enabled == ShadersState.CinematicEnabled then return end
+    ShadersState.CinematicEnabled = enabled
+
+    if enabled then
+        if ShadersState.FreezePoseEnabled then
+            bevriesHouding(true)
+        end
+
+        ShadersState.PreviousCameraType = Camera.CameraType
+        ShadersState.PreviousCameraSubject = Camera.CameraSubject
+        Camera.CameraType = Enum.CameraType.Scriptable
+
+        local curCF = Camera.CFrame
+        camPos = curCF.Position
+        targetCamPos = curCF.Position
+
+        local look = curCF.LookVector
+        camYaw = math.atan2(-look.X, -look.Z)
+        camPitch = math.asin(math.clamp(look.Y, -0.9999, 0.9999))
+
+        for k in pairs(cinematicKeys) do
+            cinematicKeys[k] = false
+        end
+        rmbHeld = false
+
+        if cinematicConn then
+            cinematicConn:Disconnect()
+        end
+
+        cinematicConn = RunService.RenderStepped:Connect(function(rawDt)
+            if not ShadersState.CinematicEnabled or not Camera then return end
+            local dt = math.clamp(rawDt, 0.001, 0.05)
+            local rot = CFrame.Angles(0, camYaw, 0) * CFrame.Angles(camPitch, 0, 0)
+
+            local moveDir = Vector3.zero
+            if cinematicKeys.W then moveDir = moveDir + rot.LookVector end
+            if cinematicKeys.S then moveDir = moveDir - rot.LookVector end
+            if cinematicKeys.D then moveDir = moveDir + rot.RightVector end
+            if cinematicKeys.A then moveDir = moveDir - rot.RightVector end
+            if cinematicKeys.E or cinematicKeys.Space then moveDir = moveDir + Vector3.new(0, 1, 0) end
+            if cinematicKeys.Q or cinematicKeys.LeftControl then moveDir = moveDir - Vector3.new(0, 1, 0) end
+
+            if moveDir.Magnitude > 0 then
+                moveDir = moveDir.Unit
+            end
+
+            local boost = cinematicKeys.LeftShift and 2.5 or 1.0
+            local spd = (ShadersState.CinematicSpeed or 35) * boost
+            targetCamPos = targetCamPos + moveDir * (spd * dt)
+            camPos = camPos:Lerp(targetCamPos, math.clamp(dt * 18, 0, 1))
+
+            Camera.CFrame = CFrame.new(camPos) * rot
+        end)
+
+        melding("freecam on")
+    else
+        if cinematicConn then
+            cinematicConn:Disconnect()
+            cinematicConn = nil
+        end
+        for k in pairs(cinematicKeys) do
+            cinematicKeys[k] = false
+        end
+        rmbHeld = false
+        pcall(function()
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        end)
+
+        bevriesHouding(false)
+
+        Camera.CameraType = ShadersState.PreviousCameraType or Enum.CameraType.Custom
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            Camera.CameraSubject = hum
+        end
+
+        melding("freecam off")
+    end
+
+    if ShadersState.SetCinematicToggleUI then
+        ShadersState.SetCinematicToggleUI(enabled)
+    end
+end
+
+do
+    local PresetsTab = maakTab("Presets")
+    local SkyTab = maakTab("Sky Settings")
+    local ShadowsTab = maakTab("Shadows")
+    local GodRaysTab = maakTab("GodRays")
+    local PBRTab = maakTab("PBR")
+    local WeatherTab = maakTab("Weather/skybox")
+    local PFXTab = maakTab("PFX")
+    local PhotoTab = maakTab("Photo Tool")
+    local CreditsTab = maakTab("Credits")
+
+    do
+        PresetsTab:VoegSectieToe("Presets")
+        PresetsTab:VoegKnopToe("Preset 1", function()
+            pasVoorinstellingToe("RTX4090")
+        end)
+        PresetsTab:VoegKnopToe("Preset 2", function()
+            pasVoorinstellingToe("UE5Lumen")
+        end)
+        PresetsTab:VoegKnopToe("Preset 3", function()
+            pasVoorinstellingToe("Cyberpunk2077")
+        end)
+        PresetsTab:VoegKnopToe("Preset 4", function()
+            pasVoorinstellingToe("IMAX70mm")
+        end)
+        PresetsTab:VoegKnopToe("Preset 5", function()
+            pasVoorinstellingToe("NordicFrostbite")
+        end)
+        PresetsTab:VoegKnopToe("Preset 6", function()
+            pasVoorinstellingToe("HyperRealism")
+        end)
+        PresetsTab:VoegKnopToe("Preset 7", function()
+            pasVoorinstellingToe("GoldenHour")
+        end)
+        PresetsTab:VoegKnopToe("Preset 8", function()
+            pasVoorinstellingToe("RainyNoir")
+        end)
+        PresetsTab:VoegKnopToe("Reset Default", function()
+            pasVoorinstellingToe("Default")
+        end)
+
+        PresetsTab:VoegSectieToe("Lighting Controls")
+        PresetsTab:VoegSchakelaarToe("Disable Map Lighting", ShadersState.DevPresetsStripped, function(v)
+            if v then
+                ontkoppelOntwikkelaar()
+            else
+                herstelOntwikkelaar()
+            end
+        end)
+        PresetsTab:VoegKnopToe("Reset Default Lighting", function()
+            herstelOntwikkelaar()
+        end)
+    end
+
+    do
+        SkyTab:VoegSectieToe("Clouds")
+        SkyTab:VoegSchakelaarToe("3D Clouds", Clouds.Enabled, function(v)
+            Clouds.Enabled = v
+        end)
+        SkyTab:VoegSchuifToe("Cloud Cover", 0, 100, math.round(Clouds.Cover * 100), function(v)
+            Clouds.Cover = v / 100
+        end)
+        SkyTab:VoegSchuifToe("Cloud Density", 0, 100, math.round(Clouds.Density * 100), function(v)
+            Clouds.Density = v / 100
+        end)
+    end
+
+    do
+        ShadowsTab:VoegSectieToe("Engine")
+        ShadowsTab:VoegKnopToe("Future", function()
+            zetLichtTechnologie(Enum.Technology.Future)
+            melding("tech: future")
+        end)
+        ShadowsTab:VoegKnopToe("ShadowMap", function()
+            zetLichtTechnologie(Enum.Technology.ShadowMap)
+            melding("tech: shadowmap")
+        end)
+        ShadowsTab:VoegKnopToe("Voxel", function()
+            zetLichtTechnologie(Enum.Technology.Voxel)
+            melding("tech: voxel")
+        end)
+
+        ShadowsTab:VoegSectieToe("SSAO & Contact Shadows")
+        ShadowsTab:VoegSchakelaarToe("SSAO Contact Shadows", ShadersState.SSAOEnabled, function(v)
+            ShadersState.SSAOEnabled = v
+            if not v then
+                Lighting.ShadowSoftness = ShadersState.OriginalLighting.ShadowSoftness
+                Lighting.EnvironmentDiffuseScale = ShadersState.OriginalLighting.EnvironmentDiffuseScale or 1
+            end
+            melding(v and "ssao shadows active" or "ssao shadows off")
+        end)
+        ShadowsTab:VoegSchuifToe("SSAO Intensity", 10, 100, math.round(ShadersState.SSAOIntensity * 100), function(v)
+            ShadersState.SSAOIntensity = v / 100
+        end)
+
+        ShadowsTab:VoegSectieToe("Shadow Settings")
+        ShadowsTab:VoegSchakelaarToe("Global Shadows", Lighting.GlobalShadows, function(v)
+            Lighting.GlobalShadows = v
+        end)
+        ShadowsTab:VoegSchakelaarToe("Deep Shadows", ShadersState.DeepShadowsEnabled, function(v)
+            zetDiepeSchaduwen(v)
+        end)
+        ShadowsTab:VoegSchakelaarToe("Force Cast Shadow", ShadersState.ForceCastShadowEnabled, function(v)
+            forceerSchaduwWorp(v)
+        end)
+        ShadowsTab:VoegSchuifToe("Shadow Softness", 0, 100, math.round(Lighting.ShadowSoftness * 100), function(v)
+            Lighting.ShadowSoftness = v / 100
+        end)
+        ShadowsTab:VoegSchuifToe("Sun Latitude", 0, 90, math.round(Lighting.GeographicLatitude), function(v)
+            Lighting.GeographicLatitude = v
+        end)
+    end
+
+    do
+        GodRaysTab:VoegSectieToe("GodRays")
+        GodRaysTab:VoegSchakelaarToe("FXAA Godrays", ShadersState.FXAAGodraysEnabled, function(v)
+            zetFXAAZonnestralen(v)
+            melding(v and "godrays on" or "godrays off")
+        end)
+        GodRaysTab:VoegSchuifToe("Blur Size", 1, 10, ShadersState.FXAABlurSize, function(v)
+            ShadersState.FXAABlurSize = v
+            if ShadersState.FXAAGodraysEnabled then
+                FXAABlur.Size = v
+            end
+        end)
+        GodRaysTab:VoegSchuifToe("Intensity", 0, 100, math.round(SunRays.Intensity * 100), function(v)
+            SunRays.Intensity = v / 100
+            SunRays.Enabled = true
+        end)
+        GodRaysTab:VoegSchuifToe("Spread", 0, 100, math.round(SunRays.Spread * 100), function(v)
+            SunRays.Spread = v / 100
+            SunRays.Enabled = true
+        end)
+    end
+
+    do
+        PBRTab:VoegSectieToe("Reflections")
+        PBRTab:VoegSchakelaarToe("PBR Reflections", ShadersState.ReflectionsEnabled, function(v)
+            zetReflecties(v)
+        end)
+        PBRTab:VoegSchuifToe("Reflectance Level", 0, 100, math.round(ShadersState.ReflectionIntensity * 100), function(v)
+            zetReflectieNiveau(v / 100)
+        end)
+        PBRTab:VoegSectieToe("Environment")
+        PBRTab:VoegSchuifToe("Diffuse Scale", 0, 100, math.round((Lighting.EnvironmentDiffuseScale or 1) * 100), function(v)
+            Lighting.EnvironmentDiffuseScale = v / 100
+        end)
+        PBRTab:VoegSchuifToe("Specular Scale", 0, 100, math.round((Lighting.EnvironmentSpecularScale or 1) * 100), function(v)
+            Lighting.EnvironmentSpecularScale = v / 100
+        end)
+    end
+
+    do
+        WeatherTab:VoegSectieToe("Weather")
+        WeatherTab:VoegSchakelaarToe("Rain Particles", ShadersState.RainEnabled, function(v)
+            zetRegenEffect(v)
+        end)
+        WeatherTab:VoegSchuifToe("Rain Density", 10, 300, math.round(ShadersState.RainIntensity * 100), function(v)
+            ShadersState.RainIntensity = v / 100
+            if ShadersState.RainEnabled then
+                zetRegenEffect(true)
+            end
+        end)
+        WeatherTab:VoegSectieToe("Atmosphere")
+        WeatherTab:VoegSchuifToe("Time of Day", 0, 24, math.round(Lighting.ClockTime), function(v)
+            Lighting.ClockTime = v
+        end)
+        WeatherTab:VoegSchuifToe("Fog Distance", 50, 2500, math.round(Lighting.FogEnd), function(v)
+            Lighting.FogEnd = v
+        end)
+    end
+
+    do
+        PFXTab:VoegSectieToe("Cinematic Optics")
+        PFXTab:VoegSchakelaarToe("Cinematic Letterbox (2.39:1)", ShadersState.LetterboxEnabled, function(v)
+            ShadersState.LetterboxEnabled = v
+            if not v then
+                LetterboxTop.Size = UDim2.new(1, 0, 0, 0)
+                LetterboxBottom.Size = UDim2.new(1, 0, 0, 0)
+                LetterboxTop.Visible = false
+                LetterboxBottom.Visible = false
+            end
+            melding(v and "letterbox on" or "letterbox off")
+        end)
+        PFXTab:VoegSchakelaarToe("35mm Film Grain", ShadersState.FilmGrainEnabled, function(v)
+            ShadersState.FilmGrainEnabled = v
+            melding(v and "film grain on" or "film grain off")
+        end)
+        PFXTab:VoegSchuifToe("Film Grain Opacity", 5, 100, math.round(ShadersState.GrainOpacity * 100), function(v)
+            ShadersState.GrainOpacity = v / 100
+        end)
+        PFXTab:VoegSchakelaarToe("Chromatic Aberration", ShadersState.AberrationEnabled, function(v)
+            ShadersState.AberrationEnabled = v
+            melding(v and "aberration on" or "aberration off")
+        end)
+        PFXTab:VoegSchuifToe("Aberration Strength", 10, 100, math.round(ShadersState.AberrationStrength * 100), function(v)
+            ShadersState.AberrationStrength = v / 100
+        end)
+        PFXTab:VoegSchakelaarToe("Vignette", ShadersState.VignetteEnabled, function(v)
+            ShadersState.VignetteEnabled = v
+            VignetteFrame.ImageTransparency = v and (1 - ShadersState.VignetteOpacity * 0.7) or 1
+        end)
+        PFXTab:VoegSchuifToe("Vignette Opacity", 10, 100, math.round(ShadersState.VignetteOpacity * 100), function(v)
+            ShadersState.VignetteOpacity = v / 100
+            if ShadersState.VignetteEnabled then
+                VignetteFrame.ImageTransparency = 1 - (v / 100 * 0.7)
+            end
+        end)
+
+        PFXTab:VoegSectieToe("Motion & Shutter")
+        PFXTab:VoegSchakelaarToe("Velocity Motion Blur", ShadersState.MotionBlurEnabled, function(v)
+            ShadersState.MotionBlurEnabled = v
+            if not v and not ShadersState.FXAAGodraysEnabled then
+                FXAABlur.Enabled = false
+            end
+            melding(v and "motion blur active" or "motion blur off")
+        end)
+        PFXTab:VoegSchuifToe("Motion Blur Scale", 10, 100, math.round(ShadersState.MotionBlurScale * 100), function(v)
+            ShadersState.MotionBlurScale = v / 100
+        end)
+
+        PFXTab:VoegSectieToe("Focus & Lens")
+        PFXTab:VoegSchakelaarToe("Auto-Focus DOF", ShadersState.AutoFocusEnabled, function(v)
+            zetScherpstelling(v)
+            melding(v and "dof on" or "dof off")
+        end)
+
+        PFXTab:VoegSectieToe("Color")
+        PFXTab:VoegSchuifToe("Exposure", -150, 150, math.round(Lighting.ExposureCompensation * 100), function(v)
+            Lighting.ExposureCompensation = v / 100
+        end)
+        PFXTab:VoegSchuifToe("Brightness", -50, 50, math.round(CC.Brightness * 100), function(v)
+            CC.Brightness = v / 100
+        end)
+        PFXTab:VoegSchuifToe("Contrast", -50, 100, math.round(CC.Contrast * 100), function(v)
+            CC.Contrast = v / 100
+        end)
+        PFXTab:VoegSchuifToe("Saturation", -100, 100, math.round(CC.Saturation * 100), function(v)
+            CC.Saturation = v / 100
+        end)
+
+        PFXTab:VoegSectieToe("Bloom")
+        PFXTab:VoegSchuifToe("Bloom Intensity", 0, 200, math.round(Bloom.Intensity * 100), function(v)
+            Bloom.Enabled = true
+            Bloom.Intensity = v / 100
+        end)
+        PFXTab:VoegSchuifToe("Bloom Size", 1, 56, math.round(Bloom.Size), function(v)
+            Bloom.Enabled = true
+            Bloom.Size = v
+        end)
+        PFXTab:VoegSchuifToe("Bloom Threshold", 0, 100, math.round(Bloom.Threshold * 100), function(v)
+            Bloom.Enabled = true
+            Bloom.Threshold = v / 100
+        end)
+    end
+
+    do
+        PhotoTab:VoegSectieToe("Camera")
+        local photoToggle = PhotoTab:VoegSchakelaarToe("Cinematic Freecam", ShadersState.CinematicEnabled, function(v)
+            schakelFilmCamera(v)
+        end)
+        ShadersState.SetCinematicToggleUI = photoToggle
+
+        PhotoTab:VoegSchakelaarToe("Lock Pose", ShadersState.FreezePoseEnabled, function(v)
+            ShadersState.FreezePoseEnabled = v
+            if ShadersState.CinematicEnabled then
+                bevriesHouding(v)
+            end
+        end)
+        PhotoTab:VoegSchakelaarToe("Hold RMB to Steer", ShadersState.HoldRMBToSteer, function(v)
+            ShadersState.HoldRMBToSteer = v
+        end)
+
+        PhotoTab:VoegSectieToe("Flight")
+        PhotoTab:VoegSchuifToe("Flight Speed", 5, 150, ShadersState.CinematicSpeed, function(v)
+            ShadersState.CinematicSpeed = v
+        end)
+        PhotoTab:VoegSchuifToe("FOV", 15, 120, math.round(Camera.FieldOfView), function(v)
+            Camera.FieldOfView = v
+        end)
+
+        PhotoTab:VoegSectieToe("Tools")
+        PhotoTab:VoegKnopToe("Frame Camera On Character", function()
+            if not ShadersState.CinematicEnabled then
+                schakelFilmCamera(true)
+            end
+            richtCameraOpKarakter()
+            melding("camera framed")
+        end)
+        PhotoTab:VoegKnopToe("Hide UI [H]", function()
+            zetZichtbaar(false)
+        end)
+    end
+
+    do
+        CreditsTab:VoegSectieToe("Credits")
+        CreditsTab:VoegLabelToe("Developer: Eiko")
+        CreditsTab:VoegLabelToe("UI Library: Venus")
+        CreditsTab:VoegKnopToe("Copy Discord Invite", function()
+            local link = "https://discord.gg/P7fuzYj5xK"
+            local copied = false
+            local fn = setclipboard or toclipboard or set_clipboard or writeclipboard or setrbxclipboard or (syn and syn.set_clipboard) or (Clipboard and Clipboard.set)
+            if fn then
+                local ok = pcall(fn, link)
+                if ok then copied = true end
+            end
+            local req = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+            if req then
+                pcall(function()
+                    req({
+                        Url = "http://127.0.0.1:6463/rpc?v=1",
+                        Method = "POST",
+                        Headers = {
+                            ["Content-Type"] = "application/json",
+                            ["Origin"] = "https://discord.com"
+                        },
+                        Body = game:GetService("HttpService"):JSONEncode({
+                            cmd = "INVITE_BROWSER",
+                            args = { code = "P7fuzYj5xK" },
+                            nonce = game:GetService("HttpService"):GenerateGUID(false)
+                        })
+                    })
+                end)
+            end
+        end)
+        CreditsTab:VoegLabelToe("Discord: discord.gg/P7fuzYj5xK")
+    end
+end
+
+task.spawn(function()
+    zetZichtbaar(true)
+end)
