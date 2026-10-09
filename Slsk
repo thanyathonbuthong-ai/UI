@@ -1,0 +1,694 @@
+--[[
+    SettingsTab UI Library
+    สร้างแท็บใหม่ในเมนู Settings ของ Roblox พร้อม component สำเร็จรูป
+    (ไม่มีระบบเลือกเซิร์ฟเวอร์ — เป็น UI ล้วน ๆ)
+
+    local Library = loadstring(readfile("UILibrary.lua"))()
+    local hub = Library.new()
+    local tab = hub:CreateTab({ Name = "My Tab" })
+    tab:AddSection("General")
+    tab:AddToggle({ Text = "Enabled", Callback = function(v) end })
+]]
+
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local Library = {}
+Library.__index = Library
+
+-- =========================
+-- THEME
+-- =========================
+Library.Theme = {
+	Surface = Color3.fromRGB(45, 45, 52),
+	SurfaceTransparency = 0.4,
+	Cooldown = Color3.fromRGB(60, 60, 70),
+	Accent = Color3.fromRGB(60, 120, 255),
+	Text = Color3.fromRGB(255, 255, 255),
+	TextSoft = Color3.fromRGB(220, 220, 220),
+	TextMuted = Color3.fromRGB(160, 160, 160),
+	TabIdle = Color3.fromRGB(180, 180, 180),
+	Off = Color3.fromRGB(80, 80, 92),
+	FontBold = Enum.Font.GothamBold,
+	FontSemi = Enum.Font.GothamSemibold,
+	FontRegular = Enum.Font.Gotham,
+	CornerLarge = 14,
+	CornerMedium = 10,
+	CornerSmall = 8,
+}
+
+local function T() return Library.Theme end
+
+-- =========================
+-- HELPERS
+-- =========================
+local function create(class, props, parent)
+	local inst = Instance.new(class)
+	for k, v in pairs(props or {}) do inst[k] = v end
+	if parent then inst.Parent = parent end
+	return inst
+end
+
+local function corner(parent, r)
+	return create("UICorner", { CornerRadius = UDim.new(0, r) }, parent)
+end
+
+local function tween(inst, props, time)
+	TweenService:Create(inst, TweenInfo.new(time or 0.15), props):Play()
+end
+
+local function isPress(input)
+	return input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function resolveRoblox()
+	local gui = CoreGui:WaitForChild("RobloxGui")
+	local shield = gui:WaitForChild("SettingsClippingShield"):WaitForChild("SettingsShield")
+	local page = shield:WaitForChild("MenuContainer"):WaitForChild("Page")
+	return {
+		Shield = shield,
+		Page = page,
+		HubBar = page:WaitForChild("HubBar"):WaitForChild("TabHeaderContainer"):WaitForChild("HubBarContainer"),
+		Clipper = page:WaitForChild("PageViewClipper"),
+	}
+end
+
+-- =========================
+-- BUTTON (ใช้ทั้งใน Row และเต็มความกว้าง)
+-- =========================
+local Button = {}
+Button.__index = Button
+
+local function newButton(parent, opts)
+	local theme = T()
+	local inst = create("TextButton", {
+		Size = opts.FullWidth and UDim2.new(1, 0, 0, opts.Height or 40)
+			or UDim2.new(0, opts.Width or 110, 0, opts.Height or 36),
+		BackgroundColor3 = opts.Color or theme.Surface,
+		BackgroundTransparency = opts.Transparency or theme.SurfaceTransparency,
+		Text = opts.Text or "Button",
+		TextColor3 = theme.Text,
+		Font = theme.FontBold,
+		TextSize = opts.TextSize or 13,
+		BorderSizePixel = 0,
+		LayoutOrder = opts.Order or 0,
+		AutoButtonColor = false,
+	}, parent)
+	corner(inst, opts.Corner or theme.CornerMedium)
+
+	local self = setmetatable({
+		Instance = inst,
+		_text = opts.Text or "Button",
+		_color = opts.Color or theme.Surface,
+		_transparency = opts.Transparency or theme.SurfaceTransparency,
+		_cooldownEnd = 0,
+	}, Button)
+
+	inst.MouseEnter:Connect(function()
+		if not self:IsCooling() then tween(inst, { BackgroundTransparency = math.max(self._transparency - 0.2, 0) }) end
+	end)
+	inst.MouseLeave:Connect(function()
+		if not self:IsCooling() then tween(inst, { BackgroundTransparency = self._transparency }) end
+	end)
+	if opts.Callback then
+		inst.MouseButton1Click:Connect(function() opts.Callback(self) end)
+	end
+	return self
+end
+
+function Button:SetText(text)
+	self._text = text
+	if not self:IsCooling() then self.Instance.Text = text end
+end
+
+function Button:IsCooling()
+	return tick() < self._cooldownEnd
+end
+
+-- restore: string | function | nil
+function Button:StartCooldown(seconds, restore)
+	if self:IsCooling() then return false end
+	local inst = self.Instance
+	self._cooldownEnd = tick() + seconds
+	inst.BackgroundColor3 = T().Cooldown
+	inst.BackgroundTransparency = 0
+	inst.Text = seconds .. "s"
+	if self._conn then self._conn:Disconnect() end
+	self._conn = RunService.Heartbeat:Connect(function()
+		local remaining = math.ceil(self._cooldownEnd - tick())
+		if remaining <= 0 then
+			local text = type(restore) == "function" and restore() or restore
+			inst.Text = text or self._text
+			self._text = inst.Text
+			inst.BackgroundColor3 = self._color
+			inst.BackgroundTransparency = self._transparency
+			self._conn:Disconnect()
+			self._conn = nil
+		else
+			inst.Text = remaining .. "s"
+		end
+	end)
+	return true
+end
+
+function Button:Destroy()
+	if self._conn then self._conn:Disconnect() end
+	self.Instance:Destroy()
+end
+
+-- =========================
+-- ROW (ปุ่มเรียงแนวนอน)
+-- =========================
+local Row = {}
+Row.__index = Row
+
+function Row:AddButton(opts)
+	self._count += 1
+	opts = opts or {}
+	opts.Order = opts.Order or self._count
+	opts.FullWidth = false
+	return newButton(self.Instance, opts)
+end
+
+-- =========================
+-- TAB
+-- =========================
+local Tab = {}
+Tab.__index = Tab
+
+function Tab:_next()
+	self._order += 1
+	return self._order
+end
+
+function Tab:_card(height)
+	local theme = T()
+	local card = create("Frame", {
+		Size = UDim2.new(1, 0, 0, height),
+		BackgroundColor3 = theme.Surface,
+		BackgroundTransparency = theme.SurfaceTransparency,
+		BorderSizePixel = 0,
+		LayoutOrder = self:_next(),
+		ClipsDescendants = true,
+	}, self.Content)
+	corner(card, theme.CornerLarge)
+	return card
+end
+
+function Tab:_title(card, text, width)
+	return create("TextLabel", {
+		Size = UDim2.new(1, -(width or 32), 0, 40),
+		Position = UDim2.new(0, 16, 0, 0),
+		BackgroundTransparency = 1,
+		Text = text or "",
+		TextColor3 = T().TextSoft,
+		Font = T().FontSemi,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, card)
+end
+
+-- ---------- Section ----------
+function Tab:AddSection(text)
+	local label = create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundTransparency = 1,
+		Text = string.upper(text or ""),
+		TextColor3 = T().TextMuted,
+		Font = T().FontBold,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = self:_next(),
+	}, self.Content)
+	return { Instance = label, SetText = function(_, t) label.Text = string.upper(t) end }
+end
+
+-- ---------- Banner ----------
+function Tab:AddBanner(opts)
+	opts = opts or {}
+	local theme = T()
+	local card = self:_card(64)
+
+	local icon = create("ImageLabel", {
+		Size = UDim2.new(0, 44, 0, 44),
+		Position = UDim2.new(0, 12, 0.5, -22),
+		BackgroundTransparency = 1,
+		Image = opts.Icon or "rbxasset://textures/ui/GuiImagePlaceholder.png",
+		Visible = opts.Icon ~= false,
+	}, card)
+	corner(icon, theme.CornerSmall)
+
+	local left = (opts.Icon ~= false) and 68 or 16
+	local title = create("TextLabel", {
+		Size = UDim2.new(1, -(left + 100), 0, 24),
+		Position = UDim2.new(0, left, 0, 10),
+		BackgroundTransparency = 1,
+		Text = opts.Title or "",
+		TextColor3 = theme.Text,
+		Font = theme.FontBold,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, card)
+	local subtitle = create("TextLabel", {
+		Size = UDim2.new(1, -(left + 100), 0, 18),
+		Position = UDim2.new(0, left, 0, 36),
+		BackgroundTransparency = 1,
+		Text = opts.Subtitle or "",
+		TextColor3 = theme.TextMuted,
+		Font = theme.FontRegular,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, card)
+	local stats = create("TextLabel", {
+		Size = UDim2.new(0, 180, 1, 0),
+		Position = UDim2.new(1, -190, 0, 0),
+		BackgroundTransparency = 1,
+		Text = opts.Stats or "",
+		TextColor3 = theme.TextMuted,
+		Font = theme.FontRegular,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, card)
+
+	return {
+		Instance = card,
+		SetTitle = function(_, t) title.Text = t end,
+		SetSubtitle = function(_, t) subtitle.Text = t end,
+		SetStats = function(_, t) stats.Text = t end,
+		SetIcon = function(_, i) icon.Image = i end,
+	}
+end
+
+-- ---------- Label ----------
+function Tab:AddLabel(text)
+	local label = create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 22),
+		BackgroundTransparency = 1,
+		Text = text or "",
+		TextColor3 = T().TextMuted,
+		Font = T().FontRegular,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
+		LayoutOrder = self:_next(),
+	}, self.Content)
+	return { Instance = label, SetText = function(_, t) label.Text = t end }
+end
+
+-- ---------- Button ----------
+function Tab:AddButton(opts)
+	opts = opts or {}
+	opts.FullWidth = true
+	opts.Order = self:_next()
+	return newButton(self.Content, opts)
+end
+
+-- ---------- Row ----------
+function Tab:AddRow()
+	local frame = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundTransparency = 1,
+		LayoutOrder = self:_next(),
+	}, self.Content)
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	}, frame)
+	return setmetatable({ Instance = frame, _count = 0 }, Row)
+end
+
+-- ---------- Toggle ----------
+function Tab:AddToggle(opts)
+	opts = opts or {}
+	local theme = T()
+	local card = self:_card(40)
+	self:_title(card, opts.Text, 80)
+
+	local track = create("TextButton", {
+		Size = UDim2.new(0, 42, 0, 22),
+		Position = UDim2.new(1, -58, 0.5, -11),
+		BackgroundColor3 = theme.Off,
+		Text = "",
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+	}, card)
+	corner(track, 11)
+	local knob = create("Frame", {
+		Size = UDim2.new(0, 16, 0, 16),
+		Position = UDim2.new(0, 3, 0.5, -8),
+		BackgroundColor3 = theme.Text,
+		BorderSizePixel = 0,
+	}, track)
+	corner(knob, 8)
+
+	local obj = { Instance = card, Value = false }
+	function obj:Set(v, silent)
+		self.Value = v and true or false
+		tween(track, { BackgroundColor3 = self.Value and theme.Accent or theme.Off })
+		tween(knob, { Position = self.Value and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8) })
+		if not silent and opts.Callback then opts.Callback(self.Value) end
+	end
+	function obj:Get() return self.Value end
+
+	track.MouseButton1Click:Connect(function() obj:Set(not obj.Value) end)
+	obj:Set(opts.Default or false, true)
+	return obj
+end
+
+-- ---------- Slider ----------
+function Tab:AddSlider(opts)
+	opts = opts or {}
+	local theme = T()
+	local min, max = opts.Min or 0, opts.Max or 100
+	local inc = opts.Increment or 1
+	local card = self:_card(58)
+	self:_title(card, opts.Text, 100)
+
+	local valueLabel = create("TextLabel", {
+		Size = UDim2.new(0, 80, 0, 36),
+		Position = UDim2.new(1, -96, 0, 0),
+		BackgroundTransparency = 1,
+		TextColor3 = theme.TextMuted,
+		Font = theme.FontRegular,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, card)
+
+	local bar = create("Frame", {
+		Size = UDim2.new(1, -32, 0, 6),
+		Position = UDim2.new(0, 16, 0, 40),
+		BackgroundColor3 = theme.Off,
+		BorderSizePixel = 0,
+	}, card)
+	corner(bar, 3)
+	local fill = create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = theme.Accent, BorderSizePixel = 0 }, bar)
+	corner(fill, 3)
+
+	local obj = { Instance = card, Value = min }
+	function obj:Set(v, silent)
+		v = math.clamp(math.round(v / inc) * inc, min, max)
+		self.Value = v
+		fill.Size = UDim2.new((v - min) / (max - min), 0, 1, 0)
+		valueLabel.Text = tostring(v)
+		if not silent and opts.Callback then opts.Callback(v) end
+	end
+	function obj:Get() return self.Value end
+
+	local dragging = false
+	local function update(x)
+		local a = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+		obj:Set(min + (max - min) * a)
+	end
+	card.InputBegan:Connect(function(input)
+		if isPress(input) then dragging = true; update(input.Position.X) end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			update(input.Position.X)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if isPress(input) then dragging = false end
+	end)
+
+	obj:Set(opts.Default or min, true)
+	return obj
+end
+
+-- ---------- TextBox ----------
+function Tab:AddTextBox(opts)
+	opts = opts or {}
+	local theme = T()
+	local card = self:_card(40)
+	self:_title(card, opts.Text, 190)
+
+	local box = create("TextBox", {
+		Size = UDim2.new(0, 160, 0, 28),
+		Position = UDim2.new(1, -176, 0.5, -14),
+		BackgroundColor3 = theme.Cooldown,
+		BorderSizePixel = 0,
+		Text = opts.Default or "",
+		PlaceholderText = opts.Placeholder or "",
+		PlaceholderColor3 = theme.TextMuted,
+		TextColor3 = theme.Text,
+		Font = theme.FontRegular,
+		TextSize = 13,
+		ClearTextOnFocus = false,
+	}, card)
+	corner(box, theme.CornerSmall)
+	box.FocusLost:Connect(function(enter)
+		if opts.Callback then opts.Callback(box.Text, enter) end
+	end)
+
+	return {
+		Instance = card,
+		Get = function() return box.Text end,
+		Set = function(_, t) box.Text = t end,
+	}
+end
+
+-- ---------- Dropdown ----------
+function Tab:AddDropdown(opts)
+	opts = opts or {}
+	local theme = T()
+	local HEADER, ITEM = 40, 30
+	local card = self:_card(HEADER)
+	self:_title(card, opts.Text, 170)
+
+	local header = create("TextButton", {
+		Size = UDim2.new(0, 150, 0, 28),
+		Position = UDim2.new(1, -166, 0, 6),
+		BackgroundColor3 = theme.Cooldown,
+		BorderSizePixel = 0,
+		TextColor3 = theme.Text,
+		Font = theme.FontRegular,
+		TextSize = 13,
+		AutoButtonColor = false,
+		Text = "",
+	}, card)
+	corner(header, theme.CornerSmall)
+
+	local holder = create("Frame", {
+		Size = UDim2.new(1, -32, 0, 0),
+		Position = UDim2.new(0, 16, 0, HEADER + 4),
+		BackgroundTransparency = 1,
+	}, card)
+	create("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, holder)
+
+	local obj = { Instance = card, Value = nil, Options = {}, Open = false }
+
+	local function resize()
+		local n = #obj.Options
+		local h = obj.Open and (HEADER + 8 + n * (ITEM + 4)) or HEADER
+		tween(card, { Size = UDim2.new(1, 0, 0, h) })
+	end
+
+	function obj:Set(v, silent)
+		self.Value = v
+		header.Text = tostring(v or "Select") .. "  ▾"
+		if not silent and opts.Callback then opts.Callback(v) end
+	end
+	function obj:Get() return self.Value end
+
+	function obj:Refresh(options)
+		self.Options = options
+		for _, c in ipairs(holder:GetChildren()) do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+		for i, name in ipairs(options) do
+			local b = create("TextButton", {
+				Size = UDim2.new(1, 0, 0, ITEM),
+				BackgroundColor3 = theme.Cooldown,
+				BackgroundTransparency = 0.3,
+				BorderSizePixel = 0,
+				Text = tostring(name),
+				TextColor3 = theme.TextSoft,
+				Font = theme.FontRegular,
+				TextSize = 13,
+				AutoButtonColor = false,
+				LayoutOrder = i,
+			}, holder)
+			corner(b, theme.CornerSmall)
+			b.MouseButton1Click:Connect(function()
+				obj:Set(name)
+				obj.Open = false
+				resize()
+			end)
+		end
+		resize()
+	end
+
+	header.MouseButton1Click:Connect(function()
+		obj.Open = not obj.Open
+		resize()
+	end)
+
+	obj:Refresh(opts.Options or {})
+	obj:Set(opts.Default, true)
+	return obj
+end
+
+function Tab:Select()
+	self._hub:Select(self)
+end
+
+-- =========================
+-- LIBRARY (HUB)
+-- =========================
+function Library.new()
+	local r = resolveRoblox()
+	local self = setmetatable({ _r = r, _tabs = {}, _conns = {}, Active = nil }, Library)
+
+	self._origParent = r.HubBar.Parent
+	self._scroll = create("ScrollingFrame", {
+		Name = "HubScroll",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 0,
+		ScrollingDirection = Enum.ScrollingDirection.X,
+		AutomaticCanvasSize = Enum.AutomaticSize.X,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+	}, self._origParent)
+	r.HubBar.Parent = self._scroll
+
+	for _, btn in ipairs(r.HubBar:GetChildren()) do
+		if btn:IsA("TextButton") then
+			table.insert(self._conns, btn.MouseButton1Click:Connect(function() self:Deselect() end))
+		end
+	end
+	table.insert(self._conns, r.Shield:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not r.Shield.Visible then self:Deselect() end
+	end))
+
+	return self
+end
+
+function Library:_setNativeSelection(visible)
+	for _, btn in ipairs(self._r.HubBar:GetChildren()) do
+		if btn:IsA("TextButton") and not btn:GetAttribute("CustomTab") then
+			local sel = btn:FindFirstChild("TabSelection")
+			if sel then sel.Visible = visible end
+		end
+	end
+end
+
+-- opts: Name, Width, Order
+function Library:CreateTab(opts)
+	opts = opts or {}
+	local r, theme = self._r, T()
+
+	local button = create("TextButton", {
+		Name = (opts.Name or "Custom") .. "Tab",
+		Size = UDim2.new(0, opts.Width or 140, 1, 0),
+		BackgroundTransparency = 1,
+		Text = opts.Name or "Custom",
+		TextColor3 = theme.TabIdle,
+		Font = theme.FontBold,
+		TextSize = 14,
+	}, r.HubBar)
+	button:SetAttribute("CustomTab", true)
+	if r.HubBar:FindFirstChildOfClass("UIListLayout") then
+		button.LayoutOrder = opts.Order or #r.HubBar:GetChildren()
+	end
+
+	local underline
+	local ref = r.HubBar:FindFirstChild("ReportAbuseTab")
+	local refSel = ref and ref:FindFirstChild("TabSelection")
+	if refSel then
+		underline = refSel:Clone()
+		underline.Visible = false
+		underline.Parent = button
+	end
+
+	local page = create("Frame", {
+		Name = (opts.Name or "Custom") .. "Page",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+	}, r.Page)
+
+	local function sync()
+		page.Size = UDim2.fromOffset(r.Clipper.AbsoluteSize.X, r.Clipper.AbsoluteSize.Y)
+		page.Position = UDim2.fromOffset(
+			r.Clipper.AbsolutePosition.X - r.Page.AbsolutePosition.X,
+			r.Clipper.AbsolutePosition.Y - r.Page.AbsolutePosition.Y
+		)
+	end
+	task.defer(sync)
+	table.insert(self._conns, r.Clipper:GetPropertyChangedSignal("AbsoluteSize"):Connect(sync))
+	table.insert(self._conns, r.Clipper:GetPropertyChangedSignal("AbsolutePosition"):Connect(sync))
+
+	-- พื้นที่เนื้อหา: scroll + auto layout
+	local content = create("ScrollingFrame", {
+		Name = "Content",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 0,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+	}, page)
+	create("UIPadding", {
+		PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16),
+		PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 12),
+	}, content)
+	create("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, content)
+
+	local tab = setmetatable({
+		Name = opts.Name,
+		Button = button,
+		Page = page,
+		Content = content,
+		Underline = underline,
+		_hub = self,
+		_order = 0,
+	}, Tab)
+
+	button.MouseButton1Click:Connect(function() self:Select(tab) end)
+	table.insert(self._tabs, tab)
+	return tab
+end
+
+function Library:Select(tab)
+	for _, t in ipairs(self._tabs) do
+		local active = (t == tab)
+		t.Page.Visible = active
+		t.Button.TextColor3 = active and T().Text or T().TabIdle
+		if t.Underline then t.Underline.Visible = active end
+	end
+	self:_setNativeSelection(false)
+	self._r.Clipper.Visible = false
+	self.Active = tab
+end
+
+function Library:Deselect()
+	if not self.Active then return end
+	for _, t in ipairs(self._tabs) do
+		t.Page.Visible = false
+		t.Button.TextColor3 = T().TabIdle
+		if t.Underline then t.Underline.Visible = false end
+	end
+	self:_setNativeSelection(true)
+	self._r.Clipper.Visible = true
+	self.Active = nil
+end
+
+function Library:Destroy()
+	self:Deselect()
+	for _, c in ipairs(self._conns) do c:Disconnect() end
+	for _, t in ipairs(self._tabs) do
+		t.Page:Destroy()
+		t.Button:Destroy()
+	end
+	self._r.HubBar.Parent = self._origParent
+	self._scroll:Destroy()
+end
+
+return Library
