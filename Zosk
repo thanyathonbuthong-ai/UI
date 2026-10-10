@@ -1,0 +1,2449 @@
+--[[
+	Headshot UI Library  (v0.6)  -  dark / orange Roblox UI library, mobile + PC
+
+	local UI  = loadstring(readfile("HeadshotUI.lua"))()          -- set SHOW_DEMO = false below to get only the library
+	local Win = UI:CreateWindow({ Title = "Headshot", Version = "v0.6", Game = "MM2", ToggleKey = Enum.KeyCode.RightShift })
+	local Tab = Win:AddTab("Main")                                 -- top tabs (max 5 fit the header)
+	local Sec = Tab:AddSection("General")                          -- tab without sub tabs
+	local Sub = Tab:AddSubTab("Skins", "description")              -- or: tab with sub tabs  ->  Sub:AddSection("TITLE")
+
+	ELEMENTS  (every element returns an object with :Set(value) / :Get(); give it Flag = "name" to include it in configs)
+	  Sec:AddToggle({ Title, Default, Flag, Callback(bool) })
+	  Sec:AddCheckbox({ Title, Default, Flag, Callback(bool) })
+	  Sec:AddRadio({ Title, Options, Default, Flag, Callback(name) })
+	  Sec:AddSlider({ Title, Min, Max, Step, Default, Flag, Callback(number) })
+	  Sec:AddStepper({ Title, Min, Max, Step, Default, Flag, Callback(number) })        (hold + / - to repeat)
+	  Sec:AddButton({ Title, Style, Icon, Confirm, Disabled, Width, Callback })         Style = Default | Accent | Outline | Success | Danger | Ghost
+	  Sec:AddButtonGroup({ Buttons = { { Title, Style, Callback }, ... } })
+	  Sec:AddToggleButton({ Title, Default, Flag, Callback(bool) })
+	  Sec:AddDropdown({ Title, Options, Default, Search, Flag, Callback(name) })        obj:SetOptions(list)
+	  Sec:AddMultiDropdown({ Title, Options, Default = { ... }, Flag, Callback(list) })
+	  Sec:AddTextbox({ Title, Default, Placeholder, Numeric, Live, Flag, Callback(text|number) })
+	  Sec:AddKeybind({ Title, Default = Enum.KeyCode.F, Mode = "Press"|"Toggle"|"Hold", Flag, Callback(key), Pressed(state) })
+	  Sec:AddColorPicker({ Title, Default = Color3, Flag, Callback(Color3) })
+	  Sec:AddSegmented({ Options, Default, Width, Flag, Callback })    Sec:AddChips({ Options, Default, Flag, Callback })
+	  Sec:AddProgress({ Title, Default, Max })  obj:Set(n)             Sec:AddLabel(text)   Sec:AddParagraph({ Title, Content })   Sec:AddDivider(text?)
+	  Sec:AddRow()  ->  Row:AddSegmented / AddSearch / AddCounter / AddButton (elements placed side by side)
+	  Sec:AddGrid({ Callback })  ->  Grid:AddItem({ Name, Rarity, Image, Type }) / Grid:Filter(fn) / Grid:Clear()
+
+	WINDOW
+	  Win:Notify({ Title, Content, Type = "Info"|"Success"|"Warning"|"Error", Duration })
+	  Win:Dialog({ Title, Content, Buttons = { { Title, Style, Callback }, ... } })
+	  Win:SaveConfig(name) / Win:LoadConfigFile(name) / Win:DeleteConfig(name) / Win:ResetConfig() / Win:GetConfig() / Win:LoadConfig(table)
+	  Win:SetStatus(text, Color3)  Win:SetGame(text)  Win:SetConfigs({ "default" }, "default")  Win:SetToggleKey(key)
+	  Win:Toggle()  Win:Destroy()      Window options: Folder / DockPosition / OnSave / OnReset / OnConfig(name) / OnSearch / OnMinimize / OnClose
+	  Configs are saved to <workspace>/HeadshotUI/<name>.json (memory only when the executor has no file functions).
+	  The bottom pill (profile picture + fps / ping / time) is a floating button: drag to move, tap to open / close the window.
+]]
+
+local SHOW_DEMO = true --// false = only return the library (or set getgenv().HeadshotDemo = false before loading)
+pcall(function() if getgenv().HeadshotDemo == false then SHOW_DEMO = false end end)
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TS = game:GetService("TweenService")
+local RS = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+local LP = Players.LocalPlayer
+
+--// ------------------------------------------------------------------ theme (estimated from the screenshot)
+local T = {
+	Window = Color3.fromRGB(27, 31, 43),
+	Panel = Color3.fromRGB(22, 25, 36),
+	Bar = Color3.fromRGB(38, 42, 57),
+	Card = Color3.fromRGB(33, 37, 51),
+	Track = Color3.fromRGB(55, 60, 80),
+	Line = Color3.fromRGB(52, 57, 75),
+	Accent = Color3.fromRGB(255, 86, 36),
+	Text = Color3.fromRGB(240, 242, 247),
+	Dim = Color3.fromRGB(140, 146, 163),
+	Green = Color3.fromRGB(76, 217, 100),
+}
+
+local Rarity = {
+	Common = Color3.fromRGB(205, 208, 218),
+	Uncommon = Color3.fromRGB(76, 217, 100),
+	Rare = Color3.fromRGB(64, 156, 255),
+	Legendary = Color3.fromRGB(255, 70, 90),
+	Godly = Color3.fromRGB(255, 92, 200),
+	Ancient = Color3.fromRGB(170, 90, 255),
+	Unique = Color3.fromRGB(255, 205, 60),
+}
+
+local Icons = {
+	search = "rbxassetid://121018724060431",
+	minus = "rbxassetid://118026365011536",
+	x = "rbxassetid://110786993356448",
+	globe = "rbxassetid://114238209622913",
+	chevron = "rbxassetid://134243273101015",
+}
+
+local FM, FB = Enum.Font.GothamMedium, Enum.Font.GothamBold
+local Left, Right, Center = Enum.TextXAlignment.Left, Enum.TextXAlignment.Right, Enum.TextXAlignment.Center
+
+--// ------------------------------------------------------------------ helpers
+local function New(Class, Props, Parent)
+	local Object = Instance.new(Class)
+	for Key, Value in pairs(Props or {}) do Object[Key] = Value end
+	if Parent then Object.Parent = Parent end
+	return Object
+end
+
+local function Round(Object, Radius) return New("UICorner", { CornerRadius = UDim.new(0, Radius) }, Object) end
+
+local function Stroke(Object, Color, Thickness, Transparency)
+	return New("UIStroke", { Color = Color, Thickness = Thickness or 1, Transparency = Transparency or 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, Object)
+end
+
+local function Pad(Object, L, Tp, R, B)
+	return New("UIPadding", { PaddingLeft = UDim.new(0, L or 0), PaddingTop = UDim.new(0, Tp or 0), PaddingRight = UDim.new(0, R or 0), PaddingBottom = UDim.new(0, B or 0) }, Object)
+end
+
+local function List(Parent, Gap, Horizontal)
+	return New("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, Gap or 0),
+		FillDirection = Horizontal and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical,
+	}, Parent)
+end
+
+local function Tw(Object, Time, Props)
+	TS:Create(Object, TweenInfo.new(Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), Props):Play()
+end
+
+local function Label(Parent, Text, Size, Color, Font, Props)
+	local Object = New("TextLabel", {
+		BackgroundTransparency = 1, BorderSizePixel = 0, Text = Text, TextSize = Size, TextColor3 = Color,
+		Font = Font or FM, TextXAlignment = Left,
+	}, Parent)
+	for Key, Value in pairs(Props or {}) do Object[Key] = Value end
+	return Object
+end
+
+local function Mount(Gui)
+	pcall(function() Gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+	if not Gui.Parent then Gui.Parent = LP:WaitForChild("PlayerGui") end
+end
+
+local function Safe(Callback, ...)
+	if type(Callback) == "function" then task.spawn(Callback, ...) end
+end
+
+local HttpService = game:GetService("HttpService")
+local GuiService = game:GetService("GuiService")
+
+--// ------------------------------------------------------------------ button styles
+local Styles = {
+	Default = { Bg = T.Bar, Text = T.Text, Alpha = 0 },
+	Accent = { Bg = T.Accent, Text = Color3.new(1, 1, 1), Alpha = 0 },
+	Danger = { Bg = Color3.fromRGB(226, 66, 78), Text = Color3.new(1, 1, 1), Alpha = 0 },
+	Success = { Bg = Color3.fromRGB(52, 178, 92), Text = Color3.new(1, 1, 1), Alpha = 0 },
+	Outline = { Bg = T.Accent, Text = T.Accent, Alpha = 1, Stroke = T.Accent },
+	Ghost = { Bg = T.Text, Text = T.Dim, Alpha = 1 },
+}
+
+--// one button factory used by AddButton / AddButtonGroup / Dialog
+local function MakeButton(Parent, Cfg, Size, Order)
+	local S = Styles[Cfg.Style or (Cfg.Accent and "Accent") or "Default"] or Styles.Default
+	local Title = Cfg.Title or "Button"
+	local Disabled = Cfg.Disabled == true
+	local Armed = false
+
+	local Button = New("TextButton", {
+		Text = Title, Font = FB, TextSize = 11, AutoButtonColor = false, BorderSizePixel = 0,
+		TextColor3 = S.Text, BackgroundColor3 = S.Bg, BackgroundTransparency = S.Alpha,
+		Size = Size, LayoutOrder = Order or 0,
+	}, Parent)
+	Round(Button, 8)
+	if S.Stroke then Stroke(Button, S.Stroke, 1, .15) end
+
+	if Cfg.Icon then
+		Pad(Button, 26, 0, 10, 0)
+		New("ImageLabel", {
+			Image = Cfg.Icon, ImageColor3 = S.Text, BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0, .5), Position = UDim2.new(0, -18, .5, 0), Size = UDim2.fromOffset(14, 14),
+		}, Button)
+	end
+
+	local Object = { Instance = Button }
+
+	Button.MouseEnter:Connect(function()
+		if not Disabled then Tw(Button, .15, { BackgroundTransparency = S.Alpha == 1 and .85 or .2 }) end
+	end)
+	Button.MouseLeave:Connect(function() Tw(Button, .15, { BackgroundTransparency = S.Alpha }) end)
+
+	function Object:Fire()
+		if Disabled then return end
+		if Cfg.Confirm and not Armed then
+			Armed = true
+			Button.Text = Cfg.ConfirmText or "Click again to confirm"
+			task.delay(2, function()
+				if Armed then Armed = false Button.Text = Title end
+			end)
+			return
+		end
+		Armed = false
+		Button.Text = Title
+		Safe(Cfg.Callback)
+	end
+
+	function Object:SetTitle(Text) Title = Text Button.Text = Text end
+
+	function Object:SetDisabled(State)
+		Disabled = State and true or false
+		Button.TextTransparency = Disabled and .55 or 0
+	end
+
+	Button.MouseButton1Click:Connect(function() Object:Fire() end)
+	Object:SetDisabled(Disabled)
+	return Object
+end
+
+--// dropdown popup list (single + multi). Pick(name) is called on click; Multi keeps the popup open
+local function OpenList(Win, Anchor, Options, IsOn, Pick, Opt)
+	Opt = Opt or {}
+	local Rows = math.clamp(#Options, 1, 6)
+	local SearchH = Opt.Search and 30 or 0
+	local Width = Opt.Width or math.max(Anchor.AbsoluteSize.X / math.max(Win.Scale.Scale, .01), 130)
+	local Popup = Win:ShowPopup(Anchor, Width, Rows * 24 + 8 + SearchH, Opt.Align)
+	Pad(Popup, 4, 4, 4, 4)
+
+	local Box
+	if Opt.Search then
+		Box = New("TextBox", {
+			Size = UDim2.new(1, 0, 0, 24), BackgroundColor3 = T.Bar, BorderSizePixel = 0, Text = "", PlaceholderText = "Search...",
+			PlaceholderColor3 = T.Dim, TextColor3 = T.Text, Font = FM, TextSize = 10, ClearTextOnFocus = false, TextXAlignment = Left, ZIndex = 3,
+		}, Popup)
+		Round(Box, 6)
+		Pad(Box, 8, 0, 8, 0)
+	end
+
+	local Scroll = New("ScrollingFrame", {
+		Position = UDim2.fromOffset(0, SearchH), Size = UDim2.new(1, 0, 1, -SearchH), BackgroundTransparency = 1, BorderSizePixel = 0,
+		ScrollBarThickness = 2, ScrollBarImageColor3 = T.Accent, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 3,
+	}, Popup)
+	List(Scroll, 2)
+
+	local Items = {}
+	local function Refresh()
+		for Name, Item in pairs(Items) do
+			local On = IsOn(Name)
+			Item.Dot.Visible = On
+			Item.Button.TextColor3 = On and T.Text or T.Dim
+		end
+	end
+
+	for Index, Name in ipairs(Options) do
+		local Button = New("TextButton", {
+			Text = tostring(Name), Font = FM, TextSize = 10, TextColor3 = T.Dim, TextXAlignment = Left, AutoButtonColor = false,
+			BackgroundColor3 = T.Bar, BackgroundTransparency = 1, Size = UDim2.new(1, -4, 0, 22), LayoutOrder = Index, BorderSizePixel = 0, ZIndex = 4,
+		}, Scroll)
+		Round(Button, 5)
+		Pad(Button, 8, 0, 22, 0)
+
+		local Dot = New("Frame", {
+			AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, 14, .5, 0), Size = UDim2.fromOffset(6, 6),
+			BackgroundColor3 = T.Accent, BorderSizePixel = 0, ZIndex = 5,
+		}, Button)
+		Round(Dot, 3)
+
+		Button.MouseEnter:Connect(function() Button.BackgroundTransparency = .3 end)
+		Button.MouseLeave:Connect(function() Button.BackgroundTransparency = 1 end)
+		Button.MouseButton1Click:Connect(function()
+			Pick(Name)
+			if Opt.Multi then Refresh() else Win:ClosePopup() end
+		end)
+
+		Items[Name] = { Button = Button, Dot = Dot }
+	end
+
+	Refresh()
+
+	if Box then
+		Box:GetPropertyChangedSignal("Text"):Connect(function()
+			local Query = string.lower(Box.Text)
+			for Name, Item in pairs(Items) do
+				Item.Button.Visible = Query == "" or string.find(string.lower(tostring(Name)), Query, 1, true) ~= nil
+			end
+		end)
+	end
+
+	return Popup
+end
+
+--// config (de)serialising
+local function Encode(Value)
+	local Kind = typeof(Value)
+	if Value == nil then return { __nil = true } end
+	if Kind == "Color3" then return { __c = { Value.R, Value.G, Value.B } } end
+	if Kind == "EnumItem" then return { __k = Value.Name } end
+	return Value
+end
+
+local function Decode(Value)
+	if type(Value) == "table" then
+		if Value.__nil then return nil end
+		if Value.__c then return Color3.new(Value.__c[1], Value.__c[2], Value.__c[3]) end
+		if Value.__k then
+			local Ok, Key = pcall(function() return Enum.KeyCode[Value.__k] end)
+			return Ok and Key or nil
+		end
+	end
+	return Value
+end
+
+--// mouse / touch position in ScreenGui space (IgnoreGuiInset = true)
+local function GuiPoint(Input)
+	return Vector2.new(Input.Position.X, Input.Position.Y + GuiService:GetGuiInset().Y)
+end
+
+--// ------------------------------------------------------------------ element builder (used by sections and rows)
+local function Builder(Container, Win, IsRow)
+	local B = {}
+	local Order = 0
+	local function Next() Order = Order + 1 return Order end
+
+	--// registers the element in the config system (Flag) and remembers its default for Reset
+	local function Reg(Cfg, Object)
+		if Object.Get then Object.Default = Object:Get() end
+		if Cfg and Cfg.Flag and Win.Flags then Win.Flags[Cfg.Flag] = Object end
+		return Object
+	end
+
+	function B:AddRow(Cfg)
+		Cfg = Cfg or {}
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, Cfg.Height or 30), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		New("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, Cfg.Gap or 8), VerticalAlignment = Enum.VerticalAlignment.Center,
+		}, Row)
+		return Builder(Row, Win, true)
+	end
+
+	function B:AddLabel(Text)
+		local Object = Label(Container, Text, 11, T.Dim, FM, { Size = UDim2.new(1, 0, 0, 16), LayoutOrder = Next(), TextWrapped = true })
+		return { Set = function(_, NewText) Object.Text = NewText end }
+	end
+
+	function B:AddToggle(Cfg)
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		Label(Row, Cfg.Title or "Toggle", 12, T.Text, FM, { Size = UDim2.new(1, -50, 1, 0) })
+
+		local Switch = New("TextButton", {
+			Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, 0, .5, 0),
+			Size = UDim2.fromOffset(34, 18), BackgroundColor3 = T.Track, BorderSizePixel = 0,
+		}, Row)
+		Round(Switch, 9)
+
+		local Knob = New("Frame", {
+			AnchorPoint = Vector2.new(0, .5), Position = UDim2.new(0, 2, .5, 0), Size = UDim2.fromOffset(14, 14),
+			BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0,
+		}, Switch)
+		Round(Knob, 7)
+
+		--// optional small key chip left of the switch:  Key = "-", KeyCallback = function(KeyCode) end
+		if Cfg.Key then
+			local Chip = New("TextButton", {
+				Text = Cfg.Key, Font = FM, TextSize = 9, TextColor3 = T.Dim, AutoButtonColor = false, BorderSizePixel = 0,
+				AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, -42, .5, 0), Size = UDim2.fromOffset(26, 18), BackgroundColor3 = T.Bar,
+			}, Row)
+			Round(Chip, 5)
+			local Listening = false
+			Chip.MouseButton1Click:Connect(function()
+				if Listening then return end
+				Listening = true
+				Chip.Text = "..."
+				local Conn
+				Conn = UIS.InputBegan:Connect(function(Input)
+					if Input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+					Conn:Disconnect()
+					Listening = false
+					if Input.KeyCode == Enum.KeyCode.Escape or Input.KeyCode == Enum.KeyCode.Backspace then
+						Chip.Text = "-"
+						Safe(Cfg.KeyCallback, nil)
+						return
+					end
+					Chip.Text = string.sub(Input.KeyCode.Name, 1, 3)
+					Safe(Cfg.KeyCallback, Input.KeyCode)
+				end)
+			end)
+		end
+
+		local State = false
+		local Object = {}
+
+		function Object:Set(Value, Silent)
+			State = Value and true or false
+			Tw(Switch, .15, { BackgroundColor3 = State and T.Accent or T.Track })
+			Tw(Knob, .15, { Position = State and UDim2.new(1, -16, .5, 0) or UDim2.new(0, 2, .5, 0) })
+			if not Silent then Safe(Cfg.Callback, State) end
+		end
+
+		function Object:Get() return State end
+
+		Switch.MouseButton1Click:Connect(function() Object:Set(not State) end)
+		Object:Set(Cfg.Default, true)
+		return Reg(Cfg, Object)
+	end
+
+	function B:AddSlider(Cfg)
+		local Min, Max, Step = Cfg.Min or 0, Cfg.Max or 100, Cfg.Step or 1
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+
+		Label(Row, Cfg.Title or "Slider", 12, T.Text, FM, { Size = UDim2.new(1, -90, 0, 18) })
+		local ValueLabel = Label(Row, "", 11, T.Dim, FM, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(90, 18), TextXAlignment = Right })
+
+		local Track = New("Frame", { Position = UDim2.fromOffset(0, 26), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = T.Track, BorderSizePixel = 0 }, Row)
+		Round(Track, 3)
+		local Fill = New("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = T.Accent, BorderSizePixel = 0 }, Track)
+		Round(Fill, 3)
+
+		local Knob = New("Frame", {
+			AnchorPoint = Vector2.new(.5, .5), Position = UDim2.new(0, 0, .5, 0), Size = UDim2.fromOffset(12, 12),
+			BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 2,
+		}, Track)
+		Round(Knob, 6)
+
+		local Hit = New("TextButton", { Text = "", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 18), Size = UDim2.new(1, 0, 0, 22) }, Row)
+
+		local Value = Min
+		local Object = {}
+
+		function Object:Set(New_, Silent)
+			New_ = math.clamp(tonumber(New_) or Min, Min, Max)
+			New_ = math.floor((New_ - Min) / Step + .5) * Step + Min
+			New_ = math.floor(New_ * 1e4 + .5) / 1e4
+			Value = New_
+			local Ratio = (Value - Min) / math.max(Max - Min, 1e-9)
+			Fill.Size = UDim2.new(Ratio, 0, 1, 0)
+			Knob.Position = UDim2.new(Ratio, 0, .5, 0)
+			ValueLabel.Text = Cfg.Format and Cfg.Format(Value) or (tostring(Value) .. (Cfg.Suffix or ""))
+			if not Silent then Safe(Cfg.Callback, Value) end
+		end
+
+		function Object:Get() return Value end
+
+		local Dragging = false
+		local function FromX(X)
+			Object:Set(Min + (Max - Min) * math.clamp((X - Track.AbsolutePosition.X) / math.max(Track.AbsoluteSize.X, 1), 0, 1))
+		end
+
+		Hit.InputBegan:Connect(function(Input)
+			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+				Dragging = true
+				FromX(Input.Position.X)
+			end
+		end)
+
+		Win:Bind(UIS.InputChanged, function(Input)
+			if Dragging and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
+				FromX(Input.Position.X)
+			end
+		end)
+
+		Win:Bind(UIS.InputEnded, function(Input)
+			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then Dragging = false end
+		end)
+
+		Object:Set(Cfg.Default or Min, true)
+		return Reg(Cfg, Object)
+	end
+
+	--// Guns | Knives   (rounded bar with an orange pill that slides)
+	function B:AddSegmented(Cfg)
+		local Options = Cfg.Options or {}
+		local Count = math.max(#Options, 1)
+		local Holder = New("Frame", {
+			Size = UDim2.fromOffset(Cfg.Width or 140, 28), BackgroundColor3 = T.Bar, BorderSizePixel = 0, LayoutOrder = Next(),
+		}, Container)
+		Round(Holder, 14)
+
+		local Inner = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, Holder)
+		Pad(Inner, 3, 3, 3, 3)
+
+		local Pill = New("Frame", { Size = UDim2.new(1 / Count, 0, 1, 0), BackgroundColor3 = T.Accent, BorderSizePixel = 0 }, Inner)
+		Round(Pill, 11)
+
+		local Buttons, Current = {}, nil
+		local Object = {}
+
+		function Object:Set(Name, Silent)
+			for Index, Option in ipairs(Options) do
+				local Active = Option == Name
+				if Active then
+					Current = Option
+					Tw(Pill, .2, { Position = UDim2.new((Index - 1) / Count, 0, 0, 0) })
+				end
+				Buttons[Index].TextColor3 = Active and Color3.new(1, 1, 1) or T.Dim
+			end
+			if not Silent then Safe(Cfg.Callback, Current) end
+		end
+
+		function Object:Get() return Current end
+
+		for Index, Option in ipairs(Options) do
+			local Button = New("TextButton", {
+				Text = Option, Font = FB, TextSize = 10, BackgroundTransparency = 1, AutoButtonColor = false,
+				Size = UDim2.new(1 / Count, 0, 1, 0), Position = UDim2.new((Index - 1) / Count, 0, 0, 0), ZIndex = 2,
+			}, Inner)
+			Buttons[Index] = Button
+			Button.MouseButton1Click:Connect(function() Object:Set(Option) end)
+		end
+
+		Object:Set(Cfg.Default or Options[1], true)
+		return Reg(Cfg, Object)
+	end
+
+	--// player picker:  local List = Sec:AddPlayerList({ Height = 190, Callback = function(selectedPlayers) end })
+	--//   List:GetSelected() -> { Player, ... }   List:SelectAll()   List:Clear()   List:Refresh()
+	function B:AddPlayerList(Cfg)
+		Cfg = Cfg or {}
+		local Holder = New("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		List(Holder, 8)
+
+		local SearchBox = New("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = T.Bar, BackgroundTransparency = .1, BorderSizePixel = 0, LayoutOrder = 1 }, Holder)
+		Round(SearchBox, 8)
+		New("ImageLabel", { Image = Icons.search, ImageColor3 = T.Dim, BackgroundTransparency = 1, Position = UDim2.fromOffset(9, 8), Size = UDim2.fromOffset(12, 12) }, SearchBox)
+		local Input = New("TextBox", {
+			Text = "", PlaceholderText = "Search players...", PlaceholderColor3 = T.Dim, Font = FM, TextSize = 10, TextColor3 = T.Text,
+			ClearTextOnFocus = false, BackgroundTransparency = 1, TextXAlignment = Left,
+			Position = UDim2.fromOffset(28, 0), Size = UDim2.new(1, -34, 1, 0),
+		}, SearchBox)
+
+		local Meta = New("Frame", { Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, LayoutOrder = 2 }, Holder)
+		local Count = Label(Meta, "0 selected", 9, T.Dim, FM, { Size = UDim2.new(.5, 0, 1, 0) })
+		local SelectAll = New("TextButton", {
+			Text = "Select all", Font = FM, TextSize = 9, TextColor3 = T.Accent, BackgroundTransparency = 1, AutoButtonColor = false,
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(.5, 0, 1, 0), TextXAlignment = Right,
+		}, Meta)
+
+		local Scroll = New("ScrollingFrame", {
+			Size = UDim2.new(1, 0, 0, Cfg.Height or 190), BackgroundTransparency = 1, BorderSizePixel = 0, LayoutOrder = 3,
+			ScrollBarThickness = 2, ScrollBarImageColor3 = T.Accent, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+		}, Holder)
+		Pad(Scroll, 0, 0, 6, 0)
+		List(Scroll, 4)
+
+		local Object = {}
+		local Selected, Rows = {}, {}
+
+		local function Fire()
+			local Total = 0
+			for _ in pairs(Selected) do Total = Total + 1 end
+			Count.Text = Total .. " selected"
+			Safe(Cfg.Callback, Object:GetSelected())
+		end
+
+		local function Paint(Row)
+			local On = Selected[Row.Player.UserId] ~= nil
+			Tw(Row.Box, .15, { BackgroundColor3 = On and T.Accent or T.Track })
+			Row.Tick.Visible = On
+		end
+
+		function Object:GetSelected()
+			local Out = {}
+			for _, Player in ipairs(Players:GetPlayers()) do
+				if Selected[Player.UserId] then table.insert(Out, Player) end
+			end
+			return Out
+		end
+
+		local function Filter()
+			local Query = string.lower(Input.Text)
+			for _, Row in pairs(Rows) do
+				local Player = Row.Player
+				Row.Frame.Visible = Query == "" or string.find(string.lower(Player.Name), Query, 1, true) ~= nil or string.find(string.lower(Player.DisplayName), Query, 1, true) ~= nil
+			end
+		end
+
+		local function AddRow(Player)
+			if Rows[Player.UserId] then return end
+			local Frame_ = New("TextButton", { Text = "", AutoButtonColor = false, Size = UDim2.new(1, 0, 0, 32), BackgroundColor3 = T.Bar, BackgroundTransparency = .35, BorderSizePixel = 0 }, Scroll)
+			Round(Frame_, 8)
+
+			local Avatar = New("ImageLabel", { Position = UDim2.fromOffset(6, 5), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = T.Track, BorderSizePixel = 0 }, Frame_)
+			Round(Avatar, 11)
+			task.spawn(function()
+				local Ok, Url = pcall(function() return Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48) end)
+				if Ok and Avatar.Parent then Avatar.Image = Url end
+			end)
+
+			Label(Frame_, Player.DisplayName .. "  @" .. Player.Name, 9, T.Text, FM, { Position = UDim2.fromOffset(34, 0), Size = UDim2.new(1, -66, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
+
+			local Box = New("Frame", { AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, -8, .5, 0), Size = UDim2.fromOffset(16, 16), BackgroundColor3 = T.Track, BorderSizePixel = 0 }, Frame_)
+			Round(Box, 5)
+			local Tick = Label(Box, "✓", 11, Color3.new(1, 1, 1), FB, { Size = UDim2.fromScale(1, 1), TextXAlignment = Center, Visible = false })
+
+			local Row = { Player = Player, Frame = Frame_, Box = Box, Tick = Tick }
+			Rows[Player.UserId] = Row
+			Frame_.MouseButton1Click:Connect(function()
+				Selected[Player.UserId] = (not Selected[Player.UserId]) and true or nil
+				Paint(Row)
+				Fire()
+			end)
+		end
+
+		function Object:Refresh()
+			local Present = {}
+			for _, Player in ipairs(Players:GetPlayers()) do
+				if Player ~= LP or Cfg.IncludeSelf then
+					Present[Player.UserId] = true
+					AddRow(Player)
+				end
+			end
+			for Id, Row in pairs(Rows) do
+				if not Present[Id] then Row.Frame:Destroy() Rows[Id] = nil Selected[Id] = nil end
+			end
+			Filter()
+			Fire()
+		end
+
+		function Object:SelectAll()
+			for Id, Row in pairs(Rows) do Selected[Id] = true Paint(Row) end
+			Fire()
+		end
+
+		function Object:Clear()
+			for Id, Row in pairs(Rows) do Selected[Id] = nil Paint(Row) end
+			Fire()
+		end
+
+		SelectAll.MouseButton1Click:Connect(function()
+			local Total = 0
+			for _ in pairs(Selected) do Total = Total + 1 end
+			if Total > 0 then Object:Clear() else Object:SelectAll() end
+		end)
+		Input:GetPropertyChangedSignal("Text"):Connect(Filter)
+		Win:Bind(Players.PlayerAdded, function() Object:Refresh() end)
+		Win:Bind(Players.PlayerRemoving, function() task.defer(function() Object:Refresh() end) end)
+		Object:Refresh()
+		return Object
+	end
+
+	function B:AddSearch(Cfg)
+		local Box = New("Frame", {
+			Size = UDim2.fromOffset(Cfg.Width or 300, 28), BackgroundColor3 = T.Bar, BackgroundTransparency = .1,
+			BorderSizePixel = 0, LayoutOrder = Next(),
+		}, Container)
+		Round(Box, 14)
+
+		New("ImageLabel", {
+			Image = Icons.search, ImageColor3 = T.Text, BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(12, 7), Size = UDim2.fromOffset(14, 14),
+		}, Box)
+
+		local Input = New("TextBox", {
+			Position = UDim2.fromOffset(34, 0), Size = UDim2.new(1, -44, 1, 0), BackgroundTransparency = 1,
+			Text = Cfg.Default or "", PlaceholderText = Cfg.Placeholder or "Search...", PlaceholderColor3 = T.Dim,
+			TextColor3 = T.Text, Font = FM, TextSize = 11, TextXAlignment = Left, ClearTextOnFocus = false,
+		}, Box)
+
+		--// fills the rest of the row (UIFlexItem); falls back to the fixed width when it isn't available
+		if IsRow then
+			pcall(function()
+				local Flex = Instance.new("UIFlexItem")
+				Flex.FlexMode = Enum.UIFlexMode.Fill
+				Flex.Parent = Box
+			end)
+		end
+
+		Input:GetPropertyChangedSignal("Text"):Connect(function() Safe(Cfg.Callback, Input.Text) end)
+
+		return Reg(Cfg, { Instance = Box, Get = function() return Input.Text end, Set = function(_, Text) Input.Text = Text end })
+	end
+
+	function B:AddCounter(Text, Width)
+		local Object = Label(Container, Text or "", 10, T.Dim, FM, {
+			Size = UDim2.fromOffset(Width or 110, 28), TextXAlignment = Right, LayoutOrder = Next(),
+		})
+		return { Set = function(_, NewText) Object.Text = NewText end }
+	end
+
+	--// All | Common | ...  (text takes the colour of its rarity, the selected chip turns orange)
+	function B:AddChips(Cfg)
+		local Holder = New("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		New("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal, Wraps = true, SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 8),
+		}, Holder)
+
+		local Chips, Current = {}, nil
+		local Object = {}
+
+		function Object:Set(Name, Silent)
+			Current = Name
+			for Key, Chip in pairs(Chips) do
+				local Active = Key == Name
+				Tw(Chip.Button, .15, { BackgroundColor3 = Active and T.Accent or T.Bar })
+				Chip.Button.TextColor3 = Active and Color3.new(1, 1, 1) or Chip.Color
+			end
+			if not Silent then Safe(Cfg.Callback, Name) end
+		end
+
+		function Object:Get() return Current end
+
+		for Index, Option in ipairs(Cfg.Options or {}) do
+			local Name = type(Option) == "table" and Option.Name or tostring(Option)
+			local Color = (type(Option) == "table" and Option.Color) or Rarity[Name] or T.Text
+
+			local Button = New("TextButton", {
+				Text = Name, Font = FM, TextSize = 10, TextColor3 = Color, AutoButtonColor = false,
+				AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 24), BackgroundColor3 = T.Bar,
+				BorderSizePixel = 0, LayoutOrder = Index,
+			}, Holder)
+			Round(Button, 12)
+			Pad(Button, 14, 0, 14, 0)
+
+			Chips[Name] = { Button = Button, Color = Color }
+			Button.MouseButton1Click:Connect(function() Object:Set(Name) end)
+		end
+
+		Object:Set(Cfg.Default or (Cfg.Options and (type(Cfg.Options[1]) == "table" and Cfg.Options[1].Name or Cfg.Options[1])), true)
+		return Reg(Cfg, Object)
+	end
+
+	--// skin cards: round tinted icon, name, rarity
+	function B:AddGrid(Cfg)
+		Cfg = Cfg or {}
+		local Grid = New("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		New("UIGridLayout", {
+			CellSize = Cfg.CellSize or UDim2.fromOffset(106, 114), CellPadding = UDim2.fromOffset(6, 6),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, Grid)
+
+		local Object = { Items = {}, Selected = nil }
+
+		function Object:AddItem(Info)
+			local Item = { Info = Info }
+			local RarityColor = Info.RarityColor or Rarity[Info.Rarity or ""] or T.Dim
+
+			local Card = New("TextButton", {
+				Text = "", AutoButtonColor = false, BackgroundColor3 = T.Card, BackgroundTransparency = .2,
+				BorderSizePixel = 0, LayoutOrder = #Object.Items + 1,
+			}, Grid)
+			Round(Card, 8)
+			local Edge = Stroke(Card, Color3.new(1, 1, 1), 1, 1)
+
+			local Circle = New("Frame", {
+				AnchorPoint = Vector2.new(.5, 0), Position = UDim2.new(.5, 0, 0, 8), Size = UDim2.fromOffset(70, 70),
+				BackgroundColor3 = Info.Tint or Color3.fromRGB(110, 50, 120), BackgroundTransparency = .15, BorderSizePixel = 0,
+			}, Card)
+			Round(Circle, 35)
+
+			New("ImageLabel", {
+				AnchorPoint = Vector2.new(.5, .5), Position = UDim2.fromScale(.5, .5), Size = UDim2.fromScale(.92, .92),
+				BackgroundTransparency = 1, Image = Info.Image or "", ScaleType = Enum.ScaleType.Fit,
+			}, Circle)
+
+			Label(Card, Info.Name or "Item", 9, T.Text, FB, { Position = UDim2.fromOffset(0, 84), Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Center, TextTruncate = Enum.TextTruncate.AtEnd })
+			Label(Card, Info.Rarity or "", 8, RarityColor, FM, { Position = UDim2.fromOffset(0, 97), Size = UDim2.new(1, 0, 0, 12), TextXAlignment = Center })
+
+			Item.Card = Card
+			Card.MouseEnter:Connect(function() if Object.Selected ~= Item then Tw(Card, .15, { BackgroundTransparency = .05 }) end end)
+			Card.MouseLeave:Connect(function() if Object.Selected ~= Item then Tw(Card, .15, { BackgroundTransparency = .2 }) end end)
+
+			function Item:Select(Silent)
+				local Old = Object.Selected
+				if Old and Old.Card.Parent then
+					Tw(Old.Card, .15, { BackgroundTransparency = .2 })
+					Tw(Old.Edge, .15, { Transparency = 1 })
+				end
+				Object.Selected = Item
+				Tw(Card, .15, { BackgroundTransparency = .05 })
+				Tw(Edge, .15, { Transparency = .45 })
+				if not Silent then Safe(Info.Callback, Info) Safe(Cfg.Callback, Info) end
+			end
+
+			Item.Edge = Edge
+			Card.MouseButton1Click:Connect(function() Item:Select() end)
+
+			table.insert(Object.Items, Item)
+			return Item
+		end
+
+		--// Grid:Filter(function(info) return true end) -> number of visible cards
+		function Object:Filter(Check)
+			local Shown = 0
+			for _, Item in ipairs(Object.Items) do
+				local Ok = Check == nil or Check(Item.Info)
+				Item.Card.Visible = Ok and true or false
+				if Ok then Shown = Shown + 1 end
+			end
+			return Shown
+		end
+
+		function Object:Clear()
+			for _, Item in ipairs(Object.Items) do Item.Card:Destroy() end
+			Object.Items, Object.Selected = {}, nil
+		end
+
+		return Object
+	end
+
+
+	--// ================================================================== new elements
+
+	function B:AddButton(Cfg)
+		Cfg = Cfg or {}
+		return MakeButton(Container, Cfg, IsRow and UDim2.fromOffset(Cfg.Width or 90, 28) or UDim2.new(1, 0, 0, Cfg.Height or 32), Next())
+	end
+
+	--// several buttons side by side: Buttons = { { Title, Style, Callback, Icon }, ... }
+	function B:AddButtonGroup(Cfg)
+		local Buttons = Cfg.Buttons or {}
+		local Gap = 8
+		local Count = math.max(#Buttons, 1)
+		local Holder = New("Frame", { Size = UDim2.new(1, 0, 0, Cfg.Height or 32), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, Gap) }, Holder)
+
+		local Objects = {}
+		for Index, Info in ipairs(Buttons) do
+			Objects[Index] = MakeButton(Holder, Info, UDim2.new(1 / Count, -Gap * (Count - 1) / Count, 1, 0), Index)
+		end
+		return Objects
+	end
+
+	--// a button that stays lit (on / off)
+	function B:AddToggleButton(Cfg)
+		local Button = New("TextButton", {
+			Text = Cfg.Title or "Toggle button", Font = FB, TextSize = 11, AutoButtonColor = false, BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, Cfg.Height or 32), BackgroundColor3 = T.Bar, TextColor3 = T.Text, LayoutOrder = Next(),
+		}, Container)
+		Round(Button, 8)
+
+		local State = false
+		local Object = {}
+
+		function Object:Set(Value, Silent)
+			State = Value and true or false
+			Tw(Button, .15, { BackgroundColor3 = State and T.Accent or T.Bar })
+			Button.TextColor3 = State and Color3.new(1, 1, 1) or T.Text
+			if not Silent then Safe(Cfg.Callback, State) end
+		end
+
+		function Object:Get() return State end
+
+		Button.MouseButton1Click:Connect(function() Object:Set(not State) end)
+		Object:Set(Cfg.Default, true)
+		return Reg(Cfg, Object)
+	end
+
+	function B:AddCheckbox(Cfg)
+		local Row = New("TextButton", { Text = "", AutoButtonColor = false, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+
+		local Box = New("Frame", {
+			AnchorPoint = Vector2.new(0, .5), Position = UDim2.new(0, 0, .5, 0), Size = UDim2.fromOffset(18, 18),
+			BackgroundColor3 = T.Track, BorderSizePixel = 0,
+		}, Row)
+		Round(Box, 5)
+
+		local Tick = New("Frame", {
+			AnchorPoint = Vector2.new(.5, .5), Position = UDim2.fromScale(.5, .5), Size = UDim2.fromOffset(0, 0),
+			BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0,
+		}, Box)
+		Round(Tick, 3)
+
+		Label(Row, Cfg.Title or "Checkbox", 12, T.Text, FM, { Position = UDim2.fromOffset(28, 0), Size = UDim2.new(1, -28, 1, 0) })
+
+		local State = false
+		local Object = {}
+
+		function Object:Set(Value, Silent)
+			State = Value and true or false
+			Tw(Box, .15, { BackgroundColor3 = State and T.Accent or T.Track })
+			Tw(Tick, .15, { Size = State and UDim2.fromOffset(8, 8) or UDim2.fromOffset(0, 0) })
+			if not Silent then Safe(Cfg.Callback, State) end
+		end
+
+		function Object:Get() return State end
+
+		Row.MouseButton1Click:Connect(function() Object:Set(not State) end)
+		Object:Set(Cfg.Default, true)
+		return Reg(Cfg, Object)
+	end
+
+	--// vertical list of round radio buttons
+	function B:AddRadio(Cfg)
+		local Options = Cfg.Options or {}
+		local Holder = New("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		List(Holder, 4)
+
+		if Cfg.Title then
+			Label(Holder, Cfg.Title, 12, T.Text, FM, { Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 0 })
+		end
+
+		local Items, Current = {}, nil
+		local Object = {}
+
+		function Object:Set(Name, Silent)
+			Current = Name
+			for Key, Item in pairs(Items) do
+				local On = Key == Name
+				Tw(Item.Ring, .15, { BackgroundColor3 = On and T.Accent or T.Track })
+				Tw(Item.Dot, .15, { Size = On and UDim2.fromOffset(6, 6) or UDim2.fromOffset(0, 0) })
+				Item.Text.TextColor3 = On and T.Text or T.Dim
+			end
+			if not Silent then Safe(Cfg.Callback, Current) end
+		end
+
+		function Object:Get() return Current end
+
+		for Index, Name in ipairs(Options) do
+			local Row = New("TextButton", { Text = "", AutoButtonColor = false, Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1, LayoutOrder = Index }, Holder)
+
+			local Ring = New("Frame", {
+				AnchorPoint = Vector2.new(0, .5), Position = UDim2.new(0, 0, .5, 0), Size = UDim2.fromOffset(16, 16),
+				BackgroundColor3 = T.Track, BorderSizePixel = 0,
+			}, Row)
+			Round(Ring, 8)
+
+			local Dot = New("Frame", {
+				AnchorPoint = Vector2.new(.5, .5), Position = UDim2.fromScale(.5, .5), Size = UDim2.fromOffset(0, 0),
+				BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0,
+			}, Ring)
+			Round(Dot, 3)
+
+			local Text = Label(Row, tostring(Name), 11, T.Dim, FM, { Position = UDim2.fromOffset(26, 0), Size = UDim2.new(1, -26, 1, 0) })
+
+			Items[Name] = { Ring = Ring, Dot = Dot, Text = Text }
+			Row.MouseButton1Click:Connect(function() Object:Set(Name) end)
+		end
+
+		Object:Set(Cfg.Default or Options[1], true)
+		return Reg(Cfg, Object)
+	end
+
+	function B:AddDropdown(Cfg)
+		local Options = Cfg.Options or {}
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		Label(Row, Cfg.Title or "Dropdown", 12, T.Text, FM, { Size = UDim2.new(1, -(Cfg.Width or 150) - 10, 1, 0) })
+
+		local Button = New("TextButton", {
+			Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, 0, .5, 0),
+			Size = UDim2.fromOffset(Cfg.Width or 150, 26), BackgroundColor3 = T.Bar, BorderSizePixel = 0,
+		}, Row)
+		Round(Button, 7)
+
+		local Text = Label(Button, "", 10, T.Text, FM, { Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -30, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
+		New("ImageLabel", {
+			Image = Icons.chevron, ImageColor3 = T.Dim, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, .5),
+			Position = UDim2.new(1, -8, .5, 0), Size = UDim2.fromOffset(11, 11),
+		}, Button)
+
+		local Value
+		local Object = {}
+
+		function Object:Set(Name, Silent)
+			Value = Name
+			Text.Text = Name ~= nil and tostring(Name) or (Cfg.Placeholder or "Select...")
+			Text.TextColor3 = Name ~= nil and T.Text or T.Dim
+			if not Silent then Safe(Cfg.Callback, Value) end
+		end
+
+		function Object:Get() return Value end
+
+		function Object:SetOptions(NewOptions)
+			Options = NewOptions or {}
+			if Value ~= nil and not table.find(Options, Value) then Object:Set(nil, true) end
+		end
+
+		Button.MouseButton1Click:Connect(function()
+			OpenList(Win, Button, Options, function(Name) return Name == Value end, function(Name) Object:Set(Name) end, {
+				Search = Cfg.Search or #Options > 8, Align = "Right",
+			})
+		end)
+
+		Object:Set(Cfg.Default, true)
+		return Reg(Cfg, Object)
+	end
+
+	function B:AddMultiDropdown(Cfg)
+		local Options = Cfg.Options or {}
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		Label(Row, Cfg.Title or "Multi dropdown", 12, T.Text, FM, { Size = UDim2.new(1, -(Cfg.Width or 150) - 10, 1, 0) })
+
+		local Button = New("TextButton", {
+			Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, 0, .5, 0),
+			Size = UDim2.fromOffset(Cfg.Width or 150, 26), BackgroundColor3 = T.Bar, BorderSizePixel = 0,
+		}, Row)
+		Round(Button, 7)
+
+		local Text = Label(Button, "", 10, T.Text, FM, { Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -30, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
+		New("ImageLabel", {
+			Image = Icons.chevron, ImageColor3 = T.Dim, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, .5),
+			Position = UDim2.new(1, -8, .5, 0), Size = UDim2.fromOffset(11, 11),
+		}, Button)
+
+		local Selected = {}
+		local Object = {}
+
+		function Object:Get()
+			local Out = {}
+			for _, Name in ipairs(Options) do
+				if Selected[Name] then table.insert(Out, Name) end
+			end
+			return Out
+		end
+
+		local function Draw()
+			local Now = Object:Get()
+			if #Now == 0 then
+				Text.Text, Text.TextColor3 = Cfg.Placeholder or "None", T.Dim
+			elseif #Now <= 2 then
+				Text.Text, Text.TextColor3 = table.concat(Now, ", "), T.Text
+			else
+				Text.Text, Text.TextColor3 = #Now .. " selected", T.Text
+			end
+		end
+
+		function Object:Set(List, Silent)
+			Selected = {}
+			for _, Name in ipairs(List or {}) do Selected[Name] = true end
+			Draw()
+			if not Silent then Safe(Cfg.Callback, Object:Get()) end
+		end
+
+		Button.MouseButton1Click:Connect(function()
+			OpenList(Win, Button, Options, function(Name) return Selected[Name] == true end, function(Name)
+				Selected[Name] = not Selected[Name] or nil
+				Draw()
+				Safe(Cfg.Callback, Object:Get())
+			end, { Multi = true, Search = Cfg.Search or #Options > 8, Align = "Right" })
+		end)
+
+		Object:Set(Cfg.Default, true)
+		return Reg(Cfg, Object)
+	end
+
+	function B:AddTextbox(Cfg)
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		Label(Row, Cfg.Title or "Textbox", 12, T.Text, FM, { Size = UDim2.new(1, -(Cfg.Width or 150) - 10, 1, 0) })
+
+		local Box = New("TextBox", {
+			AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, 0, .5, 0), Size = UDim2.fromOffset(Cfg.Width or 150, 26),
+			BackgroundColor3 = T.Bar, BorderSizePixel = 0, Text = tostring(Cfg.Default or ""), PlaceholderText = Cfg.Placeholder or "Type here...",
+			PlaceholderColor3 = T.Dim, TextColor3 = T.Text, Font = FM, TextSize = 10, ClearTextOnFocus = false, TextXAlignment = Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		}, Row)
+		Round(Box, 7)
+		Pad(Box, 10, 0, 10, 0)
+		local Edge = Stroke(Box, T.Accent, 1, 1)
+
+		local Value = Box.Text
+		local Object = {}
+
+		local function Out(Text)
+			if Cfg.Numeric then return tonumber(Text) end
+			return Text
+		end
+
+		function Object:Set(Text, Silent)
+			Box.Text = tostring(Text == nil and "" or Text)
+			Value = Box.Text
+			if not Silent then Safe(Cfg.Callback, Out(Value)) end
+		end
+
+		function Object:Get() return Out(Value) end
+
+		if Cfg.Numeric then
+			Box:GetPropertyChangedSignal("Text"):Connect(function()
+				local Clean = string.gsub(Box.Text, "[^%d%.%-]", "")
+				if Clean ~= Box.Text then Box.Text = Clean end
+			end)
+		end
+
+		Box.Focused:Connect(function() Tw(Edge, .15, { Transparency = .2 }) end)
+		Box.FocusLost:Connect(function()
+			Tw(Edge, .15, { Transparency = 1 })
+			Value = Box.Text
+			Safe(Cfg.Callback, Out(Value))
+		end)
+
+		if Cfg.Live then
+			Box:GetPropertyChangedSignal("Text"):Connect(function()
+				Value = Box.Text
+				Safe(Cfg.Callback, Out(Value))
+			end)
+		end
+
+		return Reg(Cfg, Object)
+	end
+
+	--// Mode: "Press" (default) | "Toggle" | "Hold".   Callback(key) = rebound, Pressed(state) = key used
+	function B:AddKeybind(Cfg)
+		local Mode = Cfg.Mode or "Press"
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		Label(Row, Cfg.Title or "Keybind", 12, T.Text, FM, { Size = UDim2.new(1, -100, 1, 0) })
+
+		local Button = New("TextButton", {
+			Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, 0, .5, 0),
+			Size = UDim2.fromOffset(88, 24), BackgroundColor3 = T.Bar, BorderSizePixel = 0,
+		}, Row)
+		Round(Button, 7)
+		local Text = Label(Button, "", 10, T.Text, FB, { Size = UDim2.fromScale(1, 1), TextXAlignment = Center })
+
+		local Key, Listening, State = nil, false, false
+		local Object = {}
+
+		local function Draw()
+			Text.Text = Listening and "..." or (Key and Key.Name or "None")
+			Text.TextColor3 = Listening and T.Accent or (Key and T.Text or T.Dim)
+			Tw(Button, .15, { BackgroundColor3 = Listening and T.Track or T.Bar })
+		end
+
+		function Object:Set(NewKey, Silent)
+			if type(NewKey) == "string" then
+				local Ok, Found = pcall(function() return Enum.KeyCode[NewKey] end)
+				NewKey = Ok and Found or nil
+			end
+			Key, Listening = NewKey, false
+			Draw()
+			if not Silent then Safe(Cfg.Callback, Key) end
+		end
+
+		function Object:Get() return Key end
+		function Object:GetState() return State end
+
+		Button.MouseButton1Click:Connect(function() Listening = true Draw() end)
+
+		Win:Bind(UIS.InputBegan, function(Input, Processed)
+			if Listening then
+				if Input.UserInputType == Enum.UserInputType.Keyboard then
+					if Input.KeyCode == Enum.KeyCode.Escape then Object:Set(nil) else Object:Set(Input.KeyCode) end
+				elseif Input.UserInputType == Enum.UserInputType.MouseButton1 then
+					Listening = false
+					Draw()
+				end
+				return
+			end
+
+			if Processed or not Key or Input.KeyCode ~= Key then return end
+			if Mode == "Toggle" then State = not State elseif Mode == "Hold" then State = true end
+			Safe(Cfg.Pressed, Mode == "Press" or State)
+		end)
+
+		Win:Bind(UIS.InputEnded, function(Input)
+			if Mode == "Hold" and State and Key and Input.KeyCode == Key then
+				State = false
+				Safe(Cfg.Pressed, false)
+			end
+		end)
+
+		Object:Set(Cfg.Default, true)
+		return Reg(Cfg, Object)
+	end
+
+	function B:AddColorPicker(Cfg)
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		Label(Row, Cfg.Title or "Color", 12, T.Text, FM, { Size = UDim2.new(1, -60, 1, 0) })
+
+		local Swatch = New("TextButton", {
+			Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, 0, .5, 0),
+			Size = UDim2.fromOffset(40, 20), BackgroundColor3 = Cfg.Default or Color3.new(1, 1, 1), BorderSizePixel = 0,
+		}, Row)
+		Round(Swatch, 6)
+		Stroke(Swatch, T.Line, 1, .2)
+
+		local H, S, V = (Cfg.Default or Color3.new(1, 1, 1)):ToHSV()
+		local Color = Color3.fromHSV(H, S, V)
+		local Live
+		local Object = {}
+
+		local function Apply(Silent)
+			Color = Color3.fromHSV(H, S, V)
+			Swatch.BackgroundColor3 = Color
+			if Live then Live() end
+			if not Silent then Safe(Cfg.Callback, Color) end
+		end
+
+		function Object:Set(NewColor, Silent)
+			if typeof(NewColor) ~= "Color3" then return end
+			H, S, V = NewColor:ToHSV()
+			Apply(Silent)
+		end
+
+		function Object:Get() return Color end
+
+		Swatch.MouseButton1Click:Connect(function()
+			local Popup = Win:ShowPopup(Swatch, 200, 182, "Right")
+			Pad(Popup, 8, 8, 8, 8)
+
+			local SV = New("TextButton", {
+				Text = "", AutoButtonColor = false, Size = UDim2.new(1, 0, 0, 110), BackgroundColor3 = Color3.fromHSV(H, 1, 1),
+				BorderSizePixel = 0, ZIndex = 3,
+			}, Popup)
+			Round(SV, 6)
+
+			local White = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 4 }, SV)
+			Round(White, 6)
+			New("UIGradient", { Transparency = NumberSequence.new(0, 1) }, White)
+
+			local Black = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 5 }, SV)
+			Round(Black, 6)
+			New("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(1, 0) }, Black)
+
+			local Cursor = New("Frame", {
+				AnchorPoint = Vector2.new(.5, .5), Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 6,
+			}, SV)
+			Round(Cursor, 5)
+			Stroke(Cursor, Color3.new(1, 1, 1), 2, 0)
+
+			local Hue = New("TextButton", {
+				Text = "", AutoButtonColor = false, Position = UDim2.fromOffset(0, 118), Size = UDim2.new(1, 0, 0, 12),
+				BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 3,
+			}, Popup)
+			Round(Hue, 6)
+			New("UIGradient", {
+				Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+					ColorSequenceKeypoint.new(1 / 6, Color3.fromRGB(255, 255, 0)),
+					ColorSequenceKeypoint.new(2 / 6, Color3.fromRGB(0, 255, 0)),
+					ColorSequenceKeypoint.new(3 / 6, Color3.fromRGB(0, 255, 255)),
+					ColorSequenceKeypoint.new(4 / 6, Color3.fromRGB(0, 0, 255)),
+					ColorSequenceKeypoint.new(5 / 6, Color3.fromRGB(255, 0, 255)),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0)),
+				}),
+			}, Hue)
+
+			local HueCursor = New("Frame", {
+				AnchorPoint = Vector2.new(.5, .5), Size = UDim2.fromOffset(4, 16), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 5,
+			}, Hue)
+			Round(HueCursor, 2)
+			Stroke(HueCursor, Color3.new(0, 0, 0), 1, .5)
+
+			local Preview = New("Frame", { Position = UDim2.fromOffset(0, 138), Size = UDim2.fromOffset(24, 24), BackgroundColor3 = Color, BorderSizePixel = 0, ZIndex = 3 }, Popup)
+			Round(Preview, 6)
+
+			local Hex = New("TextBox", {
+				Position = UDim2.fromOffset(32, 138), Size = UDim2.new(1, -32, 0, 24), BackgroundColor3 = T.Bar, BorderSizePixel = 0, Text = "",
+				TextColor3 = T.Text, Font = FM, TextSize = 10, ClearTextOnFocus = false, TextXAlignment = Left, ZIndex = 3,
+			}, Popup)
+			Round(Hex, 6)
+			Pad(Hex, 8, 0, 8, 0)
+
+			local function Refresh()
+				SV.BackgroundColor3 = Color3.fromHSV(H, 1, 1)
+				Cursor.Position = UDim2.fromScale(S, 1 - V)
+				HueCursor.Position = UDim2.new(H, 0, .5, 0)
+				Preview.BackgroundColor3 = Color
+				if not Hex:IsFocused() then Hex.Text = "#" .. Color:ToHex() end
+			end
+
+			Live = Refresh
+			Refresh()
+			Popup.Destroying:Connect(function() if Live == Refresh then Live = nil end end)
+
+			Hex.FocusLost:Connect(function()
+				local Code = string.gsub(Hex.Text, "#", "")
+				if #Code == 6 and string.match(Code, "^%x+$") then
+					local Ok, Parsed = pcall(Color3.fromHex, Code)
+					if Ok then Object:Set(Parsed) end
+				end
+				Refresh()
+			end)
+
+			local Mode
+			local function Drag(Input)
+				local Point = GuiPoint(Input)
+				if Mode == "sv" then
+					S = math.clamp((Point.X - SV.AbsolutePosition.X) / math.max(SV.AbsoluteSize.X, 1), 0, 1)
+					V = 1 - math.clamp((Point.Y - SV.AbsolutePosition.Y) / math.max(SV.AbsoluteSize.Y, 1), 0, 1)
+				elseif Mode == "hue" then
+					H = math.clamp((Point.X - Hue.AbsolutePosition.X) / math.max(Hue.AbsoluteSize.X, 1), 0, 1)
+				else
+					return
+				end
+				Apply()
+			end
+
+			local function IsPress(Input) return Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch end
+
+			SV.InputBegan:Connect(function(Input) if IsPress(Input) then Mode = "sv" Drag(Input) end end)
+			Hue.InputBegan:Connect(function(Input) if IsPress(Input) then Mode = "hue" Drag(Input) end end)
+
+			Win:PopupBind(UIS.InputChanged, function(Input)
+				if Mode and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then Drag(Input) end
+			end)
+			Win:PopupBind(UIS.InputEnded, function(Input) if IsPress(Input) then Mode = nil end end)
+		end)
+
+		Apply(true)
+		return Reg(Cfg, Object)
+	end
+
+	function B:AddStepper(Cfg)
+		local Min, Max, Step = Cfg.Min or 0, Cfg.Max or 100, Cfg.Step or 1
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		Label(Row, Cfg.Title or "Stepper", 12, T.Text, FM, { Size = UDim2.new(1, -120, 1, 0) })
+
+		local Holder = New("Frame", {
+			AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, 0, .5, 0), Size = UDim2.fromOffset(110, 26), BackgroundColor3 = T.Bar, BorderSizePixel = 0,
+		}, Row)
+		Round(Holder, 7)
+
+		local ValueLabel = Label(Holder, "", 11, T.Text, FB, { Position = UDim2.fromOffset(26, 0), Size = UDim2.new(1, -52, 1, 0), TextXAlignment = Center })
+
+		local Value = Min
+		local Object = {}
+
+		function Object:Set(New_, Silent)
+			New_ = math.clamp(tonumber(New_) or Min, Min, Max)
+			New_ = math.floor((New_ - Min) / Step + .5) * Step + Min
+			New_ = math.floor(New_ * 1e4 + .5) / 1e4
+			Value = New_
+			ValueLabel.Text = tostring(Value)
+			if not Silent then Safe(Cfg.Callback, Value) end
+		end
+
+		function Object:Get() return Value end
+
+		local Id = 0
+		local function Make(Text, Side, Delta)
+			local Button = New("TextButton", {
+				Text = Text, Font = FB, TextSize = 14, TextColor3 = T.Text, AutoButtonColor = false, BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(Side, 0), Position = UDim2.new(Side, 0, 0, 0), Size = UDim2.fromOffset(26, 26),
+			}, Holder)
+
+			Button.MouseButton1Down:Connect(function()
+				Id = Id + 1
+				local Mine = Id
+				Object:Set(Value + Delta * Step)
+				task.delay(.4, function()
+					while Id == Mine and Button.Parent do
+						Object:Set(Value + Delta * Step)
+						task.wait(.06)
+					end
+				end)
+			end)
+			Button.MouseButton1Up:Connect(function() Id = Id + 1 end)
+			Button.MouseLeave:Connect(function() Id = Id + 1 end)
+		end
+
+		Make("-", 0, -1)
+		Make("+", 1, 1)
+
+		Object:Set(Cfg.Default or Min, true)
+		return Reg(Cfg, Object)
+	end
+
+	function B:AddProgress(Cfg)
+		local Max = Cfg.Max or 100
+		local Row = New("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		Label(Row, Cfg.Title or "Progress", 12, T.Text, FM, { Size = UDim2.new(1, -60, 0, 18) })
+		local ValueLabel = Label(Row, "", 11, T.Dim, FM, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(60, 18), TextXAlignment = Right })
+
+		local Track = New("Frame", { Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = T.Track, BorderSizePixel = 0 }, Row)
+		Round(Track, 3)
+		local Fill = New("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = Cfg.Color or T.Accent, BorderSizePixel = 0 }, Track)
+		Round(Fill, 3)
+
+		local Value = 0
+		local Object = {}
+
+		function Object:Set(New_)
+			Value = math.clamp(tonumber(New_) or 0, 0, Max)
+			Tw(Fill, .15, { Size = UDim2.new(Value / Max, 0, 1, 0) })
+			ValueLabel.Text = string.format("%d%%", math.floor(Value / Max * 100 + .5))
+		end
+
+		function Object:Get() return Value end
+
+		Object:Set(Cfg.Default or 0)
+		return Object
+	end
+
+	function B:AddDivider(Text)
+		local Holder = New("Frame", { Size = UDim2.new(1, 0, 0, Text and 20 or 8), BackgroundTransparency = 1, LayoutOrder = Next() }, Container)
+		if Text then Label(Holder, string.upper(Text), 8, T.Dim, FM, { Size = UDim2.new(1, 0, 0, 12) }) end
+		New("Frame", {
+			AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, Text and 1 or .5, Text and 0 or 1), Size = UDim2.new(1, 0, 0, 1),
+			BackgroundColor3 = T.Line, BackgroundTransparency = .3, BorderSizePixel = 0,
+		}, Holder)
+	end
+
+	function B:AddParagraph(Cfg)
+		local Holder = New("Frame", {
+			Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = T.Bar, BackgroundTransparency = .5,
+			BorderSizePixel = 0, LayoutOrder = Next(),
+		}, Container)
+		Round(Holder, 8)
+		Pad(Holder, 12, 10, 12, 10)
+		List(Holder, 4)
+
+		local Title = Label(Holder, Cfg.Title or "", 11, T.Text, FB, { Size = UDim2.new(1, 0, 0, 14), LayoutOrder = 1, Visible = (Cfg.Title or "") ~= "" })
+		local Body = Label(Holder, Cfg.Content or "", 10, T.Dim, FM, {
+			Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 2,
+		})
+
+		return {
+			Set = function(_, NewTitle, NewContent)
+				Title.Text, Title.Visible = NewTitle or "", (NewTitle or "") ~= ""
+				Body.Text = NewContent or ""
+			end,
+		}
+	end
+
+	return B
+end
+
+--// ------------------------------------------------------------------ library
+local Library = {}
+
+function Library:CreateWindow(Cfg)
+	Cfg = Cfg or {}
+
+	local Win = { Tabs = {}, Active = nil, Connections = {}, Configs = {}, CurrentConfig = nil, Flags = {}, Memory = {}, ToggleKey = Cfg.ToggleKey or Enum.KeyCode.RightShift }
+
+	function Win:Bind(Signal, Callback)
+		local Connection = Signal:Connect(Callback)
+		table.insert(Win.Connections, Connection)
+		return Connection
+	end
+
+	--// re-running the script replaces the old window
+	pcall(function()
+		local Old = ((gethui and gethui()) or game:GetService("CoreGui")):FindFirstChild("HeadshotUI")
+		if Old then Old:Destroy() end
+	end)
+
+	local Gui = New("ScreenGui", { Name = "HeadshotUI", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 100 })
+	Mount(Gui)
+
+	local Frame = New("Frame", {
+		Name = "Window", AnchorPoint = Vector2.new(.5, .5), Position = UDim2.fromScale(.5, .5),
+		Size = Cfg.Size or UDim2.fromOffset(760, 480), BackgroundColor3 = T.Window, BackgroundTransparency = .08, BorderSizePixel = 0,
+	}, Gui)
+	Round(Frame, 12)
+	Stroke(Frame, T.Line, 1, .5)
+
+	--// always fits the screen (phones included)
+	local Scale = New("UIScale", {}, Frame)
+	local DockScale, NotifScale
+	local function Fit()
+		local View = Gui.AbsoluteSize
+		if View.X <= 0 or View.Y <= 0 then return end
+		Scale.Scale = math.clamp(math.min(View.X * .96 / 760, View.Y * .94 / 480), .4, 1)
+		if DockScale then DockScale.Scale = Scale.Scale end
+		if NotifScale then NotifScale.Scale = Scale.Scale end
+	end
+	Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(Fit)
+
+	--// ---- popup layer (dropdowns, color picker) + notifications + dialogs
+	Win.Scale = Scale
+
+	local Overlay = New("Frame", { Name = "Overlay", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 50 }, Frame)
+	local Catcher = New("TextButton", { Text = "", AutoButtonColor = false, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 1 }, Overlay)
+
+	local Popup, PopupConns = nil, {}
+
+	function Win:ClosePopup()
+		for _, Connection in ipairs(PopupConns) do pcall(function() Connection:Disconnect() end) end
+		PopupConns = {}
+		if Popup then
+			local Old = Popup
+			Popup = nil
+			Old:Destroy()
+		end
+		Catcher.Visible = false
+	end
+
+	--// connections that live only while the popup is open
+	function Win:PopupBind(Signal, Callback)
+		local Connection = Signal:Connect(Callback)
+		table.insert(PopupConns, Connection)
+		return Connection
+	end
+
+	Catcher.MouseButton1Click:Connect(function() Win:ClosePopup() end)
+
+	--// Anchor = the button that opens it. Width / Height are in window units. Align = "Left" | "Right"
+	function Win:ShowPopup(Anchor, Width, Height, Align)
+		Win:ClosePopup()
+
+		local S = math.max(Scale.Scale, .01)
+		local Origin, Place, Size = Frame.AbsolutePosition, Anchor.AbsolutePosition, Anchor.AbsoluteSize
+		local Window = Frame.AbsoluteSize / S
+
+		local X = (Place.X - Origin.X) / S
+		local Y = (Place.Y + Size.Y - Origin.Y) / S + 4
+		if Align == "Right" then X = X + Size.X / S - Width end
+
+		X = math.clamp(X, 8, math.max(Window.X - Width - 8, 8))
+		if Y + Height > Window.Y - 8 then Y = (Place.Y - Origin.Y) / S - Height - 4 end
+		Y = math.max(Y, 8)
+
+		Popup = New("Frame", {
+			Position = UDim2.fromOffset(X, Y), Size = UDim2.fromOffset(Width, Height), BackgroundColor3 = T.Panel,
+			BorderSizePixel = 0, ZIndex = 2, ClipsDescendants = true,
+		}, Overlay)
+		Round(Popup, 8)
+		Stroke(Popup, T.Line, 1, .3)
+
+		Catcher.Visible = true
+		return Popup
+	end
+
+	--// notifications (top right)
+	local NotifHolder = New("Frame", {
+		Name = "Notifications", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 16), Size = UDim2.fromOffset(270, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 80,
+	}, Gui)
+	NotifScale = New("UIScale", {}, NotifHolder)
+	New("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Right }, NotifHolder)
+
+	local NotifKinds = { Info = T.Accent, Success = T.Green, Warning = Color3.fromRGB(255, 196, 61), Error = Color3.fromRGB(235, 72, 84) }
+	local NotifOrder = 0
+
+	--// Win:Notify({ Title, Content, Type = "Info" | "Success" | "Warning" | "Error", Duration = 4 })
+	function Win:Notify(Info)
+		if type(Info) == "string" then Info = { Content = Info } end
+		NotifOrder = NotifOrder + 1
+
+		local Color = NotifKinds[Info.Type or "Info"] or T.Accent
+		local Duration = Info.Duration or 4
+
+		local Card = New("CanvasGroup", {
+			Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = T.Window, BorderSizePixel = 0,
+			GroupTransparency = 1, LayoutOrder = NotifOrder,
+		}, NotifHolder)
+		Round(Card, 10)
+
+		New("Frame", { Size = UDim2.new(0, 3, 1, 0), BackgroundColor3 = Color, BorderSizePixel = 0 }, Card)
+
+		local Body = New("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }, Card)
+		Pad(Body, 16, 10, 12, 14)
+		List(Body, 3)
+
+		Label(Body, Info.Title or "Notification", 12, T.Text, FB, { Size = UDim2.new(1, 0, 0, 16), LayoutOrder = 1 })
+		if Info.Content and Info.Content ~= "" then
+			Label(Body, Info.Content, 10, T.Dim, FM, {
+				Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 2,
+			})
+		end
+
+		local Timer = New("Frame", {
+			AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 2),
+			BackgroundColor3 = Color, BackgroundTransparency = .4, BorderSizePixel = 0,
+		}, Card)
+
+		local Click = New("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 5 }, Card)
+
+		local Closed = false
+		local function Close()
+			if Closed then return end
+			Closed = true
+			Tw(Card, .25, { GroupTransparency = 1 })
+			task.delay(.3, function() Card:Destroy() end)
+		end
+
+		Click.MouseButton1Click:Connect(Close)
+		Tw(Card, .25, { GroupTransparency = 0 })
+		TS:Create(Timer, TweenInfo.new(Duration, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 2) }):Play()
+		task.delay(Duration, Close)
+
+		return { Close = Close }
+	end
+
+	--// Win:Dialog({ Title, Content, Buttons = { { Title, Style, Callback }, ... } })
+	function Win:Dialog(Info)
+		local Layer = New("TextButton", {
+			Text = "", AutoButtonColor = false, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0),
+			BackgroundTransparency = .45, BorderSizePixel = 0, ZIndex = 70,
+		}, Frame)
+		Round(Layer, 12)
+
+		local Card = New("Frame", {
+			AnchorPoint = Vector2.new(.5, .5), Position = UDim2.fromScale(.5, .5), Size = UDim2.fromOffset(320, 0),
+			AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = T.Window, BorderSizePixel = 0, ZIndex = 71,
+		}, Layer)
+		Round(Card, 12)
+		Stroke(Card, T.Line, 1, .2)
+		Pad(Card, 18, 16, 18, 16)
+		List(Card, 10)
+
+		Label(Card, Info.Title or "Dialog", 13, T.Text, FB, { Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 1 })
+		if Info.Content then
+			Label(Card, Info.Content, 10, T.Dim, FM, {
+				Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 2,
+			})
+		end
+
+		local Buttons = New("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = 3 }, Card)
+		New("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8),
+			HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		}, Buttons)
+
+		for Index, Item in ipairs(Info.Buttons or { { Title = "OK", Style = "Accent" } }) do
+			MakeButton(Buttons, {
+				Title = Item.Title, Style = Item.Style,
+				Callback = function()
+					Layer:Destroy()
+					Safe(Item.Callback)
+				end,
+			}, UDim2.fromOffset(Item.Width or 90, 30), Index)
+		end
+
+		return Layer
+	end
+
+	function Win:SetToggleKey(Key) Win.ToggleKey = Key end
+
+	--// ---- header
+	local Header = New("Frame", { Name = "Header", Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1 }, Frame)
+
+	local TitleBox = New("Frame", { Position = UDim2.fromOffset(20, 0), Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1 }, Header)
+	New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, TitleBox)
+	Label(TitleBox, Cfg.Title or "Headshot", 15, T.Text, FB, { AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 20), LayoutOrder = 1 })
+
+	local VersionBox = New("Frame", { AutomaticSize = Enum.AutomaticSize.XY, BackgroundTransparency = 1, LayoutOrder = 2 }, TitleBox)
+	Pad(VersionBox, 0, 5, 0, 0)
+	Label(VersionBox, Cfg.Version or "v0.5", 8, T.Dim, FM, { AutomaticSize = Enum.AutomaticSize.XY })
+
+	--// drag
+	do
+		local Dragging, Start, Origin
+		Header.InputBegan:Connect(function(Input)
+			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+				Dragging, Start, Origin = true, Input.Position, Frame.Position
+			end
+		end)
+		Win:Bind(UIS.InputChanged, function(Input)
+			if Dragging and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
+				local Delta = (Input.Position - Start) / math.max(Scale.Scale, .01)
+				Frame.Position = UDim2.new(Origin.X.Scale, Origin.X.Offset + Delta.X * Scale.Scale, Origin.Y.Scale, Origin.Y.Offset + Delta.Y * Scale.Scale)
+			end
+		end)
+		Win:Bind(UIS.InputEnded, function(Input)
+			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then Dragging = false end
+		end)
+	end
+
+	--// top tabs
+	local TabsHolder = New("Frame", { Position = UDim2.fromOffset(166, 0), Size = UDim2.new(0, 400, 1, 0), BackgroundTransparency = 1 }, Header)
+	List(TabsHolder, 0, true)
+
+	--// right icons: globe (filled), search, minus, close
+	local Icons_ = New("Frame", { AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, -14, .5, 0), Size = UDim2.new(0, 0, 0, 28), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1 }, Header)
+	New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }, Icons_)
+
+	local function IconButton(Order, Image, Filled, Callback)
+		local Button = New("TextButton", {
+			Text = "", AutoButtonColor = false, Size = UDim2.fromOffset(28, 28), LayoutOrder = Order,
+			BackgroundColor3 = Filled and T.Track or T.Bar, BackgroundTransparency = Filled and 0 or 1, BorderSizePixel = 0,
+		}, Icons_)
+		Round(Button, 14)
+		New("ImageLabel", { Image = Image, ImageColor3 = T.Text, BackgroundTransparency = 1, AnchorPoint = Vector2.new(.5, .5), Position = UDim2.fromScale(.5, .5), Size = UDim2.fromOffset(14, 14) }, Button)
+
+		if not Filled then
+			Button.MouseEnter:Connect(function() Tw(Button, .15, { BackgroundTransparency = .5 }) end)
+			Button.MouseLeave:Connect(function() Tw(Button, .15, { BackgroundTransparency = 1 }) end)
+		end
+
+		Button.MouseButton1Click:Connect(Callback)
+		return Button
+	end
+
+	--// search  (opens the global search box)  |  minus (hide, the round button shows it again)  |  close (unload the UI)
+	local SearchButton = IconButton(1, Icons.search, false, function() end)
+	IconButton(2, Icons.minus, false, function() Safe(Cfg.OnMinimize) Win:Toggle() end)
+	IconButton(3, Icons.x, false, function() Safe(Cfg.OnClose) Win:Destroy() end)
+
+	--// ---- global search: looks through every tab / sub tab for a setting by its text
+	function Win:Search(Query)
+		Query = string.lower(Query or "")
+		local Out, Seen = {}, {}
+		if Query == "" then return Out end
+
+		for _, Tab in ipairs(Win.Tabs) do
+			for _, Sub in ipairs(Tab.Subs) do
+				for _, Obj in ipairs(Sub.Scroll:GetDescendants()) do
+					if (Obj:IsA("TextLabel") or Obj:IsA("TextButton")) and #Obj.Text > 1 then
+						local Lower = string.lower(Obj.Text)
+						local At = string.find(Lower, Query, 1, true)
+						local Key = Tab.Name .. "|" .. Sub.Name .. "|" .. Lower
+						if At and not Seen[Key] then
+							Seen[Key] = true
+							table.insert(Out, { Text = Obj.Text, Tab = Tab, Sub = Sub, Object = Obj, Rank = At == 1 and 0 or 1 })
+						end
+					end
+				end
+			end
+		end
+
+		table.sort(Out, function(A, B)
+			if A.Rank ~= B.Rank then return A.Rank < B.Rank end
+			return #A.Text < #B.Text
+		end)
+		return Out
+	end
+
+	--// opens the tab / sub tab of a search result, scrolls to it and flashes the text
+	function Win:GoTo(Entry)
+		Win:ClosePopup()
+		if not Frame.Visible then Win:Toggle() end
+		Win:SelectTab(Entry.Tab)
+		Entry.Tab:SelectSub(Entry.Sub)
+
+		task.spawn(function()
+			task.wait(.05)
+			local Obj, Scroll = Entry.Object, Entry.Sub.Scroll
+			if not Obj or not Obj.Parent then return end
+
+			local Y = Obj.AbsolutePosition.Y - Scroll.AbsolutePosition.Y + Scroll.CanvasPosition.Y
+			Scroll.CanvasPosition = Vector2.new(0, math.max(Y / math.max(Scale.Scale, .01) - 40, 0))
+
+			local Old = Obj.TextColor3
+			Obj.TextColor3 = T.Accent
+			task.wait(.5)
+			if Obj.Parent then Tw(Obj, .9, { TextColor3 = Old }) end
+		end)
+	end
+
+	local function OpenSearch()
+		local Popup = Win:ShowPopup(SearchButton, 290, 270, "Right")
+		Pad(Popup, 6, 6, 6, 6)
+
+		local Box = New("TextBox", {
+			Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = T.Bar, BorderSizePixel = 0, Text = "", PlaceholderText = "Search settings...",
+			PlaceholderColor3 = T.Dim, TextColor3 = T.Text, Font = FM, TextSize = 11, ClearTextOnFocus = false, TextXAlignment = Left, ZIndex = 3,
+		}, Popup)
+		Round(Box, 8)
+		Pad(Box, 10, 0, 10, 0)
+
+		local Scroll = New("ScrollingFrame", {
+			Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 1, -34), BackgroundTransparency = 1, BorderSizePixel = 0,
+			ScrollBarThickness = 2, ScrollBarImageColor3 = T.Accent, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 3,
+		}, Popup)
+		List(Scroll, 2)
+
+		local Results = {}
+
+		local function Rebuild()
+			for _, Child in ipairs(Scroll:GetChildren()) do
+				if Child:IsA("TextButton") or Child:IsA("TextLabel") then Child:Destroy() end
+			end
+
+			if Box.Text == "" then
+				Label(Scroll, "Type to search every tab", 10, T.Dim, FM, { Size = UDim2.new(1, 0, 0, 24), ZIndex = 4 })
+				Results = {}
+				return
+			end
+
+			Results = Win:Search(Box.Text)
+			if #Results == 0 then
+				Label(Scroll, "No results", 10, T.Dim, FM, { Size = UDim2.new(1, 0, 0, 24), ZIndex = 4 })
+				return
+			end
+
+			for Index, Entry in ipairs(Results) do
+				if Index > 30 then break end
+
+				local Item = New("TextButton", {
+					Text = "", AutoButtonColor = false, BackgroundColor3 = T.Bar, BackgroundTransparency = 1,
+					Size = UDim2.new(1, -4, 0, 36), LayoutOrder = Index, BorderSizePixel = 0, ZIndex = 4,
+				}, Scroll)
+				Round(Item, 6)
+
+				Label(Item, Entry.Text, 11, T.Text, FM, { Position = UDim2.fromOffset(8, 3), Size = UDim2.new(1, -16, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5 })
+				local Where = Entry.Tab.Name
+				if Entry.Sub.Name ~= "_" then Where = Where .. "  ›  " .. Entry.Sub.Name end
+				Label(Item, Where, 9, T.Dim, FM, { Position = UDim2.fromOffset(8, 19), Size = UDim2.new(1, -16, 0, 14), ZIndex = 5 })
+
+				Item.MouseEnter:Connect(function() Item.BackgroundTransparency = .3 end)
+				Item.MouseLeave:Connect(function() Item.BackgroundTransparency = 1 end)
+				Item.MouseButton1Click:Connect(function() Win:GoTo(Entry) end)
+			end
+		end
+
+		Box:GetPropertyChangedSignal("Text"):Connect(Rebuild)
+		Box.FocusLost:Connect(function(Enter)
+			if Enter and Results[1] then Win:GoTo(Results[1]) end
+		end)
+
+		Rebuild()
+		task.defer(function() if Box.Parent then Box:CaptureFocus() end end)
+	end
+
+	SearchButton.MouseButton1Click:Connect(function()
+		Safe(Cfg.OnSearch)
+		OpenSearch()
+	end)
+
+
+	--// ---- pages
+	local Pages = New("Frame", { Name = "Pages", Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -90), BackgroundTransparency = 1, ClipsDescendants = true }, Frame)
+
+	--// ---- footer
+	local Footer = New("Frame", { Name = "Footer", Position = UDim2.new(0, 0, 1, -46), Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1 }, Frame)
+	New("Frame", { Size = UDim2.new(1, -40, 0, 1), Position = UDim2.fromOffset(20, 0), BackgroundColor3 = T.Line, BackgroundTransparency = .3, BorderSizePixel = 0 }, Footer)
+
+	local Dot = New("Frame", { AnchorPoint = Vector2.new(0, .5), Position = UDim2.new(0, 20, .5, 1), Size = UDim2.fromOffset(6, 6), BackgroundColor3 = T.Green, BorderSizePixel = 0 }, Footer)
+	Round(Dot, 3)
+	local StatusLabel = Label(Footer, Cfg.Status or "Connected", 9, T.Dim, FM, { AnchorPoint = Vector2.new(0, .5), Position = UDim2.new(0, 31, .5, 1), Size = UDim2.fromOffset(80, 14) })
+	local GameLabel = Label(Footer, Cfg.Game or "", 9, T.Dim, FM, { AnchorPoint = Vector2.new(0, .5), Position = UDim2.new(0, 118, .5, 1), Size = UDim2.fromOffset(120, 14) })
+
+	local Save = New("TextButton", {
+		Text = "Save config", Font = FB, TextSize = 10, TextColor3 = Color3.new(1, 1, 1), AutoButtonColor = false,
+		AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, -20, .5, 1), Size = UDim2.fromOffset(81, 28),
+		BackgroundColor3 = T.Accent, BorderSizePixel = 0,
+	}, Footer)
+	Round(Save, 8)
+	Save.MouseEnter:Connect(function() Tw(Save, .15, { BackgroundTransparency = .15 }) end)
+	Save.MouseLeave:Connect(function() Tw(Save, .15, { BackgroundTransparency = 0 }) end)
+	Save.MouseButton1Click:Connect(function()
+		Win:SaveConfig(Win.CurrentConfig)
+		Safe(Cfg.OnSave, Win.CurrentConfig)
+	end)
+
+	local Reset = New("TextButton", {
+		Text = "Reset", Font = FM, TextSize = 9, TextColor3 = T.Dim, BackgroundTransparency = 1, AutoButtonColor = false,
+		AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, -111, .5, 1), Size = UDim2.fromOffset(40, 22),
+	}, Footer)
+	Reset.MouseEnter:Connect(function() Reset.TextColor3 = T.Text end)
+	Reset.MouseLeave:Connect(function() Reset.TextColor3 = T.Dim end)
+	Reset.MouseButton1Click:Connect(function()
+		Win:ResetConfig()
+		Safe(Cfg.OnReset, Win.CurrentConfig)
+	end)
+
+	local ConfigButton = New("TextButton", {
+		Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, -161, .5, 1),
+		Size = UDim2.fromOffset(133, 22), BackgroundColor3 = T.Bar, BackgroundTransparency = .1, BorderSizePixel = 0,
+	}, Footer)
+	Round(ConfigButton, 6)
+	local ConfigText = Label(ConfigButton, "default", 9, T.Text, FM, { Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -30, 1, 0) })
+	New("ImageLabel", { Image = Icons.chevron, ImageColor3 = T.Dim, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, .5), Position = UDim2.new(1, -7, .5, 0), Size = UDim2.fromOffset(11, 11) }, ConfigButton)
+
+	local ConfigList = New("Frame", {
+		Visible = false, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -161, 1, -50), Size = UDim2.fromOffset(133, 30),
+		BackgroundColor3 = T.Panel, BorderSizePixel = 0, ZIndex = 30,
+	}, Frame)
+	Round(ConfigList, 8)
+	Stroke(ConfigList, T.Line, 1, .3)
+	Pad(ConfigList, 4, 4, 4, 4)
+	List(ConfigList, 2)
+
+	function Win:SetConfigs(Names, Selected)
+		for _, Child in ipairs(ConfigList:GetChildren()) do
+			if Child:IsA("TextButton") then Child:Destroy() end
+		end
+
+		Win.Configs = Names or {}
+		for Index, Name in ipairs(Win.Configs) do
+			local Item = New("TextButton", {
+				Text = Name, Font = FM, TextSize = 9, TextColor3 = T.Text, BackgroundColor3 = T.Bar, BackgroundTransparency = 1,
+				AutoButtonColor = false, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = Index, ZIndex = 31, BorderSizePixel = 0,
+			}, ConfigList)
+			Round(Item, 5)
+			Item.MouseEnter:Connect(function() Item.BackgroundTransparency = .3 end)
+			Item.MouseLeave:Connect(function() Item.BackgroundTransparency = 1 end)
+			Item.MouseButton1Click:Connect(function()
+				Win.CurrentConfig = Name
+				ConfigText.Text = Name
+				ConfigList.Visible = false
+				Win:LoadConfigFile(Name, true)
+				Safe(Cfg.OnConfig, Name)
+			end)
+		end
+
+		ConfigList.Size = UDim2.fromOffset(133, #Win.Configs * 24 + 8)
+		Win.CurrentConfig = Selected or Win.Configs[1] or "default"
+		ConfigText.Text = Win.CurrentConfig
+	end
+
+	--// ---- config system (every element that has a Flag is saved)
+	local FolderName = Cfg.Folder or "HeadshotUI"
+
+	local function HasFS()
+		return type(writefile) == "function" and type(readfile) == "function" and type(isfolder) == "function"
+			and type(makefolder) == "function" and type(isfile) == "function"
+	end
+
+	function Win:GetConfig()
+		local Data = {}
+		for Flag, Object in pairs(Win.Flags) do
+			if Object.Get then Data[Flag] = Encode(Object:Get()) end
+		end
+		return Data
+	end
+
+	function Win:LoadConfig(Data)
+		for Flag, Value in pairs(Data or {}) do
+			local Object = Win.Flags[Flag]
+			if Object and Object.Set then pcall(Object.Set, Object, Decode(Value)) end
+		end
+	end
+
+	function Win:ResetConfig()
+		for _, Object in pairs(Win.Flags) do
+			if Object.Set then pcall(Object.Set, Object, Object.Default) end
+		end
+	end
+
+	function Win:ListConfigs()
+		local Names, Seen = { "default" }, { default = true }
+
+		if HasFS() and type(listfiles) == "function" and isfolder(FolderName) then
+			pcall(function()
+				for _, Path in ipairs(listfiles(FolderName)) do
+					local Name = string.match(Path, "([^/\\]+)%.json$")
+					if Name and not Seen[Name] then
+						Seen[Name] = true
+						table.insert(Names, Name)
+					end
+				end
+			end)
+		end
+
+		for Name in pairs(Win.Memory) do
+			if not Seen[Name] then
+				Seen[Name] = true
+				table.insert(Names, Name)
+			end
+		end
+
+		return Names
+	end
+
+	--// writes <folder>/<name>.json (falls back to memory when the executor has no file functions)
+	function Win:SaveConfig(Name, Silent)
+		Name = (Name and Name ~= "") and Name or Win.CurrentConfig or "default"
+		Name = (string.gsub(Name, "[^%w_%- ]", ""))
+		if Name == "" then Name = "default" end
+
+		local Data = Win:GetConfig()
+		local Saved = false
+
+		if HasFS() then
+			Saved = pcall(function()
+				if not isfolder(FolderName) then makefolder(FolderName) end
+				writefile(FolderName .. "/" .. Name .. ".json", HttpService:JSONEncode(Data))
+			end)
+		end
+
+		if not Saved then Win.Memory[Name] = Data end
+
+		Win:SetConfigs(Win:ListConfigs(), Name)
+		if not Silent then
+			Win:Notify({ Title = "Config saved", Content = Name .. (Saved and "" or "  (memory only)"), Type = "Success", Duration = 2.5 })
+		end
+		return Saved
+	end
+
+	function Win:LoadConfigFile(Name, Silent)
+		local Data
+
+		if HasFS() then
+			pcall(function()
+				local Path = FolderName .. "/" .. Name .. ".json"
+				if isfile(Path) then Data = HttpService:JSONDecode(readfile(Path)) end
+			end)
+		end
+
+		Data = Data or Win.Memory[Name]
+		if not Data then return false end
+
+		Win:LoadConfig(Data)
+		if not Silent then
+			Win:Notify({ Title = "Config loaded", Content = Name, Type = "Info", Duration = 2.5 })
+		end
+		return true
+	end
+
+	function Win:DeleteConfig(Name)
+		if Name == nil or Name == "default" then return false end
+		Win.Memory[Name] = nil
+		if HasFS() and type(delfile) == "function" then
+			pcall(function()
+				local Path = FolderName .. "/" .. Name .. ".json"
+				if isfile(Path) then delfile(Path) end
+			end)
+		end
+		Win:SetConfigs(Win:ListConfigs(), "default")
+		Win:Notify({ Title = "Config deleted", Content = Name, Type = "Warning", Duration = 2.5 })
+		return true
+	end
+
+	ConfigButton.MouseButton1Click:Connect(function() ConfigList.Visible = not ConfigList.Visible end)
+	Win:SetConfigs(Cfg.Configs or Win:ListConfigs(), Cfg.Config or "default")
+
+	function Win:SetStatus(Text, Color)
+		StatusLabel.Text = Text
+		Dot.BackgroundColor3 = Color or T.Green
+	end
+
+	function Win:SetGame(Text) GameLabel.Text = Text end
+
+	--// ---- dock: stats pill + round profile-picture button (shows / hides the window)
+	local DOCK_H = 46 --// big enough for a finger
+
+	--// Dock itself has NO layout, so the hit button below can never be squashed to 0 width by a list layout
+	local Dock = New("Frame", {
+		Name = "Dock", AnchorPoint = Vector2.new(.5, .5), Size = UDim2.new(0, 0, 0, DOCK_H), AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1, ZIndex = 40,
+	}, Gui)
+
+	local DockRow = New("Frame", { Name = "Row", Size = UDim2.new(0, 0, 0, DOCK_H), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1, ZIndex = 40 }, Dock)
+	New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }, DockRow)
+
+	local Pill = New("Frame", { Size = UDim2.new(0, 0, 0, 32), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = T.Window, BackgroundTransparency = .05, BorderSizePixel = 0, LayoutOrder = 1, ZIndex = 40 }, DockRow)
+	Round(Pill, 16)
+	Stroke(Pill, T.Line, 1, .4)
+	Pad(Pill, 14, 0, 14, 0)
+	New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }, Pill)
+
+	local function PillLabel(Order, Text)
+		return Label(Pill, Text, 8, T.Text, FB, { AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 20), LayoutOrder = Order, ZIndex = 41, RichText = true })
+	end
+
+	PillLabel(1, '<b>Head</b><font color="rgb(150,156,173)">Shot</font>')
+	local PingLabel, FpsLabel, TimeLabel = PillLabel(2, "0 ms"), PillLabel(3, "0 fps"), PillLabel(4, os.date("%H:%M"))
+
+	--// round profile-picture button (this is the main UI open / close button)
+	local Avatar = New("Frame", {
+		Name = "Avatar", Size = UDim2.fromOffset(DOCK_H, DOCK_H), BackgroundColor3 = T.Bar,
+		BorderSizePixel = 0, LayoutOrder = 2, ZIndex = 41,
+	}, DockRow)
+	Round(Avatar, DOCK_H / 2)
+	local AvatarRing = Stroke(Avatar, T.Accent, 2, 0)
+
+	local AvatarImage = New("ImageLabel", {
+		BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 42, ScaleType = Enum.ScaleType.Crop,
+		Image = "rbxthumb://type=AvatarHeadShot&id=" .. LP.UserId .. "&w=150&h=150", --// loads instantly, no async call
+	}, Avatar)
+	Round(AvatarImage, DOCK_H / 2)
+
+	--// first letter of the name shows behind the picture while / if it can't load
+	Label(Avatar, string.upper(string.sub(LP.DisplayName ~= "" and LP.DisplayName or LP.Name, 1, 1)), 16, T.Text, FB, {
+		Size = UDim2.fromScale(1, 1), TextXAlignment = Center, ZIndex = 41,
+	})
+
+	--// backup: ask Roblox for the thumbnail URL if the rbxthumb link is not available
+	task.spawn(function()
+		local Ok, Url, Ready = pcall(function()
+			return Players:GetUserThumbnailAsync(LP.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+		end)
+		if Ok and Url and Url ~= "" then
+			task.wait(1.5)
+			if not AvatarImage.IsLoaded then AvatarImage.Image = Url end
+		end
+	end)
+
+	function Win:Toggle()
+		Frame.Visible = not Frame.Visible
+		if not Frame.Visible then
+			ConfigList.Visible = false
+			Win:ClosePopup()
+		end
+	end
+
+	--// the dock is a FLOATING button: always visible, drag it anywhere, tap it to open / close the main window
+	Dock.AnchorPoint = Vector2.new(.5, 1)
+	Dock.Position = Cfg.DockPosition or UDim2.new(.5, 0, 1, -16)
+	Dock.Visible = true
+
+	--// always keep the dock fully on screen (also when the screen size / pill width changes)
+	local function KeepDock()
+		local View, Size, Place = Gui.AbsoluteSize, Dock.AbsoluteSize, Dock.AbsolutePosition
+		if View.X <= 0 or View.Y <= 0 or Size.X <= 0 then return end
+		local X = math.clamp(Place.X, 0, math.max(View.X - Size.X, 0)) - Place.X
+		local Y = math.clamp(Place.Y, 0, math.max(View.Y - Size.Y, 0)) - Place.Y
+		if math.abs(X) > .5 or math.abs(Y) > .5 then
+			local Now = Dock.Position
+			Dock.Position = UDim2.new(Now.X.Scale, Now.X.Offset + X, Now.Y.Scale, Now.Y.Offset + Y)
+		end
+	end
+	Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() task.defer(KeepDock) end)
+	Dock:GetPropertyChangedSignal("AbsoluteSize"):Connect(KeepDock)
+	task.delay(.3, KeepDock)
+
+	--// transparent button over the whole dock (pill + picture). Kept the same size as the row by hand,
+	--// because a scale size inside an auto-sized parent resolves to 0 (that is why taps did nothing on mobile)
+	local DockHit = New("TextButton", {
+		Name = "Hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(DOCK_H, DOCK_H), ZIndex = 60, Active = true,
+	}, Dock)
+	local function SyncHit()
+		local Size = DockRow.AbsoluteSize
+		local Factor = (DockScale and DockScale.Scale) or 1
+		if Size.X > 0 then DockHit.Size = UDim2.fromOffset(Size.X / Factor, DOCK_H) end
+	end
+	DockRow:GetPropertyChangedSignal("AbsoluteSize"):Connect(SyncHit)
+	SyncHit()
+	task.delay(.2, SyncHit)
+
+	do
+		local Tracking, Start, Origin, Moved, Held = false, nil, nil, false, nil
+		local function IsPress(Input) return Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch end
+
+		DockHit.InputBegan:Connect(function(Input)
+			if IsPress(Input) and not Tracking then
+				Tracking, Moved, Start, Origin, Held = true, false, Input.Position, Dock.Position, Input
+				Tw(AvatarRing, .1, { Thickness = 3 })
+			end
+		end)
+
+		Win:Bind(UIS.InputChanged, function(Input)
+			if not Tracking then return end
+			local IsTouch = Input.UserInputType == Enum.UserInputType.Touch
+			if IsTouch and Input ~= Held then return end --// ignore other fingers
+			if IsTouch or Input.UserInputType == Enum.UserInputType.MouseMovement then
+				local Delta = Input.Position - Start
+				if not Moved and Delta.Magnitude < 12 then return end --// fingers wobble: only count it as a drag after 12px
+				Moved = true
+				Dock.Position = UDim2.new(Origin.X.Scale, Origin.X.Offset + Delta.X, Origin.Y.Scale, Origin.Y.Offset + Delta.Y)
+			end
+		end)
+
+		Win:Bind(UIS.InputEnded, function(Input)
+			if not Tracking or not IsPress(Input) then return end
+			if Input.UserInputType == Enum.UserInputType.Touch and Input ~= Held then return end
+			Tracking, Held = false, nil
+			Tw(AvatarRing, .1, { Thickness = 2 })
+
+			if Moved then
+				--// keep it on screen
+				local View, Size, Place = Gui.AbsoluteSize, Dock.AbsoluteSize, Dock.AbsolutePosition
+				local X = math.clamp(Place.X, 0, math.max(View.X - Size.X, 0)) - Place.X
+				local Y = math.clamp(Place.Y, 0, math.max(View.Y - Size.Y, 0)) - Place.Y
+				if math.abs(X) > .5 or math.abs(Y) > .5 then
+					local Now = Dock.Position
+					Tw(Dock, .2, { Position = UDim2.new(Now.X.Scale, Now.X.Offset + X, Now.Y.Scale, Now.Y.Offset + Y) })
+				end
+			else
+				Win:Toggle() --// plain tap = open / close the main window
+			end
+		end)
+	end
+
+	do
+		local Frames, Last = 0, os.clock()
+		Win:Bind(RS.RenderStepped, function()
+			Frames = Frames + 1
+			local Now = os.clock()
+			if Now - Last >= 1 then
+				FpsLabel.Text = Frames .. " fps"
+				TimeLabel.Text = os.date("%H:%M")
+				local Ok, Ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue() + .5) end)
+				PingLabel.Text = (Ok and Ping or 0) .. " ms"
+				Frames, Last = 0, Now
+			end
+		end)
+	end
+
+	Win:Bind(UIS.InputBegan, function(Input, Processed)
+		if not Processed and Win.ToggleKey and Input.KeyCode == Win.ToggleKey then Win:Toggle() end
+	end)
+
+	function Win:Destroy()
+		Win:ClosePopup()
+		for _, Connection in ipairs(Win.Connections) do pcall(function() Connection:Disconnect() end) end
+		Win.Connections = {}
+		Gui:Destroy()
+	end
+
+	--// ---- tabs
+	function Win:SelectTab(Tab)
+		Win.Active = Tab
+		ConfigList.Visible = false
+		Win:ClosePopup()
+
+		for _, Other in ipairs(Win.Tabs) do
+			local On = Other == Tab
+			Other.Page.Visible = On
+			Other.Button.TextColor3 = On and T.Text or T.Dim
+			Other.Button.Font = On and FB or FM
+			Tw(Other.Line, .2, { Size = UDim2.fromOffset(On and 18 or 0, 2) })
+		end
+	end
+
+	function Win:AddTab(Name)
+		local Tab = { Name = Name, Subs = {}, Active = nil, DescText = "" }
+
+		Tab.Button = New("TextButton", {
+			Text = Name, Font = FM, TextSize = 11, TextColor3 = T.Dim, BackgroundTransparency = 1, AutoButtonColor = false,
+			Size = UDim2.fromOffset(80, 44), LayoutOrder = #Win.Tabs + 1,
+		}, TabsHolder)
+		Tab.Line = New("Frame", { AnchorPoint = Vector2.new(.5, 1), Position = UDim2.new(.5, 0, 1, -4), Size = UDim2.fromOffset(0, 2), BackgroundColor3 = T.Accent, BorderSizePixel = 0 }, Tab.Button)
+		Round(Tab.Line, 1)
+
+		Tab.Page = New("Frame", { Name = Name, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, Pages)
+		Label(Tab.Page, Name, 18, T.Text, FB, { Position = UDim2.fromOffset(20, 8), Size = UDim2.fromOffset(100, 26) })
+		Tab.Desc = Label(Tab.Page, "", 9, T.Dim, FM, { Position = UDim2.fromOffset(20, 45), Size = UDim2.new(1, -40, 0, 16) })
+
+		Tab.SubBar = New("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 13), Size = UDim2.fromOffset(463, 27), BackgroundColor3 = T.Bar, BackgroundTransparency = .1, BorderSizePixel = 0, Visible = false }, Tab.Page)
+		Round(Tab.SubBar, 8)
+
+		function Tab:SelectSub(Sub)
+			Tab.Active = Sub
+			Win:ClosePopup()
+			for _, Other in ipairs(Tab.Subs) do
+				local On = Other == Sub
+				Other.Scroll.Visible = On
+				Other.Button.TextColor3 = On and T.Text or T.Dim
+				Other.Button.Font = On and FB or FM
+				Tw(Other.Line, .2, { Size = UDim2.fromOffset(On and 24 or 0, 2) })
+			end
+			Tab.Desc.Text = (Sub.Name == "_") and Tab.DescText or Sub.Desc
+		end
+
+		function Tab:SetDescription(Text)
+			Tab.DescText = Text or ""
+			if Tab.Active and Tab.Active.Name == "_" then Tab.Desc.Text = Tab.DescText end
+		end
+
+		function Tab:AddSubTab(SubName, Description, Columns)
+			local Sub = { Name = SubName, Desc = Description or "", ColumnCount = Columns or 3, AutoIndex = 0 }
+
+			Sub.Button = New("TextButton", { Text = SubName, Font = FM, TextSize = 9, TextColor3 = T.Dim, BackgroundTransparency = 1, AutoButtonColor = false }, Tab.SubBar)
+			Sub.Line = New("Frame", { AnchorPoint = Vector2.new(.5, 1), Position = UDim2.new(.5, 0, 1, 0), Size = UDim2.fromOffset(0, 2), BackgroundColor3 = T.Accent, BorderSizePixel = 0 }, Sub.Button)
+			Round(Sub.Line, 1)
+
+			Sub.Scroll = New("ScrollingFrame", {
+				Position = UDim2.fromOffset(20, 83), Size = UDim2.new(1, -38, 1, -93), BackgroundTransparency = 1, BorderSizePixel = 0,
+				ScrollBarThickness = 0, ScrollingEnabled = false, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ScrollingDirection = Enum.ScrollingDirection.Y, Visible = false,
+			}, Tab.Page)
+			Pad(Sub.Scroll, 0, 0, 0, 0)
+			List(Sub.Scroll, 10)
+
+			local SectionCount = 0
+
+			--// card with an optional small grey "eyebrow" (COMBAT) and a big title (Sheriff)
+			local function MakeCard(Parent, Title, Eyebrow, Order)
+				local Card = New("Frame", {
+					Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = T.Panel,
+					BackgroundTransparency = .2, BorderSizePixel = 0, LayoutOrder = Order,
+				}, Parent)
+				Round(Card, 10)
+				Pad(Card, 16, 14, 16, 16)
+				List(Card, 10)
+
+				if Eyebrow and Eyebrow ~= "" then
+					Label(Card, string.upper(Eyebrow), 8, T.Dim, FM, { Size = UDim2.new(1, 0, 0, 12), LayoutOrder = -2 })
+					if Title and Title ~= "" then Label(Card, Title, 15, T.Text, FB, { Size = UDim2.new(1, 0, 0, 20), LayoutOrder = -1 }) end
+				elseif Title and Title ~= "" then
+					Label(Card, string.upper(Title), 8, T.Dim, FM, { Size = UDim2.new(1, 0, 0, 12), LayoutOrder = -1 })
+				end
+
+				return Builder(Card, Win, false)
+			end
+
+			--// no scrolling: every section is placed in the next column (1, 2, 3, 1, 2, 3 ...)
+			function Sub:AddSection(Title, Eyebrow)
+				if not Sub.AutoColumns then Sub.AutoColumns = Sub:AddColumns(Sub.ColumnCount) end
+				Sub.AutoIndex = Sub.AutoIndex + 1
+				local Index = ((Sub.AutoIndex - 1) % #Sub.AutoColumns) + 1
+				return Sub.AutoColumns[Index]:AddSection(Title, Eyebrow)
+			end
+
+			--// side by side columns:  local Cols = Sub:AddColumns(3)   Cols[1]:AddSection("Sheriff", "Combat")   Cols[2]:AddSection(...)
+			function Sub:AddColumns(Count, Gap)
+				Count, Gap = math.max(Count or 2, 1), Gap or 10
+				SectionCount = SectionCount + 1
+				local Holder = New("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = SectionCount }, Sub.Scroll)
+				New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, Gap), VerticalAlignment = Enum.VerticalAlignment.Top }, Holder)
+
+				local Columns = {}
+				for Index = 1, Count do
+					local Column = New("Frame", {
+						Size = UDim2.new(1 / Count, -Gap * (Count - 1) / Count, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+						BackgroundTransparency = 1, LayoutOrder = Index,
+					}, Holder)
+					List(Column, Gap)
+
+					local Used = 0
+					Columns[Index] = {
+						AddSection = function(_, Title, Eyebrow)
+							Used = Used + 1
+							return MakeCard(Column, Title, Eyebrow, Used)
+						end,
+					}
+				end
+				return Columns
+			end
+
+			table.insert(Tab.Subs, Sub)
+
+			--// equal width buttons
+			local Count = #Tab.Subs
+			for Index, Other in ipairs(Tab.Subs) do
+				Other.Button.Size = UDim2.new(1 / Count, 0, 1, 0)
+				Other.Button.Position = UDim2.new((Index - 1) / Count, 0, 0, 0)
+			end
+
+			Tab.SubBar.Visible = not Tab.Implicit
+			Tab.SubBar.Size = UDim2.fromOffset(math.min(463, 90 * Count), 27)
+			Sub.Button.MouseButton1Click:Connect(function() Tab:SelectSub(Sub) end)
+			if Count == 1 then Tab:SelectSub(Sub) end
+
+			return Sub
+		end
+
+		--// tab without sub tabs
+		function Tab:AddSection(Title)
+			if not Tab.Implicit then
+				Tab.Implicit = true
+				Tab.ImplicitSub = Tab:AddSubTab("_", "")
+				Tab.SubBar.Visible = false
+			end
+			return Tab.ImplicitSub:AddSection(Title)
+		end
+
+		Tab.Button.MouseButton1Click:Connect(function() Win:SelectTab(Tab) end)
+
+		table.insert(Win.Tabs, Tab)
+		if #Win.Tabs == 1 then Win:SelectTab(Tab) end
+
+		return Tab
+	end
+
+	task.defer(Fit)
+	return Win
+end
+
+--// ------------------------------------------------------------------ demo (every element)
+if SHOW_DEMO then
+	local Win = Library:CreateWindow({ Title = "Headshot", Version = "v0.6", Game = "MM2", ToggleKey = Enum.KeyCode.RightShift })
+
+	--// ------------------------------------------------ Main  (3 columns, like the screenshot)
+	local Main = Win:AddTab("Main")
+
+	local Combat = Main:AddSubTab("Combat", "Welcome to headshot kingdom")
+	local Movement = Main:AddSubTab("Movement", "Welcome to headshot kingdom")
+	local Misc = Main:AddSubTab("Misc", "Welcome to headshot kingdom")
+
+	local Cols = Combat:AddColumns(3)
+
+	--// column 1 : Sheriff
+	local Sheriff = Cols[1]:AddSection("Sheriff", "Combat")
+	Sheriff:AddToggle({ Title = "Enable", Flag = "sheriff_enable", Key = "-", Callback = function(Value) --[[ your code ]] end })
+	Sheriff:AddToggle({ Title = "Penetration", Flag = "sheriff_pen", Callback = function(Value) --[[ your code ]] end })
+	Sheriff:AddToggle({ Title = "Force shoot", Flag = "sheriff_force", Default = true, Callback = function(Value) --[[ your code ]] end })
+	Sheriff:AddSlider({ Title = "Shot delay", Flag = "sheriff_delay", Min = 0, Max = 1000, Step = 10, Default = 0, Suffix = " ms", Callback = function(Value) --[[ your code ]] end })
+	Sheriff:AddSlider({ Title = "Prediction offset", Flag = "sheriff_pred", Min = -200, Max = 200, Step = 1, Default = 0, Format = function(V) return string.format("%+d ms", V) end, Callback = function(Value) --[[ your code ]] end })
+	Sheriff:AddSlider({ Title = "Height offset", Flag = "sheriff_height", Min = -5, Max = 5, Step = .1, Default = 0, Format = function(V) return string.format("%+.1f studs", V) end, Callback = function(Value) --[[ your code ]] end })
+	Sheriff:AddToggle({ Title = "Auto gun collect", Flag = "sheriff_collect", Key = "-", Callback = function(Value) --[[ your code ]] end })
+	Sheriff:AddDropdown({ Title = "Shot sounds", Flag = "sheriff_sound", Options = { "None", "Hit", "Headshot", "Ding" }, Default = "None", Callback = function(Name) --[[ your code ]] end })
+
+	--// column 2 : Murderer + Credits
+	local Murderer = Cols[2]:AddSection("Murderer", "Combat")
+	Murderer:AddToggle({ Title = "Auto Win", Flag = "murd_autowin", Key = "8", Callback = function(Value) --[[ your code ]] end })
+	Murderer:AddToggle({ Title = "Silent knife", Flag = "murd_silent", Default = true, Callback = function(Value) --[[ your code ]] end })
+	Murderer:AddToggle({ Title = "Hitbox extender", Flag = "murd_hitbox", Default = true, Callback = function(Value) --[[ your code ]] end })
+	Murderer:AddSlider({ Title = "Size", Flag = "murd_hitbox_size", Min = 1, Max = 50, Step = 1, Default = 25, Suffix = " studs", Callback = function(Value) --[[ your code ]] end })
+
+	local Credits = Cols[2]:AddSection("", "Credits")
+	Credits:AddLabel("Headshot - is an MM2 script, created by @headshotees. Idea by \"Shitaro\" script")
+
+	--// column 3 : Kill Selected
+	local Kill = Cols[3]:AddSection("Kill Selected", "Combat")
+	local PlayerList = Kill:AddPlayerList({ Height = 200 })
+	Kill:AddButton({ Title = "Kill selected players", Style = "Accent", Callback = function()
+		local Targets = PlayerList:GetSelected()
+		print("selected:", #Targets) --// your code here
+	end })
+
+	--// Movement / Misc: add your own controls here
+	local Move = Movement:AddSection("Movement")
+	Move:AddSlider({ Title = "Walk speed", Flag = "speed", Min = 16, Max = 100, Default = 16, Callback = function(Value)
+		local Humanoid = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+		if Humanoid then Humanoid.WalkSpeed = Value end
+	end })
+	local Other = Misc:AddSection("Misc")
+	Other:AddLabel("Nothing here yet")
+
+	--// ------------------------------------------------ Visuals (same layout as the screenshot)
+	local Visuals = Win:AddTab("Visuals")
+
+	local PlayersSub = Visuals:AddSubTab("Players", "Player ESP")
+	local Esp = PlayersSub:AddSection("ESP")
+	Esp:AddToggle({ Title = "Box", Flag = "esp_box" })
+	Esp:AddToggle({ Title = "Name", Flag = "esp_name" })
+	Esp:AddColorPicker({ Title = "Color", Flag = "esp_color", Default = Color3.fromRGB(255, 86, 36) })
+
+	local WorldSub = Visuals:AddSubTab("World", "World settings")
+	local World = WorldSub:AddSection("World")
+	World:AddSlider({ Title = "Time of day", Flag = "world_time", Min = 0, Max = 24, Default = 14 })
+	World:AddToggle({ Title = "Full bright", Flag = "world_bright" })
+
+	Visuals:AddSubTab("Local", "")
+	Visuals:AddSubTab("Effects", "")
+
+	local Skins = Visuals:AddSubTab("Skins", "Every dumped skin with icons. Pick one to equip it instantly.")
+	Visuals:AddSubTab("More", "")
+
+	local Section = Skins:AddSection("Skins")
+	local Counter
+	local State = { Type = "Knives", Rarity = "Godly", Search = "bat" }
+	local Grid
+
+	local function Refresh()
+		local Shown = Grid:Filter(function(Item)
+			if Item.Type ~= State.Type then return false end
+			if State.Rarity ~= "All" and Item.Rarity ~= State.Rarity then return false end
+			return State.Search == "" or string.find(string.lower(Item.Name), string.lower(State.Search), 1, true) ~= nil
+		end)
+		Counter:Set(Shown .. " of 462 " .. string.lower(State.Type))
+	end
+
+	local Row = Section:AddRow()
+	Row:AddSegmented({ Options = { "Guns", "Knives" }, Default = "Knives", Width = 140, Callback = function(Value) State.Type = Value Refresh() end })
+	Row:AddSearch({ Default = "bat", Placeholder = "Search...", Callback = function(Value) State.Search = Value Refresh() end })
+	Counter = Row:AddCounter("3 of 462 knives")
+
+	Section:AddChips({
+		Options = { "All", "Common", "Uncommon", "Rare", "Legendary", "Godly", "Ancient", "Unique" },
+		Default = "Godly",
+		Callback = function(Name) State.Rarity = Name Refresh() end,
+	})
+
+	Grid = Section:AddGrid({ Callback = function(Item) Win:Notify({ Title = "Equipped", Content = Item.Name, Type = "Success", Duration = 2 }) end })
+	Grid:AddItem({ Name = "BattleAxe", Rarity = "Godly", Type = "Knives" })
+	Grid:AddItem({ Name = "BattleAxe2", Rarity = "Godly", Type = "Knives" })
+	Grid:AddItem({ Name = "ZombieBat", Rarity = "Godly", Type = "Knives" })
+	Grid:AddItem({ Name = "Harvester", Rarity = "Ancient", Type = "Knives" })
+	Grid:AddItem({ Name = "Chroma Luger", Rarity = "Godly", Type = "Guns" })
+	Refresh()
+
+	Visuals:SelectSub(Skins)
+
+	--// ------------------------------------------------ Players
+	local PlayersTab = Win:AddTab("Players")
+	PlayersTab:SetDescription("Pick a player")
+	local PlayerSec = PlayersTab:AddSection("Players")
+	local PlayerDrop = PlayerSec:AddDropdown({ Title = "Player", Options = {}, Placeholder = "Select player..." })
+
+	local function RefreshPlayers()
+		local Names = {}
+		for _, Player in ipairs(Players:GetPlayers()) do table.insert(Names, Player.Name) end
+		PlayerDrop:SetOptions(Names)
+	end
+
+	RefreshPlayers()
+	Win:Bind(Players.PlayerAdded, RefreshPlayers)
+	Win:Bind(Players.PlayerRemoving, function() task.defer(RefreshPlayers) end)
+	PlayerSec:AddButton({ Title = "Refresh list", Callback = RefreshPlayers })
+
+	--// ------------------------------------------------ Config
+	local ConfigTab = Win:AddTab("Config")
+	ConfigTab:SetDescription("Save and load every control that has a Flag")
+
+	local ConfigSec = ConfigTab:AddSection("Configs")
+	local NameBox = ConfigSec:AddTextbox({ Title = "Config name", Placeholder = "my config", Width = 170 })
+	ConfigSec:AddButtonGroup({ Buttons = {
+		{ Title = "Save", Style = "Accent", Callback = function() Win:SaveConfig(NameBox:Get()) end },
+		{ Title = "Load", Callback = function() Win:LoadConfigFile(NameBox:Get() ~= "" and NameBox:Get() or Win.CurrentConfig) end },
+		{ Title = "Delete", Style = "Danger", Confirm = true, Callback = function() Win:DeleteConfig(NameBox:Get() ~= "" and NameBox:Get() or Win.CurrentConfig) end },
+	} })
+	ConfigSec:AddButton({ Title = "Reset everything to default", Style = "Outline", Callback = function() Win:ResetConfig() Win:Notify({ Title = "Reset", Type = "Warning" }) end })
+
+	local Interface = ConfigTab:AddSection("Interface")
+	Interface:AddKeybind({ Title = "Menu key", Default = Enum.KeyCode.RightShift, Callback = function(Key) Win:SetToggleKey(Key) end })
+	Interface:AddButton({ Title = "Unload UI", Style = "Danger", Confirm = true, Callback = function() Win:Destroy() end })
+
+	Win:Notify({ Title = "Headshot loaded", Content = "Press RightShift or tap the round button to hide / show.", Type = "Success" })
+end
+
+return Library
