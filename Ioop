@@ -1,0 +1,3929 @@
+--[[
+Everforest folder tree:
+Folder: components
+src\components\element
+src\components\notification
+src\components\tab
+src\components\top
+src\components\window
+Folder: elements
+src\elements\button
+src\elements\dropdown
+src\elements\init
+src\elements\input
+src\elements\paragraph
+src\elements\section
+src\elements\slider
+src\elements\toggle
+src\init
+Folder: modules
+src\modules\creator
+src\modules\icons
+src\modules\presets
+src\modules\tween
+Folder: themes
+src\themes\dark
+src\themes\init
+
+]]
+
+-- [Mobile build] Sizes now adapt to touch devices / small screens automatically.
+-- Optional: Library:CreateWindow({ Mobile = true })  force the mobile layout
+--           Library:CreateWindow({ Mobile = false }) force the desktop layout
+
+local Modules = {}
+local Everforest = Instance.new("ModuleScript")
+Everforest.Name = "Everforest"
+local v6 = Instance.new("Folder", Everforest)
+v6.Name = "components"
+local v1 = Instance.new('ModuleScript', v6)
+v1.Name = "element"
+Modules[v1] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    return function(Title, Parent, Hover, Condition)
+        local Element = {
+            Hoving = false,
+            Condition = Condition or function() return true end
+        }
+    
+        Element.Title = New("TextLabel", {
+            FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+            Text = Title,
+            TextWrapped = true,
+            TextSize = Pick(16, 14),
+            RichText = true,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, Pick(16, 14)),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            ThemeTag = {
+                TextColor3 = "ElementText"
+            }
+        })
+    
+        Element.LabelHolder = New("Frame", {
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 10, 0, 0),
+            Size = UDim2.new(1, -Pick(100, 76), 0, 0)
+        }, {
+            New("UIPadding", {
+                PaddingBottom = UDim.new(0, Pick(10, 8)),
+                PaddingTop = UDim.new(0, Pick(10, 8))
+            }),
+            New("UIListLayout", {
+                Padding = UDim.new(0, Pick(6, 4)),
+                SortOrder = Enum.SortOrder.LayoutOrder
+            }),
+            Element.Title
+        })
+    
+        Element.Border = New("UIStroke", {
+            Thickness = 1.8,
+            Transparency = 1,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            Color = Color3.fromRGB(99, 75, 172),
+            ThemeTag = {
+                Color = "ElementBorder"
+            }
+        })
+    
+        Element.Root = New("Frame", {
+            Size = UDim2.new(1, 0, 0, 36),
+            Parent = Parent,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            ThemeTag = {
+                BackgroundColor3 = "Element",
+                BackgroundTransparency = "ElementTransparency"
+            }
+        }, {
+            Element.Border,
+            Element.LabelHolder,
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 5)
+            })
+        })
+    
+        function Element:SetTitle(Text)
+            Element.Title.Text = Text
+        end
+    
+        function Element:Destroy()
+            Element.Root:Destroy()
+        end
+    
+        Element:SetTitle(Title)
+    
+        if Hover then
+            Element.Button = New("TextButton", {
+                Text = "",
+                AnchorPoint = Vector2.new(0, 0),
+                Size = UDim2.new(1, 0, 1, 0),
+                Position = UDim2.new(0, 0, 0, 0),
+                BackgroundTransparency = 1,
+                Parent = Element.Root
+            })
+    
+            Element.SoundHover = New("Sound", {
+                ThemeTag = {
+                    SoundId = "ElementSoundHoverId",
+                    Volume = "ElementSoundHoverVolume"
+                }
+            })
+    
+            Element.SoundClick = New("Sound", {
+                ThemeTag = {
+                    SoundId = "ElementSoundClickId",
+                    Volume = "ElementSoundClickVolume"
+                }
+            })
+    
+            Element.Fade = New("Frame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                Parent = Element.Root,
+                ThemeTag = {
+                    BackgroundColor3 = "ElementFade"
+                }
+            }, {
+                Element.SoundHover,
+                Element.SoundClick,
+                New("UICorner", {
+                    CornerRadius = UDim.new(0, 5)
+                }),
+                New("UIGradient", {
+                    Rotation = -90,
+                    Transparency = NumberSequence.new({
+                        NumberSequenceKeypoint.new(0, 0.5),
+                        NumberSequenceKeypoint.new(1, 1)
+                    }),
+                    Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255))
+                })
+            })
+    
+            AddSignal(Element.Root.MouseEnter, function()
+                Element.Hoving = true
+                Tween.Plays(Element, {
+                    Fade = { Props = { BackgroundTransparency = 0.9 } },
+                    Border = { Props = { Transparency = 0 } }
+                }, { EasingStyle = "Quad" })
+                Element.SoundHover:Play()
+            end)
+    
+            AddSignal(Element.Root.MouseLeave, function()
+                Element.Hoving = false
+                Tween.Plays(Element, {
+                    Fade = { Props = { BackgroundTransparency = 1 } },
+                    Border = { Props = { Transparency = 1 }, Condition = Element.Condition }
+                }, { EasingStyle = "Quad" })
+            end)
+        end
+        return Element
+    end
+end
+
+local v2 = Instance.new('ModuleScript', v6)
+v2.Name = "notification"
+Modules[v2] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    local Notification = {}
+    
+    function Notification:Init(GUI)
+        Notification.Holder = New("Frame", {
+            Position = UDim2.new(1, -Pick(30, 10), 0, Pick(86, 48)),
+            Size = UDim2.new(0, Pick(190, 170), 1, -Pick(86, 48)),
+            AnchorPoint = Vector2.new(1, 0),
+            BackgroundTransparency = 1,
+            ZIndex = 2,
+            Parent = GUI,
+        }, {
+            New("UIListLayout", {
+                Padding = UDim.new(0, 5),
+                HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                SortOrder = Enum.SortOrder.LayoutOrder
+            })
+        })
+    end
+    
+    function Notification:UpdateLayout()
+        if not Notification.Holder then return end
+        Notification.Holder.Position = UDim2.new(1, -Pick(30, 10), 0, Pick(86, 48))
+        Notification.Holder.Size = UDim2.new(0, Pick(190, 170), 1, -Pick(86, 48))
+    end
+
+    function Notification:New(Config)
+        Config.Indicator = Config.Indicator or {}
+        Config.Duration = Config.Duration or 5
+    
+        local NewNotification = {
+            Closed = false,
+            Connection = nil
+        }
+    
+        NewNotification.Title = New("TextLabel", {
+            TextSize = Pick(16, 13),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            FontFace = Font.new([[rbxassetid://11702779409]], Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+            BackgroundTransparency = 1,
+            Text = Config.Title or "Notification",
+            LayoutOrder = 1,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(0, Pick(134, 112), 0, Pick(31, 24)),
+            TextTransparency = 1,
+            MaxVisibleGraphemes = 0,
+            RichText = true,
+            TextWrapped = true,
+            ThemeTag = { TextColor3 = "NotificationTitle" }
+        }, {
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, 0),
+                PaddingRight = UDim.new(0, 10),
+                PaddingTop = UDim.new(0, 0),
+                PaddingBottom = UDim.new(0, Pick(15, 10))
+            })
+        })
+    
+        NewNotification.LabelHolder = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            AnchorPoint = Vector2.new(0, 0),
+            AutomaticSize = Enum.AutomaticSize.XY,
+            Size = UDim2.new(0, 0, 0, 0),
+            Position = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1,
+            LayoutOrder = 2
+        }, {
+            NewNotification.Title,
+            New("UIListLayout", {
+                Padding = UDim.new(0, 0),
+                SortOrder = Enum.SortOrder.LayoutOrder
+            }),
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, Pick(12, 10)),
+                PaddingRight = UDim.new(0, 0),
+                PaddingTop = UDim.new(0, Pick(16, 10)),
+                PaddingBottom = UDim.new(0, 0)
+            })
+        })
+    
+        NewNotification.Indicator = New("Frame", {
+            BackgroundColor3 = Config.Indicator.Color or Color3.fromRGB(42, 38, 9),
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, Pick(44, 36), 0, Pick(47, 36)),
+            LayoutOrder = 1
+        }, {
+            New("UICorner", {
+                TopLeftRadius = UDim.new(0, 6),
+                BottomLeftRadius = UDim.new(0, 6),
+                TopRightRadius = UDim.new(0, 0),
+                BottomRightRadius = UDim.new(0, 0)
+            }),
+            New("ImageLabel", {
+                Image = Config.Indicator.Icon or "rbxassetid://10723374276",
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                ImageColor3 = Config.Indicator.IconColor or Color3.fromRGB(255, 228, 55),
+                ImageTransparency = 1,
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Size = UDim2.new(0, Pick(18, 14), 0, Pick(18, 14)),
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0.5, 0, 0.5, 0)
+            })
+        })
+    
+        NewNotification.Indicator.Visible = Config.Indicator.Enabled or false
+    
+        NewNotification.Flash = New("Frame", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 0, 0, 0),
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BackgroundTransparency = 0.8,
+            ZIndex = 2
+        }, {
+            New("UICorner", { CornerRadius = UDim.new(0, 6) })
+        })
+    
+        NewNotification.Root = New("Frame", {
+            AnchorPoint = Vector2.new(0, 0),
+            AutomaticSize = Enum.AutomaticSize.XY,
+            Size = UDim2.new(0, 0, 0, Pick(48, 38)),
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 0, 0, 0),
+            ThemeTag = { BackgroundColor3 = "Notification" }
+        }, {
+            NewNotification.LabelHolder,
+            NewNotification.Indicator,
+            New("UICorner", { CornerRadius = UDim.new(0, 6) }),
+            New("UIListLayout", {
+                Padding = UDim.new(0, 0),
+                FillDirection = Enum.FillDirection.Horizontal,
+                SortOrder = Enum.SortOrder.LayoutOrder
+            }),
+            New("UIStroke", {
+                Thickness = 0.7,
+                Transparency = 1,
+                ThemeTag = { Color = "NotificationBorder" }
+            })
+        })
+    
+        NewNotification.Holder = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.new(0, 0, 0, Pick(48, 38)),
+            AutomaticSize = Enum.AutomaticSize.XY,
+            BackgroundTransparency = 1,
+            Parent = Notification.Holder,
+        }, {
+            NewNotification.Flash,
+            NewNotification.Root
+        })
+    
+        local LastHeight = 0
+        NewNotification.Connection = AddSignal(NewNotification.LabelHolder:GetPropertyChangedSignal("AbsoluteSize"),
+            function()
+                local CurrentSize = NewNotification.LabelHolder.AbsoluteSize
+                if CurrentSize.Y > 0 and CurrentSize.Y ~= LastHeight then
+                    LastHeight = CurrentSize.Y
+                    NewNotification.Indicator.Size = UDim2.new(0, Pick(44, 36), 0, CurrentSize.Y)
+                end
+            end)
+    
+        function NewNotification:Open()
+            task.spawn(function()
+                local TextLength = #NewNotification.Title.Text
+                game:GetService("TweenService"):Create(NewNotification.Title,
+                    TweenInfo.new(
+                        tonumber(string.format("%.2f", TextLength * 0.03)),
+                        Enum.EasingStyle.Linear,
+                        Enum.EasingDirection.Out
+                    ),
+                    { MaxVisibleGraphemes = TextLength }
+                ):Play()
+    
+                Tween.Plays(NewNotification, {
+                    Indicator = { "ImageLabel" },
+                    Flash = {
+                        Props = { BackgroundTransparency = 1 },
+                        Preset = { Duration = 3 }
+                    },
+                    Root = {
+                        UIStroke = { Props = { Transparency = 0.85 } }
+                    },
+                    "Title"
+                }, { Transparency = 0 }, { Duration = 0.5 })
+            end)
+        end
+    
+        function NewNotification:Close()
+            if NewNotification.Closed then return end
+            NewNotification.Closed = true
+    
+            task.spawn(function()
+                if NewNotification.Connection then
+                    NewNotification.Connection:Disconnect()
+                    NewNotification.Connection = nil
+                end
+    
+                local CloseTween = Tween.Plays(NewNotification, {
+                    Indicator = { "ImageLabel" },
+                    Root = { "UIStroke" },
+                    "Title"
+                }, { Transparency = 1 }, { Duration = 0.3, EasingStyle = "Quad" })
+    
+                task.wait(0.3)
+                NewNotification.Holder:Destroy()
+            end)
+        end
+    
+        task.spawn(function()
+            NewNotification:Open()
+            task.wait(Config.Duration)
+            NewNotification:Close()
+        end)
+    
+        return NewNotification
+    end
+    
+    return Notification
+end
+
+local v3 = Instance.new('ModuleScript', v6)
+v3.Name = "tab"
+Modules[v3] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+
+    -- height of the page title strip (also used for scroll-spy offsets)
+    local function HeaderHeight()
+        return Pick(70, 48)
+    end
+    
+    local TabModule = {
+        Window = nil,
+        SelectedTab = 1,
+        Tabs = {},
+        Containers = {},
+        Limits = {},
+        IsAutoScrolling = false,
+        TotalTabs = 0
+    }
+    
+    local function IsPageRendered(PageRoot)
+        return PageRoot and PageRoot.AbsoluteSize.Y > 0
+    end
+    
+    function TabModule:New(Title, Icon, Parent)
+        local Library = require(script.Parent.Parent)
+    
+        local Window = TabModule.Window
+        local Elements = Library.Elements
+    
+        TabModule.TotalTabs = TabModule.TotalTabs + 1
+    
+        local Tab = {
+            Selected = TabModule.TotalTabs == 1,
+            Name = Title,
+            Index = TabModule.TotalTabs,
+            Type = "Tab",
+            Navigation = {},
+            Page = {}
+        }
+    
+        local CheckedIcon = Library:GetIcon(Icon) or Icon
+        if CheckedIcon == "" or CheckedIcon == nil then
+            CheckedIcon = nil
+        end
+    
+        local Navigation = Tab.Navigation
+        local TabIndex = Tab.Index
+    
+        Navigation.Button = New("TextButton", {
+            Text = "",
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(0, 0),
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(1, 0, 1, 0)
+        })
+    
+        Navigation.Indicator = New("Frame", {
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, Pick(10, 6), 0.5, 0),
+            Size = UDim2.new(0, 1, 0, 14),
+            ThemeTag = { BackgroundColor3 = "Indicator" }
+        }, {
+            New("UICorner", { CornerRadius = UDim.new(0, 10) }),
+            New("UIStroke", { Thickness = 0.8, Transparency = 1, ThemeTag = { Color = "Indicator" } })
+        })
+    
+        Navigation.Scaller = New("UIScale", { Scale = 1 })
+    
+        Navigation.Icon = New("ImageLabel", {
+            Image = CheckedIcon or "",
+            ImageTransparency = 0,
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, Pick(25, 16), 0.5, 0),
+            Size = UDim2.new(0, Pick(20, 16), 0, Pick(20, 16)),
+            Visible = CheckedIcon and true or false,
+            ThemeTag = { ImageColor3 = "TabNotSelected" }
+        })
+    
+        local TextPosition = CheckedIcon and Pick(60, 38) or Pick(25, 16)
+    
+        Navigation.Title = New("TextLabel", {
+            Text = Title,
+            FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+            TextSize = Pick(16, 13),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, TextPosition, 0.5, 0),
+            Size = UDim2.new(1, -TextPosition - Pick(10, 6), 1, 0),
+            ThemeTag = { TextColor3 = "TabNotSelected" }
+        })
+    
+        Navigation.Flash = New("Frame", {
+            BackgroundTransparency = 1,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            Size = UDim2.new(1, 0, 1, 0)
+        }, {
+            New("UICorner", { CornerRadius = UDim.new(0, 4) })
+        })
+    
+        Navigation.Insider = New("Frame", {
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            Size = UDim2.new(1, 0, 1, 0),
+            ThemeTag = { BackgroundColor3 = "TabHover" }
+        }, {
+            Navigation.Title,
+            Navigation.Button,
+            Navigation.Indicator,
+            Navigation.Icon,
+            Navigation.Flash,
+            Navigation.Scaller,
+            New("UICorner", { CornerRadius = UDim.new(0, 4) })
+        })
+    
+        Navigation.SoundHover = New("Sound", { ThemeTag = { SoundId = "TabSoundHoverId", Volume = "TabSoundHoverVolume" } })
+        Navigation.SoundClick = New("Sound", { ThemeTag = { SoundId = "TabSoundClickId", Volume = "TabSoundClickVolume" } })
+    
+        Navigation.Root = New("Frame", {
+            BackgroundTransparency = 1,
+            Parent = Parent,
+            Size = UDim2.new(1, 0, 0, Pick(36, 34))
+        }, {
+            Navigation.Insider,
+            Navigation.SoundHover,
+            Navigation.SoundClick,
+        })
+    
+        AddSignal(Navigation.Insider.MouseEnter, function()
+            Tween.Play(Navigation.Insider, { Transparency = 0 })
+            Navigation.SoundHover:Play()
+        end)
+    
+        AddSignal(Navigation.Insider.MouseLeave, function()
+            Tween.Play(Navigation.Insider, { Transparency = 1 })
+        end)
+    
+        local NavButton = Navigation.Button
+        local NavScaller = Navigation.Scaller
+        local NavFlash = Navigation.Flash
+        local SoundClick = Navigation.SoundClick
+    
+        AddSignal(NavButton.InputBegan, function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            local StartTime = os.clock()
+    
+            Tween.Play(NavScaller, { Scale = 0.92 }, { Duration = 2, EasingStyle = "Quad" })
+    
+            input.Changed:Wait()
+            if input.UserInputState ~= Enum.UserInputState.End then return end
+    
+            local MousePos = input.Position
+            local ButtonPos = NavButton.AbsolutePosition
+            local ButtonSize = NavButton.AbsoluteSize
+    
+            local IsInside = (MousePos.X >= ButtonPos.X and MousePos.X <= ButtonPos.X + ButtonSize.X) and
+                (MousePos.Y >= ButtonPos.Y and MousePos.Y <= ButtonPos.Y + ButtonSize.Y)
+    
+            local ClickTime = os.clock() - StartTime
+            local TargetScale = (ClickTime >= 0.2) and 1.1 or 1.04
+            Tween.Play(NavScaller, { Scale = TargetScale }, { Duration = 0.2, EasingStyle = "Quad" })
+    
+            if IsInside then
+                SoundClick:Play()
+    
+                TabModule.IsAutoScrolling = true
+                TabModule:SelectTab(TabIndex)
+    
+                NavFlash.BackgroundTransparency = 0.8
+                Tween.Play(NavFlash, { Transparency = 1 }, { Duration = 0.3, EasingStyle = "Quad" })
+    
+                task.wait(0.1)
+            end
+    
+            Tween.Play(NavScaller, { Scale = 1 }, { Duration = 0.1, EasingStyle = "Quad" })
+        end)
+    
+        local Page = Tab.Page
+    
+        Page.Title = New("TextLabel", {
+            TextSize = Pick(30, 22),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            FontFace = Font.new([[rbxassetid://11702779409]], Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(0, 1),
+            Text = Title,
+            AutomaticSize = Enum.AutomaticSize.XY,
+            Position = UDim2.new(0, 0, 1, Pick(-10, -6))
+        })
+    
+        Page.Header = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.new(1, 0, 0, HeaderHeight()),
+            Position = UDim2.new(0, 0, 0, 2),
+            BorderColor3 = Color3.fromRGB(0, 0, 0),
+            LayoutOrder = 1,
+            BackgroundTransparency = 1
+        }, {
+            Page.Title,
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, Pick(15, 10)),
+                PaddingRight = UDim.new(0, Pick(15, 10)),
+                PaddingTop = UDim.new(0, 0),
+                PaddingBottom = UDim.new(0, 0),
+            })
+        })
+    
+        Page.Container = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 0),
+            Position = UDim2.new(0, 0, 0, HeaderHeight()),
+            LayoutOrder = 2,
+            BackgroundTransparency = 1
+        }, {
+            New("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, Pick(17, 12)),
+                PaddingRight = UDim.new(0, Pick(15, 10)),
+                PaddingTop = UDim.new(0, 0),
+                PaddingBottom = UDim.new(0, Pick(32, 20)),
+            })
+        })
+    
+        Page.Fade = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 0.8
+        })
+    
+        Page.Button = New("TextButton", {
+            TextSize = 14,
+            TextColor3 = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            FontFace = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular,
+                Enum.FontStyle.Normal),
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = ""
+        })
+    
+        Page.Root = New("Frame", {
+            Size = UDim2.new(1, 0, 0, 90),
+            BackgroundColor3 = Color3.fromRGB(49, 47, 57),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Parent = Window.ContainerHolder
+        }, {
+            Page.Header, Page.Container, Page.Fade, Page.Button,
+            New("Frame", { BackgroundColor3 = Color3.fromRGB(24, 23, 28), Size = UDim2.new(1, 0, 0, 2) })
+        })
+    
+        local PageFade = Page.Fade
+        local PageButton = Page.Button
+    
+        AddSignal(PageFade.MouseEnter, function()
+            if Tab.Selected then return end
+            Tween.Play(PageFade, { Transparency = 0.9 }, { Duration = 0.2, EasingStyle = "Quad" })
+        end)
+    
+        AddSignal(PageFade.MouseLeave, function()
+            if Tab.Selected then return end
+            Tween.Play(PageFade, { Transparency = 0.8 }, { Duration = 0.2, EasingStyle = "Quad" })
+        end)
+    
+        AddSignal(PageButton.Activated, function()
+            TabModule.IsAutoScrolling = true
+            TabModule:SelectTab(TabIndex)
+        end)
+    
+        if Tab.Selected then
+            Tween.Plays(Tab.Navigation, {
+                Indicator = {
+                    Props = { Size = UDim2.new(0, 1, 0, 14), BackgroundTransparency = 0 },
+                    UIStroke = { Props = { Thickness = 0.8, Transparency = 0 } }
+                },
+                Title = { Props = { TextColor3 = Creator.GetThemeProperty("TabSelected") }, Preset = { Duration = 0.1 } },
+                Icon = { Props = { ImageColor3 = Creator.GetThemeProperty("TabSelected") }, Preset = { Duration = 0.1 } }
+            }, { Duration = 0.2, EasingStyle = "Quad" })
+            Tab.Page.Fade.Transparency = 1
+            Tab.Page.Button.Visible = false
+        end
+        TabModule.Containers[TabIndex] = Page.Container
+        TabModule.Tabs[TabIndex] = Tab
+        TabModule.Limits[TabIndex] = Page.Root
+    
+        Tab.Container = Page.Container
+        setmetatable(Tab, Elements)
+        return Tab
+    end
+    
+    function TabModule:SelectTab(Index)
+        local Window = TabModule.Window
+        local OldActiveIndex = TabModule.SelectedTab
+    
+        local Tab = TabModule.Tabs[Index]
+        task.spawn(function()
+            if not TabModule.IsAutoScrolling then return end
+            local CurrentCanvasY = Window.ContainerHolder.CanvasPosition.Y
+            local RelativeY = Tab.Page.Root.AbsolutePosition.Y - Window.ContainerHolder.AbsolutePosition.Y
+            local TargetY = CurrentCanvasY + RelativeY - HeaderHeight()
+    
+            local ContainerTween = Tween.Play(Window.ContainerHolder, {
+                CanvasPosition = Vector2.new(0, math.max(0, TargetY))
+            }, { Duration = 0.5 })
+    
+            ContainerTween.Completed:Wait()
+            TabModule.IsAutoScrolling = false
+        end)
+    
+    
+        if OldActiveIndex == Index then return end
+    
+        if OldActiveIndex and OldActiveIndex ~= Index then
+            local SelectedTab = TabModule.Tabs[OldActiveIndex]
+            if SelectedTab then
+                Tween.Plays(SelectedTab.Navigation, {
+                    Indicator = {
+                        Props = { Size = UDim2.new(0, 1, 0, 0), Transparency = 1 },
+                        UIStroke = { Props = { Thickness = 0, Transparency = 1 } }
+                    },
+                    Title = { Props = { TextColor3 = Creator.GetThemeProperty("TabNotSelected") }, Preset = { Duration = 0.1 } },
+                    Icon = { Props = { ImageColor3 = Creator.GetThemeProperty("TabNotSelected") }, Preset = { Duration = 0.1 } }
+                }, { Duration = 0.2, EasingStyle = "Quad" })
+                SelectedTab.Page.Button.Visible = true
+                Tween.Play(SelectedTab.Page.Fade, { Transparency = 0.8 }, { Duration = 0.2, EasingStyle = "Quad" })
+                SelectedTab.Selected = false
+            end
+        end
+    
+        Tween.Plays(Tab.Navigation, {
+            Indicator = {
+                Props = { Size = UDim2.new(0, 1, 0, 14), BackgroundTransparency = 0 },
+                UIStroke = { Props = { Thickness = 0.8, Transparency = 0 } }
+            },
+            Title = { Props = { TextColor3 = Creator.GetThemeProperty("TabSelected") }, Preset = { Duration = 0.1 } },
+            Icon = { Props = { ImageColor3 = Creator.GetThemeProperty("TabSelected") }, Preset = { Duration = 0.1 } }
+        }, { Duration = 0.2, EasingStyle = "Quad" })
+    
+        TabModule.SelectedTab = Index
+        Tween.Play(Tab.Page.Fade, { Transparency = 1 }, { Duration = 0.2, EasingStyle = "Quad" })
+        Tab.Page.Button.Visible = false
+    
+        Tab.Selected = true
+        return Tab
+    end
+    
+    function TabModule:Init(Window)
+        TabModule.Window = Window
+    
+        local UpdateTabOnScroll = function()
+            if TabModule.IsAutoScrolling then return end
+    
+            local Container = Window.ContainerHolder
+            local CurrentY = Container.CanvasPosition.Y
+            local HolderY = Container.AbsolutePosition.Y
+            local ScrollThreshold = CurrentY + HeaderHeight() + 5
+    
+            for Index = 1, TabModule.TotalTabs do
+                local PageRoot = TabModule.Limits[Index]
+    
+                if IsPageRendered(PageRoot) then
+                    local PageTop = CurrentY + (PageRoot.AbsolutePosition.Y - HolderY) - HeaderHeight()
+                    local PageBottom = PageTop + PageRoot.AbsoluteSize.Y
+    
+                    if ScrollThreshold >= PageTop and ScrollThreshold < PageBottom then
+                        if TabModule.SelectedTab ~= Index then
+                            TabModule:SelectTab(Index)
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    
+        AddSignal(Window.ContainerHolder:GetPropertyChangedSignal("CanvasPosition"), UpdateTabOnScroll)
+        return TabModule
+    end
+    
+    return TabModule
+end
+
+local v4 = Instance.new('ModuleScript', v6)
+v4.Name = "top"
+Modules[v4] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    return function(Config)
+        local Top = {}
+    
+        Top.Button = New("TextButton", {
+            Text = "",
+            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1,
+        })
+    
+        Top.User = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            AnchorPoint = Vector2.new(1, 0),
+            AutomaticSize = Enum.AutomaticSize.X,
+            Size = UDim2.new(0, 0, 1, 0),
+            Position = UDim2.new(1, -Pick(18, 10), 0, 0),
+            BackgroundTransparency = 1
+        }, {
+            New("TextLabel", {
+                TextSize = Pick(14, 12),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                TextColor3 = Color3.fromRGB(255, 255, 255),
+                BackgroundTransparency = 1,
+                AnchorPoint = Vector2.new(0, 0.5),
+                Text = Config.User.Name,
+                AutomaticSize = Enum.AutomaticSize.XY,
+                Position = UDim2.new(0, Pick(30, 24), 0.5, -1)
+            }),
+            New("ImageLabel", {
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Image = Config.User.Icon or "rbxassetid://138895252616906",
+                Size = UDim2.new(0, Pick(25, 20), 0, Pick(25, 20)),
+                BorderColor3 = Color3.fromRGB(0, 0, 0),
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, 0, 0.5, 0)
+            })
+        })
+    
+        local HasLogo = Config.Logo ~= nil and Config.Logo ~= ""
+        local TextWidth = HasLogo and Pick(54, 38) or Pick(12, 10)
+    
+        Top.Root = New("Frame", {
+            Size = UDim2.new(1, 0, 0, Pick(58, 40)),
+            Parent = Config.Parent,
+            ThemeTag = {
+                BackgroundColor3 = "Top",
+                BackgroundTransparency = "TopTransparency",
+            }
+        }, {
+            Top.Button,
+            Top.User,
+            New("Frame", {
+                Size = UDim2.new(0, 200, 1, 0),
+                Position = UDim2.new(0, 0, 0, 0),
+                BackgroundTransparency = 1,
+                AutomaticSize = Enum.AutomaticSize.X,
+            }, {
+                New("ImageLabel", {
+                    Size = UDim2.new(0, Pick(30, 24), 0, Pick(30, 24)),
+                    AnchorPoint = Vector2.new(0, 0.5),
+                    Position = UDim2.new(0, Pick(12, 8), 0.5, 0),
+                    Image = HasLogo and Config.Icon or "",
+                }),
+                New("TextLabel", {
+                    Text = Config.Title,
+                    FontFace = Font.new("rbxassetid://12187376910", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+                    BackgroundTransparency = 1,
+                    TextSize = Pick(20, 15),
+                    AnchorPoint = Vector2.new(0, 0),
+                    Position = UDim2.new(0, TextWidth, 0, Pick(11, 4)),
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    ThemeTag = {
+                        TextColor3 = "TopTitle"
+                    }
+                }),
+                New("TextLabel", {
+                    Text = Config.Description,
+                    BackgroundTransparency = 1,
+                    FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                    TextSize = Pick(14, 11),
+                    AnchorPoint = Vector2.new(0, 0),
+                    Position = UDim2.new(0, TextWidth, 0, Pick(29, 21)),
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    ThemeTag = {
+                        TextColor3 = "TopDescription"
+                    }
+                })
+            })
+        })
+    
+    
+        AddSignal(Top.Button.Activated, function()
+            Config.Window:ToggleVisibility()
+        end)
+    
+        AddSignal(Top.Root.MouseEnter, function()
+            Tween.Play(Top.Root, { BackgroundTransparency = Creator.GetThemeProperty("TopHoverTransparency") }, { Duration = 0.2 })
+        end)
+    
+        AddSignal(Top.Root.MouseLeave, function()
+            Tween.Play(Top.Root, { BackgroundTransparency = Creator.GetThemeProperty("TopTransparency") }, { Duration = 0.2 })
+        end)
+        return Top
+    end
+end
+
+local v5 = Instance.new('ModuleScript', v6)
+v5.Name = "window"
+Modules[v5] = function(script, require)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    return function(Config)
+
+        -- Sidebar / content widths. On mobile the sidebar is narrow and the content
+        -- panel is clamped to what is left of the screen.
+        local function GetWidths()
+            local Viewport = Creator.GetViewport()
+            local Sidebar = Config.TabWidth or 200
+            local Container = Config.ContainerWidth or 400
+
+            if Creator.IsMobile() then
+                local Auto = math.max(96, math.min(150, math.floor(Viewport.X * 0.17)))
+                Sidebar = math.min(Sidebar, Auto)
+            end
+
+            Container = math.min(Container, math.max(Viewport.X - Sidebar, 200))
+            return Sidebar, Container
+        end
+
+        local SidebarWidth, ContainerWidth = GetWidths()
+
+        local Window = {
+            State = false,
+            TabWidth = ContainerWidth,
+            SidebarWidth = SidebarWidth,
+            Keybind = Config.Keybind
+        }
+    
+        Window.TabHolder = New("ScrollingFrame", {
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            ElasticBehavior = Enum.ElasticBehavior.Always,
+            ScrollBarThickness = 0,
+            ClipsDescendants = false,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.new(1, -Pick(15, 10), 1, -Pick(15, 10)),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+        }, {
+            New("UIListLayout", {
+                Padding = UDim.new(0, Pick(8, 4)),
+                SortOrder = Enum.SortOrder.LayoutOrder
+            })
+        })
+    
+        Window.Sidebar = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(37, 36, 44),
+            ClipsDescendants = true,
+            Size = UDim2.new(0, SidebarWidth, 1, 0),
+            Position = UDim2.new(0, -Window.SidebarWidth, 0, 0),
+        }, {
+            Window.TabHolder
+        })
+    
+        Window.Fade = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(1, 1, 1),
+            BackgroundTransparency = 0.1,
+            Size = UDim2.new(1, 0, 0, Pick(60, 40)),
+            ThemeTag = {
+                BackgroundColor3  = "ContainerFade"
+            }
+        }, {
+            New("UIGradient", {
+                Rotation = 90,
+                Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0),
+                    NumberSequenceKeypoint.new(1, 1)
+                }),
+                Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255))
+            })
+        })
+    
+        Window.Footer = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(50, 48, 58),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, Pick(82, 60)),
+            LayoutOrder = 1
+        }, {
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, Pick(15, 10)),
+                PaddingRight = UDim.new(0, Pick(15, 10)),
+                PaddingTop = UDim.new(0, Pick(24, 14)),
+                PaddingBottom = UDim.new(0, Pick(24, 14))
+            }),
+            New("UIListLayout", {
+                SortOrder = Enum.SortOrder.LayoutOrder
+            }),
+            New("TextLabel", {
+                TextWrapped = true,
+                TextSize = Pick(18, 15),
+                TextYAlignment = Enum.TextYAlignment.Top,
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                FontFace = Font.new([[rbxassetid://11702779409]], Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                TextColor3 = Color3.fromRGB(255, 255, 255),
+                BackgroundTransparency = 1,
+                RichText = true,
+                Size = UDim2.new(1, 0, 0, 0),
+                Text = Config.Footer.Title,
+                LayoutOrder = 0,
+                AutomaticSize = Enum.AutomaticSize.Y
+            }),
+            New("TextLabel", {
+                TextWrapped = true,
+                TextSize = Pick(16, 13),
+                TextYAlignment = Enum.TextYAlignment.Top,
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                FontFace = Font.new([[rbxassetid://11702779409]], Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+                TextColor3 = Color3.fromRGB(255, 255, 255),
+                BackgroundTransparency = 1,
+                RichText = true,
+                Size = UDim2.new(1, 0, 0, 0),
+                BorderColor3 = Color3.fromRGB(0, 0, 0),
+                Text = Config.Footer.Description,
+                LayoutOrder = 1,
+                AutomaticSize = Enum.AutomaticSize.Y,
+            })
+        })
+    
+        Window.Header = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 80),
+            BackgroundTransparency = 1,
+            LayoutOrder = 0,
+        }, {
+            New("UIListLayout", {
+                Padding = UDim.new(0, 0),
+                SortOrder = Enum.SortOrder.LayoutOrder
+            }),
+            New("TextLabel", {
+                TextSize = Pick(40, 26),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                FontFace = Font.new([[rbxassetid://11702779409]], Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                BackgroundTransparency = 1,
+                Text = Config.Header.Title or "settings",
+                AutomaticSize = Enum.AutomaticSize.Y,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top,
+                TextWrapped = true,
+                Size = UDim2.new(1, 0, 0, 0),
+                ThemeTag = {
+                    TextColor3 = "HeaderTitle"
+                },
+                LayoutOrder = 0
+            }),
+            New("TextLabel", {
+                TextSize = Pick(20, 14),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                FontFace = Font.new([[rbxassetid://11702779409]], Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+                BackgroundTransparency = 1,
+                Text = Config.Header.Description or "change the way Everforest behaves",
+                TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top,
+                AutomaticSize = Enum.AutomaticSize.Y,
+                Size = UDim2.new(1, 0, 0, 0),
+                ThemeTag = {
+                    TextColor3 = "HeaderDescription"
+                },
+                LayoutOrder = 1
+            }),
+            New("UIPadding", {
+                PaddingBottom = UDim.new(0, Pick(15, 8)),
+                PaddingLeft = UDim.new(0, Pick(15, 10)),
+                PaddingRight = UDim.new(0, Pick(15, 10)),
+                PaddingTop = UDim.new(0, Pick(30, 14)),
+            })
+        })
+    
+        if Config.Header.SearchBar and Config.Header.SearchBar.Enabled then
+            Window.SearchBox = New("TextBox", {
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextSize = Pick(18, 15),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                FontFace = Font.new([[rbxassetid://11702779409]], Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                AutomaticSize = Enum.AutomaticSize.Y,
+                AnchorPoint = Vector2.new(0, 0.5),
+                PlaceholderText = Config.Header.SearchBar.PlaceholderText or "type to search",
+                Size = UDim2.new(1, -Pick(50, 40), 0, 0),
+                Position = UDim2.new(0, 12, 0.5, 0),
+                Text = "",
+                ClipsDescendants = true,
+                BackgroundTransparency = 1,
+                ThemeTag = {
+                    PlaceholderColor3 = "SearchBoxPlaceholder",
+                    TextColor3 = "SearchBoxText"
+                }
+            })
+    
+            Window.SearchBar = New("Frame", {
+                BackgroundColor3 = Color3.fromRGB(37, 35, 43),
+                AnchorPoint = Vector2.new(0.5, 1),
+                Size = UDim2.new(1, 0, 0, Pick(40, 34)),
+                Position = UDim2.new(0.5, 0, 1, -4),
+                BorderColor3 = Color3.fromRGB(0, 0, 0),
+            }, {
+                Window.SearchBox,
+                New("ImageLabel", {
+                    BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                    AnchorPoint = Vector2.new(1, 0.5),
+                    Image = Config.Header.SearchBar.Icon or "rbxassetid://89922969033534",
+                    Size = UDim2.new(0, Pick(28, 22), 0, Pick(28, 22)),
+                    BorderColor3 = Color3.fromRGB(0, 0, 0),
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(1, -6, 0.5, 0)
+                }),
+                New("UICorner", {
+                    CornerRadius = UDim.new(0, 6)
+                })
+            })
+    
+            Window.Wrapper = New("Frame", {
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                LayoutOrder = 2,
+                Parent = Window.Header,
+                Size = UDim2.new(1, 0, 0, Pick(70, 46)),
+            }, {
+                Window.SearchBar
+            })
+        end
+    
+        Window.ContainerHolder = New("ScrollingFrame", {
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            ElasticBehavior = Enum.ElasticBehavior.Always,
+            ScrollBarThickness = 0,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            ClipsDescendants = false,
+            Size = UDim2.new(1, 0, 1, 0),
+            ZIndex = 0,
+        }, {
+            New("UIListLayout", {
+                Padding = UDim.new(0, 0),
+                SortOrder = Enum.SortOrder.LayoutOrder
+            }),
+            Window.Header,
+            Window.Footer
+        })
+    
+        Window.TabContainer = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(49, 47, 57),
+            ClipsDescendants = true,
+            Size = UDim2.new(0, ContainerWidth, 1, 0),
+            Position = UDim2.new(0, -Window.SidebarWidth - Window.TabWidth, 0, 0),
+        }, {
+            Window.Fade,
+            Window.ContainerHolder
+        })
+    
+        Window.Root = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 0, 0, 0),
+            Parent = Config.Parent,
+        })
+    
+        Window.Top = require(script.Parent.top)({
+            Title = Config.Top.Title,
+            Description = Config.Top.Description,
+            Icon = Config.Top.Logo,
+            User = Config.Top.User,
+            Parent = Window.Root,
+            Window = Window
+        })
+    
+        Window.Main = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, -Window.Top.Root.Size.Y.Offset),
+            Position = UDim2.new(0, 0, 0, Window.Top.Root.Size.Y.Offset),
+            Parent = Window.Root,
+            BackgroundColor3 = Color3.new(0, 0, 0)
+        }, {
+            Window.Sidebar,
+            Window.TabContainer,
+        })
+    
+        function Window:Destroy()
+            Window.Root:Destroy()
+        end
+    
+        local TabModule = require(script.Parent.tab):Init(Window)
+        function Window:AddTab(TabConfig)
+            return TabModule:New(TabConfig.Title, TabConfig.Icon, Window.TabHolder)
+        end
+    
+        function Window:SelectTab(Tab)
+            TabModule:SelectTab(Tab)
+        end
+    
+        Window.SidebarWidth = Window.Sidebar.Size.X.Offset
+        Window.TabWidth = Window.TabContainer.Size.X.Offset
+
+        -- Re-compute widths (screen rotation / resize)
+        function Window:UpdateLayout()
+            local Sidebar, Container = GetWidths()
+            Window.SidebarWidth = Sidebar
+            Window.TabWidth = Container
+
+            Window.Sidebar.Size = UDim2.new(0, Sidebar, 1, 0)
+            Window.TabContainer.Size = UDim2.new(0, Container, 1, 0)
+
+            if Window.State then
+                Window.Sidebar.Position = UDim2.new(0, 0, 0, 0)
+                Window.TabContainer.Position = UDim2.new(0, Sidebar, 0, 0)
+            else
+                Window.Sidebar.Position = UDim2.new(0, -Sidebar, 0, 0)
+                Window.TabContainer.Position = UDim2.new(0, -Sidebar - Container, 0, 0)
+            end
+        end
+
+        local Camera = game:GetService("Workspace").CurrentCamera
+        if Camera then
+            AddSignal(Camera:GetPropertyChangedSignal("ViewportSize"), function()
+                Window:UpdateLayout()
+            end)
+        end
+    
+        function Window:ToggleVisibility()
+            self.State = not self.State
+            if self.State then
+                Tween.Plays(Window, {
+                    Main = { Props = { BackgroundTransparency = 0.5 } },
+                    Sidebar = { Props = { Position = UDim2.new(0, 0, 0, 0) } },
+                    TabContainer = { Props = { Position = UDim2.new(0, Window.SidebarWidth, 0, 0) } }
+                }, {}, { Duration = 0.5 })
+            else
+                Tween.Plays(Window, {
+                    Main = { Props = { BackgroundTransparency = 1 } },
+                    Sidebar = { Props = { Position = UDim2.new(0, -Window.SidebarWidth, 0, 0) } },
+                    TabContainer = { Props = { Position = UDim2.new(0, -Window.SidebarWidth - Window.TabWidth, 0, 0) } }
+                }, {}, { Duration = 0.2 })
+            end
+            return self.State
+        end
+    
+        AddSignal(game:GetService("UserInputService").InputBegan, function(input, gameProcessedEvent)
+            if gameProcessedEvent then return end
+    
+            if input.KeyCode == Window.Keybind then
+                Window:ToggleVisibility()
+            end
+        end)
+    
+        Window:ToggleVisibility()
+        return Window
+    end
+end
+
+local v15 = Instance.new("ModuleScript", Everforest)
+v15.Name = "elements"
+local v7 = Instance.new('ModuleScript', v15)
+v7.Name = "button"
+Modules[v7] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    local Element = {}
+    Element.__index = Element
+    Element.__type = "Button"
+    
+    function Element:New(Config)
+    	assert(Config.Title, "Button - Missing Title")
+    	local Button = {
+    		Callback = Config.Callback or function() end,
+    	}
+    
+    	local ButtonFlash = New("Frame", {
+    		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+    		BackgroundTransparency = 1,
+    		Size = UDim2.new(1, 0, 1, 0),
+    	}, {
+    		New("UICorner", {
+    			CornerRadius = UDim.new(0, 6),
+    		}),
+    	})
+    
+    	local SoundHover = New("Sound", {
+    		ThemeTag = {
+    			SoundId = "ButtonSoundHoverId",
+    			Volume = "ButtonSoundHoverVolume",
+    		}
+        })
+    
+    	local SoundClick = New("Sound", {
+    		ThemeTag = {
+    			SoundId = "ButtonSoundClickId",
+    			Volume = "ButtonSoundClickVolume",
+    		},
+    	})
+    
+    	local ButtonButton = New("TextButton", {
+    		TextWrapped = true,
+    		RichText = true,
+    		TextSize = Pick(18, 15),
+    		FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+    		BackgroundTransparency = 1,
+    		Size = UDim2.new(1, 0, 1, 0),
+    		Text = Config.Title,
+    		ThemeTag = {
+    			TextColor3 = "ButtonText",
+    		},
+    	}, {
+    	    New("UIPadding", {
+    			PaddingLeft = UDim.new(0, Pick(12, 8)),
+    			PaddingRight = UDim.new(0, Pick(12, 8)),
+    			PaddingTop = UDim.new(0, Pick(12, 8)),
+    			PaddingBottom = UDim.new(0, Pick(12, 8)),
+    		})
+    	})
+    
+    	local Scaller = New("UIScale", {
+    		Scale = 1,
+    	})
+    
+    	local ButtonFrame = New("Frame", {
+        	AnchorPoint = Vector2.new(0.5, 0.5),
+        	Size = UDim2.new(1, 0, 0, Pick(42, 36)),
+        	Position = UDim2.new(0.5, 0, 0.5, 0),
+        	ThemeTag = {
+            	BackgroundColor3 = "Button"
+            },
+    	}, {
+    		ButtonFlash,
+    		ButtonButton,
+    		SoundHover,
+    		SoundClick,
+    		Scaller,
+    		New("UICorner", {
+    			CornerRadius = UDim.new(0, 6),
+    		})
+    	})
+    
+    	local ButtonRoot = New("Frame", {
+        	Size = UDim2.new(1, 0, 0, Pick(42, 36)),
+        	BackgroundTransparency = 1,
+        	Parent = self.Container,
+    	}, {
+    		ButtonFrame
+    	})
+    
+    	AddSignal(ButtonFrame.MouseEnter, function()
+    		SoundHover:Play()
+    		ButtonFlash.BackgroundTransparency = 0.8
+    		Tween.Play(ButtonFlash, { BackgroundTransparency = 1 }, { Duration = 1 })
+    	end)
+    
+    	AddSignal(ButtonButton.InputBegan, function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            local StartTime = os.clock()
+    
+            Tween.Play(Scaller, { Scale = 0.92 }, { Duration = 2, EasingStyle = "Quad" })
+    
+            input.Changed:Wait()
+            if input.UserInputState ~= Enum.UserInputState.End then return end
+    
+            local MousePos = input.Position
+            local ButtonPos = ButtonButton.AbsolutePosition
+            local ButtonSize = ButtonButton.AbsoluteSize
+    
+            local IsInside = (MousePos.X >= ButtonPos.X and MousePos.X <= ButtonPos.X + ButtonSize.X) and
+                (MousePos.Y >= ButtonPos.Y and MousePos.Y <= ButtonPos.Y + ButtonSize.Y)
+    
+            local ClickTime = os.clock() - StartTime
+            local TargetScale = (ClickTime >= 0.2) and 1.04 or 1.02
+            Tween.Play(Scaller, { Scale = TargetScale }, { Duration = 0.2, EasingStyle = "Quad" })
+    
+            if IsInside then
+                SoundClick:Play()
+    
+                self.Library:SafeCallback(Button.Callback)
+                ButtonFlash.BackgroundTransparency = 0.8
+                Tween.Play(ButtonFlash, { BackgroundTransparency = 1 }, { Duration = 2 })
+    
+                task.wait(0.1)
+            end
+    
+            Tween.Play(Scaller, { Scale = 1 }, { Duration = 0.1, EasingStyle = "Quad" })
+        end)
+    
+    	function Button:SetTitle(Title)
+    		ButtonButton.Text = tostring(Title)
+    	end
+    
+    	return Button
+    end
+    
+    return Element
+end
+
+local v8 = Instance.new('ModuleScript', v15)
+v8.Name = "dropdown"
+Modules[v8] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    local Element = {}
+    Element.__index = Element
+    Element.__type = "Dropdown"
+    
+    function Element:New(Flag, Config)
+        local Library = self.Library
+    
+        local Dropdown = {
+            Library = Library,
+            Options = Config.Options or {},
+            Value = Config.Default,
+            Multi = Config.Multi,
+            Buttons = {
+                TotalButtons = 0
+            },
+            Opened = false,
+            Type = "Dropdown",
+            DropdownOpenHeight = math.min(Config.DropdownOpenHeight or 200, Pick(math.huge, math.floor(Creator.GetViewport().Y * 0.45))),
+            Callback = Config.Callback or function() end,
+        }
+    
+        if Dropdown.Multi then
+            local NewValue = {}
+            for _, value in Dropdown.Options do
+                NewValue[value] = Dropdown.Value[value] and true or table.find(Dropdown.Value, value) and true or false
+            end
+    
+            Dropdown.Value = NewValue
+        end
+    
+        local DropdownScroll = New("ScrollingFrame", {
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, -16, 1, -16),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            ScrollBarThickness = 0,
+            ClipsDescendants = true,
+            BackgroundTransparency = 1,
+            Visible = false
+        }, {
+            New("UIListLayout", {
+                Padding = UDim.new(0, 2),
+                SortOrder = Enum.SortOrder.LayoutOrder,
+            })
+        })
+    
+        local DropdownContainer = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(45, 43, 52),
+            Size = UDim2.new(1, 0, 0, 0),
+            Position = UDim2.new(0, 0, 0, 6),
+            LayoutOrder = 1
+        }, {
+            DropdownScroll,
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 5)
+            }),
+            New("UIStroke", {
+                Thickness = 1.6,
+                Transparency = 1,
+                ThemeTag = {
+                    Color = "DropdownBorder"
+                }
+            })
+        })
+    
+        local DropdownFrame = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(45, 43, 52),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 60),
+            BackgroundTransparency = 1,
+            Parent = self.Container
+        }, {
+            DropdownContainer,
+            New("UIListLayout", {
+                SortOrder = Enum.SortOrder.LayoutOrder,
+            })
+        })
+    
+        local DropdownTop = require(script.Parent.Parent.components.element)(Config.Title, DropdownFrame, true,
+            function() return not Dropdown.Opened end)
+        DropdownTop.LabelHolder.Size = UDim2.new(1, -20, 0, 0)
+    
+        local DropdownText = New("TextLabel", {
+            Text = "None",
+            RichText = true,
+            TextSize = Pick(18, 15),
+            TextWrapped = true,
+            FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -Pick(50, 36), 0, 0),
+            ThemeTag = {
+                TextColor3 = "DropdownText"
+            }
+        })
+    
+        local DropdownHeader = New("Frame", {
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            LayoutOrder = 1,
+            Position = UDim2.new(0, 10, 0, 26),
+            Size = UDim2.new(1, -5, 0, Pick(18, 15)),
+            Parent = DropdownTop.LabelHolder
+        }, {
+            DropdownText,
+            New("ImageLabel", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                BackgroundTransparency = 1,
+                Position = UDim2.new(1, 0, 0.5, 0),
+                Size = UDim2.new(0, Pick(16, 14), 0, Pick(16, 14)),
+                ThemeTag = {
+                    ImageColor3 = "DropdownImage",
+                    Image = "DropdownImageId"
+                }
+            })
+        })
+    
+        Dropdown.SetTitle = DropdownTop.SetTitle
+    
+        function Dropdown:OnChanged(Func)
+            Dropdown.Changed = Func
+            Func(Dropdown.Value)
+        end
+    
+        function Dropdown:UpdateValue()
+            if #self.Options == self.Buttons.TotalButtons then
+                for value, button in self.Buttons do
+                    if type(button) == "table" then
+                        local isSelected = false
+                        if self.Multi then
+                            isSelected = self.Value[value] == true
+                        else
+                            isSelected = self.Value == value
+                        end
+    
+                        button.Value = isSelected
+    
+                        if button.Tweens.Frame then button.Tweens.Frame:Cancel() end
+                        if button.Tweens.Arrow then button.Tweens.Arrow:Cancel() end
+    
+                        button.Tweens.Frame = Tween.Play(button.Frame, {
+                            BackgroundColor3 = Creator.GetThemeProperty("Item"),
+                            BackgroundTransparency = isSelected and 0 or 1
+                        })
+                        button.Tweens.Arrow = Tween.Play(button.Arrow, {
+                            ImageTransparency = isSelected and 0 or 1
+                        })
+                    end
+                end
+            else
+                for key, button in self.Buttons do
+                    if type(button) == "table" and button.Destroy then
+                        button:Destroy()
+                    end
+                    self.Buttons[key] = nil
+                end
+    
+                self.Buttons = {
+                    TotalButtons = 0
+                }
+    
+                for _, value in self.Options do
+                    self.Buttons.TotalButtons = self.Buttons.TotalButtons + 1
+    
+                    local isSelected = false
+                    if self.Multi then
+                        isSelected = self.Value[value] == true
+                    else
+                        isSelected = self.Value == value
+                    end
+    
+                    self.Buttons[value] = {
+                        Value = isSelected,
+                        Connections = {},
+                        Tweens = {}
+                    }
+    
+                    local button = self.Buttons[value]
+    
+                    button.Button = New("TextButton", {
+                        Font = Enum.Font.SourceSans,
+                        Text = "",
+                        TextSize = 14,
+                        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                        BackgroundTransparency = 1,
+                        Size = UDim2.new(1, 0, 1, 0)
+                    })
+    
+                    button.Arrow = New("ImageLabel", {
+                        Image = "rbxassetid://120679435135651",
+                        AnchorPoint = Vector2.new(0, 0.5),
+                        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                        BackgroundTransparency = 1,
+                        Position = UDim2.new(0, 6, 0.5, 0),
+                        Rotation = -90,
+                        Size = UDim2.new(0, Pick(10, 8), 0, Pick(10, 8)),
+                        ImageTransparency = isSelected and 0 or 1,
+                        ThemeTag = {
+                            ImageColor3 = "ItemHoldArrow"
+                        }
+                    })
+    
+                    button.Title = New("TextLabel", {
+                        FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                        TextSize = Pick(16, 14),
+                        TextWrapped = true,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        TextYAlignment = Enum.TextYAlignment.Top,
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                        BackgroundTransparency = 1,
+                        LayoutOrder = 1,
+                        Position = UDim2.new(0, Pick(20, 18), 0, 0),
+                        Size = UDim2.new(1, -Pick(30, 26), 0, 0),
+                        Text = tostring(value),
+                        ThemeTag = {
+                            TextColor3 = "ItemText"
+                        }
+                    }, {
+                        New("UIPadding", {
+                            PaddingBottom = UDim.new(0, Pick(4, 6)),
+                            PaddingTop = UDim.new(0, Pick(4, 6))
+                        })
+                    })
+    
+                    button.Frame = New("Frame", {
+                        LayoutOrder = self.Buttons.TotalButtons,
+                        Size = UDim2.new(1, 0, 0, Pick(24, 28)),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        Parent = DropdownScroll,
+                        BackgroundTransparency = isSelected and 0 or 1,
+                        ThemeTag = {
+                            BackgroundColor3 = "Item"
+                        }
+                    }, {
+                        button.Button,
+                        button.Title,
+                        button.Arrow,
+                        New("UICorner", {
+                            CornerRadius = UDim.new(0, 5)
+                        })
+                    })
+    
+                    table.insert(button.Connections, AddSignal(button.Frame.MouseEnter, function()
+                        if button.Tweens.Frame then button.Tweens.Frame:Cancel() end
+                        if button.Tweens.Arrow then button.Tweens.Arrow:Cancel() end
+    
+                        button.Tweens.Frame = Tween.Play(button.Frame, {
+                            BackgroundColor3 = Creator.GetThemeProperty("ItemHold"),
+                            BackgroundTransparency = 0
+                        })
+                        button.Tweens.Arrow = Tween.Play(button.Arrow, {
+                            ImageTransparency = 0,
+                        })
+                    end))
+    
+                    table.insert(button.Connections, AddSignal(button.Frame.MouseLeave, function()
+                        local currentlySelected = false
+                        if self.Multi then
+                            currentlySelected = self.Value[value] == true
+                        else
+                            currentlySelected = self.Value == value
+                        end
+    
+                        if button.Tweens.Frame then button.Tweens.Frame:Cancel() end
+                        if button.Tweens.Arrow then button.Tweens.Arrow:Cancel() end
+    
+                        button.Tweens.Frame = Tween.Play(button.Frame, {
+                            BackgroundColor3 = Creator.GetThemeProperty("Item"),
+                            BackgroundTransparency = currentlySelected and 0 or 1
+                        })
+                        button.Tweens.Arrow = Tween.Play(button.Arrow, {
+                            ImageTransparency = currentlySelected and 0 or 1,
+                        })
+                    end))
+    
+                    table.insert(button.Connections, AddSignal(button.Button.Activated, function()
+                        if DropdownTop.SoundClick then DropdownTop.SoundClick:Play() end
+                        if self.Multi then
+                            self.Value[value] = not self.Value[value] or nil
+                            self:SetValue(self.Value)
+                        else
+                            Dropdown.Opened = false
+    
+                            Tween.Plays(DropdownContainer, {
+                                { Props = { Size = UDim2.new(1, 0, 0, 0) } },
+                                UIStroke = { Props = { Transparency = 1 } }
+                            }, { Duration = 0.15 })
+    
+                            Tween.Play(DropdownFrame.UIListLayout, {
+                                Padding = UDim.new(0, 0)
+                            }, { Duration = 0.15 })
+    
+                            local closeTween = Tween.Play(DropdownTop.Border, {
+                                Color = Creator.GetThemeProperty("ElementBorder")
+                            }, { Duration = 0.15 })
+                            AddSignal(closeTween.Completed, function()
+                                DropdownScroll.Visible = false
+                            end)
+    
+                            DropdownTop.Hoving = false
+                            Tween.Plays(DropdownTop, {
+                                Fade = { Props = { BackgroundTransparency = 1 } },
+                                Border = { Props = { Transparency = 1 }, Condition = Element.Condition }
+                            }, { EasingStyle = "Quad" })
+    
+                            self:SetValue(value)
+                        end
+                    end))
+    
+                    function button:Destroy()
+                        if button.Connections then
+                            for i = 1, #button.Connections do
+                                Creator.RemoveSignal(button.Connections[i])
+                            end
+                        end
+                        if button.Tweens then
+                            for _, tween in button.Tweens do
+                                if tween then tween:Cancel() end
+                            end
+                        end
+                        if button.Frame then button.Frame:Destroy() end
+                    end
+                end
+            end
+    
+            if self.Multi then
+                local selectedItems = {}
+                for k, v in self.Value do
+                    if table.find(self.Options, k) and v == true then
+                        table.insert(selectedItems, tostring(k))
+                    end
+                end
+    
+                DropdownText.Text = #selectedItems > 0 and table.concat(selectedItems, ", ") or "None"
+            else
+                DropdownText.Text = tostring(self.Value or "None")
+            end
+        end
+    
+        function Dropdown:SetValue(Value)
+            if self.Multi then
+                local NewValue = {}
+                for _, value in self.Options do
+                    NewValue[value] = self.Value[value] and true or table.find(self.Value, value) and true or false
+                end
+    
+                self.Value = NewValue
+            else
+                self.Value = table.find(self.Options, Value) and Value or self.Value
+            end
+    
+            self:UpdateValue()
+    
+            Library:SafeCallback(self.Callback, self.Value)
+            Library:SafeCallback(self.Changed, self.Value)
+        end
+    
+        function Dropdown:Destroy()
+            if DropdownFrame then DropdownFrame:Destroy() end
+            if self.Buttons then
+                for key, button in self.Buttons do
+                    if type(button) == "table" and button.Destroy then
+                        button:Destroy()
+                    end
+                    self.Buttons[key] = nil
+                end
+            end
+            Library.Options[Flag] = nil
+        end
+    
+        Dropdown:UpdateValue()
+    
+        AddSignal(DropdownTop.Button.Activated, function()
+            if DropdownTop.SoundClick then DropdownTop.SoundClick:Play() end
+            Dropdown.Opened = not Dropdown.Opened
+    
+            if Dropdown.Opened then
+                DropdownScroll.Visible = true
+                Tween.Play(DropdownFrame.UIListLayout, {
+                    Padding = UDim.new(0, 6)
+                }, { Duration = 0.15 })
+    
+                Tween.Plays(DropdownContainer, {
+                    { Props = { Size = UDim2.new(1, 0, 0, Dropdown.DropdownOpenHeight) } },
+                    UIStroke = { Props = { Transparency = 0 } }
+                }, { Duration = 0.15 })
+    
+                Tween.Play(DropdownTop.Border, {
+                    Color = Creator.GetThemeProperty("DropdownBorder")
+                }, { Duration = 0.15 })
+            else
+                Tween.Plays(DropdownContainer, {
+                    { Props = { Size = UDim2.new(1, 0, 0, 0) } },
+                    UIStroke = { Props = { Transparency = 1 } }
+                }, { Duration = 0.15 })
+    
+                Tween.Play(DropdownFrame.UIListLayout, {
+                    Padding = UDim.new(0, 0)
+                }, { Duration = 0.15 })
+    
+                local closeTween = Tween.Play(DropdownTop.Border, {
+                    Color = Creator.GetThemeProperty("ElementBorder")
+                }, { Duration = 0.15 })
+                AddSignal(closeTween.Completed, function()
+                    DropdownScroll.Visible = false
+                end)
+            end
+        end)
+    
+        Library.Options[Flag] = Dropdown
+        return Dropdown
+    end
+    
+    return Element
+end
+
+Modules[v15] = function(script, require)
+    local Elements = {}
+    
+    for _, module in script:GetChildren() do
+        if module:IsA("ModuleScript") and module ~= script then
+            local element = require(module)
+            Elements[element.__type] = element
+        end
+    end
+    
+    return Elements
+end
+
+local v10 = Instance.new('ModuleScript', v15)
+v10.Name = "input"
+Modules[v10] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    local Element = {}
+    Element.__index = Element
+    Element.__type = "Input"
+    
+    function Element:New(Flag, Config)
+        local Library = self.Library
+        assert(Config.Title, "Input - Missing Title")
+    
+        local Input = {
+            Value = Config.Default or "",
+            Placeholder = Config.Placeholder or "",
+            ClearTextOnFocus = Config.ClearTextOnFocus or false,
+            Callback = Config.Callback or function(Value) end,
+        }
+    
+        local Focused = false
+        local InputFrame = require(script.Parent.Parent.components.element)(Config.Title, self.Container, true, function() return not Focused end)
+        InputFrame.Button.Visible = false
+        InputFrame.LabelHolder.Size = UDim2.new(1, -20, 0, 0)
+        Input.SetTitle = InputFrame.SetTitle
+    
+        local InputBox = New("TextBox", {
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextSize = Pick(18, 15),
+            FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+            PlaceholderText = Input.Placeholder,
+            Size = UDim2.new(1, 0, 0, Pick(18, 15)),
+            Text = Input.Value,
+            LayoutOrder = 1,
+            BackgroundTransparency = 1,
+            Parent = InputFrame.LabelHolder,
+            TextWrapped = true,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            RichText = true,
+            ClearTextOnFocus = Input.ClearTextOnFocus,
+            ThemeTag = {
+                PlaceholderColor3 = "InputPlaceholder",
+                TextColor3 = "InputText",
+            }
+        })
+    
+        AddSignal(InputBox.Focused, function()
+            Focused = true
+            Tween.Play(InputFrame.Border, { Color = Creator.GetThemeProperty("InputBorder") })
+        end)
+    
+        AddSignal(InputBox.FocusLost, function()
+            Focused = false
+            Tween.Play(InputFrame.Border, { Color = Creator.GetThemeProperty("ElementBorder") })
+            if not InputFrame.Hoving then
+                Tween.Play(InputFrame.Border, { Transparency = 1 })
+            end
+    
+            Input:SetValue(InputBox.Text)
+        end)
+    
+        function Input:OnChanged(Func)
+            Input.Changed = Func
+            Func(Input.Value)
+        end
+    
+        function Input:SetValue(Value)
+            Input.Value = Value
+            InputBox.Text = Input.Value
+    
+            Library:SafeCallback(Input.Callback, Input.Value)
+            Library:SafeCallback(Input.Changed, Input.Value)
+        end
+    
+        function Input:Destroy()
+            InputFrame:Destroy()
+            Library.Options[Flag] = nil
+        end
+    
+        Library.Options[Flag] = Input
+        return Input
+    end
+    
+    return Element
+end
+
+local v11 = Instance.new('ModuleScript', v15)
+v11.Name = "paragraph"
+Modules[v11] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    
+    local Element = {}
+    Element.__index = Element
+    Element.__type = "Paragraph"
+    
+    function Element:New(Config)
+        assert(Config.Title, "Paragraph - Missing Title")
+        local Paragraph = require(script.Parent.Parent.components.element)(Config.Title, self.Container, false)
+    
+        Paragraph.Root.BackgroundTransparency = Creator.GetThemeProperty("ParagraphTransparency")
+        Paragraph.Root.BackgroundColor3 = Creator.GetThemeProperty("Paragraph")
+        Paragraph.Title.FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+        Paragraph.Title.TextColor3 = Creator.GetThemeProperty("ParagraphText")
+        Paragraph.LabelHolder.Size = UDim2.new(1, -20, 0, 0)
+    
+        Creator.AddThemeObject(Paragraph.Root, {
+            BackgroundColor3 = "Paragraph",
+        })
+    
+        Creator.AddThemeObject(Paragraph.Title, {
+            TextColor3 = "ParagraphText",
+        })
+    
+        return Paragraph
+    end
+    
+    return Element
+end
+
+local v12 = Instance.new('ModuleScript', v15)
+v12.Name = "section"
+Modules[v12] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    
+    local New = Creator.New
+    local Pick = Creator.Pick
+    
+    local Element = {}
+    Element.__index = Element
+    Element.__type = "Section"
+    
+    function Element:New(Config)
+        assert(Config.Title, "Section - Missing Title")
+        local Section = {}
+    
+        Section.Title = New("TextLabel", {
+            FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+            Text = Config.Title,
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            TextSize = Pick(22, 17),
+            TextWrapped = true,
+            RichText = true,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            BorderColor3 = Color3.fromRGB(0, 0, 0),
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, -2, 0, Pick(13, 8)),
+            Size = UDim2.new(1, 0, 0, Pick(22, 17))
+        })
+    
+        Section.Root = New("Frame", {
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, Pick(45, 34)),
+            Parent = self.Container
+        }, {
+            Section.Title,
+            New("UIPadding", {
+                PaddingBottom = UDim.new(0, Pick(10, 6))
+            })
+        })
+    
+        function Section:SetTitle(Title)
+            Section.Title.Text = tostring(Title)
+        end
+    
+        function Element:Destroy()
+            Section.Root:Destroy()
+        end
+    
+        return Section
+    end
+    
+    return Element
+end
+
+local v13 = Instance.new('ModuleScript', v15)
+v13.Name = "slider"
+Modules[v13] = function(script, require)
+    local UserInputService = game:GetService("UserInputService")
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    local Element = {}
+    Element.__index = Element
+    Element.__type = "Slider"
+    
+    function Element:New(Idx, Config)
+    	local Library = self.Library
+    	assert(Config.Title, "Slider - Missing Title.")
+    	assert(Config.Default, "Slider - Missing default value.")
+    
+    	local Slider = {
+    		Value = Config.Default,
+    		Realtime = Config.Realtime or false,
+    		Min = Config.Min or 0,
+    		Max = Config.Max or 100,
+    		Increment = Config.Increment or 1,
+    		Suffix = Config.Suffix or "",
+    		SliderWidth = Pick(Config.SliderWidth or 200, math.min(Config.SliderWidth or 200, 130)),
+    		ClearTextOnFocus = Config.ClearTextOnFocus or false,
+    		Callback = Config.Callback or function(Value) end,
+    		Type = "Slider"
+    	}
+    
+    	local Dragging = false
+    	local Focused = false
+    
+    	local SliderFrame = require(script.Parent.Parent.components.element)(Config.Title, self.Container, true, function() return not Dragging and not Focused end)
+    	SliderFrame.Button.Visible = false
+    	SliderFrame.LabelHolder.Size = UDim2.new(1, -Slider.SliderWidth-20, 0, 0)
+    	Slider.SetTitle = SliderFrame.SetTitle
+    
+    	local SliderDisplay = New("TextBox", {
+    		TextXAlignment = Enum.TextXAlignment.Left,
+    		TextWrapped = true,
+    		TextSize = Pick(18, 15),
+    		RichText = true,
+    		TextYAlignment = Enum.TextYAlignment.Top,
+    		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+    		FontFace = Font.new("rbxassetid://11702779409", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+    		AutomaticSize = Enum.AutomaticSize.Y,
+    		Size = UDim2.new(1, 0, 0, Pick(18, 15)),
+    		Text = tostring(Slider.Value) .. Slider.Suffix,
+    		LayoutOrder = 1,
+    		BackgroundTransparency = 1,
+    		ClearTextOnFocus = Slider.ClearTextOnFocus,
+    		Parent = SliderFrame.LabelHolder,
+    		PlaceholderText = "0" .. Slider.Suffix,
+    		ThemeTag = {
+    			TextColor3 = "SliderText",
+    			PlaceholderColor3 = "SliderText"
+    		}
+    	})
+    
+    	local SliderDot = New("Frame", {
+    		AnchorPoint = Vector2.new(1, 0),
+    		Size = UDim2.new(0, Pick(10, 8), 1, 0),
+    		Position = UDim2.new(1, 0, 0, 0),
+    		ThemeTag = {
+    			BackgroundColor3 = "SliderDot",
+    		}
+    	}, {
+    		New("UICorner", {
+    			CornerRadius = UDim.new(0, 100),
+    		}),
+    	})
+    
+    	local SliderFill = New("Frame", {
+    		AnchorPoint = Vector2.new(0, 0.5),
+    		Size = UDim2.new(0.7, 0, 0, Pick(40, 30)),
+    		Position = UDim2.new(0, 0, 0.5, 0),
+    		ThemeTag = {
+    			BackgroundColor3 = "SliderFill",
+    		}
+    	}, {
+    		SliderDot,
+    		New("UICorner", {
+    			CornerRadius = UDim.new(0, 6),
+    		})
+    	})
+    
+    	local SliderTrack = New("Frame", {
+    		AnchorPoint = Vector2.new(0.5, 0.5),
+    		Size = UDim2.new(0, Pick(180, Slider.SliderWidth - 16), 0, Pick(40, 30)),
+    		Position = UDim2.new(0.5, 0, 0.5, 0),
+    		BorderColor3 = Color3.fromRGB(0, 0, 0),
+    		ThemeTag = {
+    			BackgroundColor3 = "SliderTrack",
+    		},
+    	}, {
+    		SliderFill,
+    		New("UICorner", {
+    			CornerRadius = UDim.new(0, 6),
+    		}),
+    	})
+    
+    	local SliderHolder = New("Frame", {
+    		AnchorPoint = Vector2.new(1, 0.5),
+    		Size = UDim2.new(0, Slider.SliderWidth, 1, 0),
+    		Position = UDim2.new(1, 0, 0.5, 0),
+    		BackgroundTransparency = 1,
+    		Parent = SliderFrame.Root,
+    	}, {
+    		SliderTrack
+    	})
+    
+    	function Slider:_round(Number, Factor)
+    		local Result = math.floor(Number/Factor + (math.sign(Number) * 0.5)) * Factor
+    		if Result < 0 then
+    			Result = Result + Factor
+    		end
+    		return Result
+    	end
+    
+    	local isUpdating = false
+        SliderDisplay:GetPropertyChangedSignal("Text"):Connect(function()
+            if isUpdating then return end
+            isUpdating = true
+    
+            local cleanedText = SliderDisplay.Text:gsub("[^%d%.]", "")
+    
+            local firstDot = cleanedText:find("%.")
+            if firstDot and cleanedText:find("%.", firstDot + 1) then
+                cleanedText = cleanedText:sub(1, firstDot) .. cleanedText:sub(firstDot + 1):gsub("%.", "")
+            end
+    
+            local numValue = tonumber(cleanedText)
+            if numValue and numValue > Slider.Max then
+                SliderDisplay.Text = tostring(Slider.Max) .. Slider.Suffix
+            else
+                SliderDisplay.Text = cleanedText .. Slider.Suffix
+            end
+    
+            isUpdating = false
+        end)
+    
+    	AddSignal(SliderDisplay.Focused, function()
+    		Tween.Play(SliderFrame.Border, { Color = Creator.GetThemeProperty("SliderHold") }, { Duration = 0.1 })
+    		Focused = true
+    	end)
+    
+    	AddSignal(SliderDisplay.FocusLost, function()
+    		local cleanText = SliderDisplay.Text:gsub("[^%d%.]", "")
+    		local finalValue = tonumber(cleanText) or Slider.Min
+    
+    		Slider:SetValue(finalValue)
+    
+    		Tween.Play(SliderFrame.Border, { Color = Creator.GetThemeProperty("ElementBorder") }, { Duration = 0.1 })
+    		if not SliderFrame.Hoving then
+    			Tween.Play(SliderFrame.Border, { Transparency = 1 }, { Duration = 0.1 })
+    		end
+    		Focused = false
+    	end)
+    
+    	AddSignal(SliderTrack.MouseEnter, function()
+    		Tween.Play(SliderDot, { BackgroundColor3 = Creator.GetThemeProperty("SliderDotHold") })
+    	end)
+    
+    	AddSignal(SliderTrack.MouseLeave, function()
+    		Tween.Play(SliderDot, { BackgroundColor3 = Creator.GetThemeProperty("SliderDot") })
+    	end)
+    
+    	AddSignal(SliderHolder.InputBegan, function(Input)
+    		if
+    			Input.UserInputType == Enum.UserInputType.MouseButton1
+    			or Input.UserInputType == Enum.UserInputType.Touch
+    		then
+    			Dragging = true
+    			SliderFrame.SoundClick:Play()
+    			Tween.Play(SliderFrame.Border, { Color = Creator.GetThemeProperty("SliderHold") })
+    			Tween.Play(SliderDot, { BackgroundColor3 = Creator.GetThemeProperty("SliderDotHold") })
+    		end
+    	end)
+    
+    	AddSignal(SliderHolder.InputEnded, function(Input)
+    		if
+    			Input.UserInputType == Enum.UserInputType.MouseButton1
+    			or Input.UserInputType == Enum.UserInputType.Touch
+    		then
+    			Dragging = false
+    			Tween.Play(SliderFrame.Border, { Color = Creator.GetThemeProperty("ElementBorder") }, { Duration = 0.1 })
+    			if not SliderFrame.Hoving then
+    				Tween.Play(SliderFrame.Border, { Transparency = 1 }, { Duration = 0.1 })
+    			end
+    
+    			if not Slider.Realtime then
+    				local SizeScale = math.clamp((Input.Position.X - SliderTrack.AbsolutePosition.X) / SliderTrack.AbsoluteSize.X, 0, 1)
+    				Slider:SetValue(Slider.Min + ((Slider.Max - Slider.Min) * SizeScale))
+    			end
+    		end
+    	end)
+    
+    	AddSignal(UserInputService.InputChanged, function(Input)
+    		if
+    			Dragging
+    			and (
+    				Input.UserInputType == Enum.UserInputType.MouseMovement
+    				or Input.UserInputType == Enum.UserInputType.Touch
+    			)
+    		then
+    			local SizeScale = math.clamp((Input.Position.X - SliderTrack.AbsolutePosition.X) / SliderTrack.AbsoluteSize.X, 0, 1)
+    			local Value = math.clamp(Slider:_round(Slider.Min + ((Slider.Max - Slider.Min) * SizeScale), Slider.Increment), Slider.Min, Slider.Max)
+    
+    			if Slider.Realtime then
+    				Slider:SetValue(Value)
+    			else
+                    local incrementStr = tostring(Slider.Increment)
+                    local dotIndex = incrementStr:find("%.")
+                    local decimalPlaces = dotIndex and (#incrementStr - dotIndex) or 0
+                    local cleanDisplayValue = tonumber(string.format("%." .. decimalPlaces .. "f", Value))
+    
+                    SliderDisplay.Text = tostring(cleanDisplayValue) .. Slider.Suffix
+                    Tween.Play(SliderFill, { Size = UDim2.fromScale((Value - Slider.Min) / (Slider.Max - Slider.Min), 1) }, { Duration = 0.2 })
+                end
+    		end
+    	end)
+    
+    	function Slider:OnChanged(Func)
+    		Slider.Changed = Func
+    		Func(Slider.Value)
+    	end
+    
+    	function Slider:SetValue(Value)
+    		local ComputedValue = math.clamp(Slider:_round(Value, Slider.Increment), Slider.Min, Slider.Max)
+    
+    		local incrementStr = tostring(Slider.Increment)
+    		local dotIndex = incrementStr:find("%.")
+    		local decimalPlaces = dotIndex and (#incrementStr - dotIndex) or 0
+    
+    		local CleanValue = tonumber(string.format("%." .. decimalPlaces .. "f", ComputedValue))
+    
+    		Slider.Value = CleanValue
+    		SliderDisplay.Text = tostring(CleanValue) .. Slider.Suffix
+    		Tween.Play(SliderFill, { Size = UDim2.fromScale((CleanValue - Slider.Min) / (Slider.Max - Slider.Min), 1) }, { Duration = 0.2 })
+    
+    		Library:SafeCallback(Slider.Callback, self.Value)
+    		Library:SafeCallback(Slider.Changed, self.Value)
+    	end
+    
+    	function Slider:Destroy()
+    		SliderFrame:Destroy()
+    		Library.Options[Idx] = nil
+    	end
+    
+    	Slider:SetValue(Config.Default)
+    
+    	Library.Options[Idx] = Slider
+    	return Slider
+    end
+    
+    return Element
+end
+
+local v14 = Instance.new('ModuleScript', v15)
+v14.Name = "toggle"
+Modules[v14] = function(script, require)
+    local Creator = require(script.Parent.Parent.modules.creator)
+    local Tween = require(script.Parent.Parent.modules.tween)
+    
+    local New = Creator.New
+    local AddSignal = Creator.AddSignal
+    local Pick = Creator.Pick
+    
+    local Element = {}
+    Element.__index = Element
+    Element.__type = "Toggle"
+    
+    function Element:New(Flag, Config)
+        local Library = self.Library
+        assert(Config.Title, "Toggle - Missing Title")
+    
+        local Toggle = {
+            Value = Config.Default or false,
+            Callback = Config.Callback or function(Value) end,
+            Type = "Toggle",
+        }
+    
+        local ToggleFrame = require(script.Parent.Parent.components.element)(Config.Title, self.Container, true)
+        Toggle.SetTitle = ToggleFrame.SetTitle
+    
+        local SwitchBorder = New("UIStroke", {
+            Thickness = Pick(2.7, 2.2),
+            ThemeTag = {
+                Color = "ToggleSlider",
+            },
+        })
+    
+        local SwitchInsider = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(128, 94, 233),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.new(0, Pick(40, 32), 0, Pick(12, 10)),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            BackgroundTransparency = 1,
+            ThemeTag = {
+                BackgroundColor3 = "ToggleSlider",
+            },
+        }, {
+            SwitchBorder,
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 100),
+            })
+        })
+    
+        local ToggleSwitch = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(45, 43, 52),
+            AnchorPoint = Vector2.new(1, 0.5),
+            Size = UDim2.new(0, Pick(80, 60), 1, 0),
+            Position = UDim2.new(1, 0, 0.5, 0),
+            BackgroundTransparency = 1,
+            Parent = ToggleFrame.Root,
+        }, {
+            SwitchInsider
+        })
+    
+        local Hoving = false
+    
+        AddSignal(SwitchInsider.MouseEnter, function()
+            Tween.Play(SwitchBorder, { Color = Creator.GetThemeProperty("ToggleHoverColor") })
+            Tween.Play(SwitchInsider, { BackgroundColor3 = Creator.GetThemeProperty("ToggleHoverColor") })
+            Hoving = true
+        end)
+    
+        AddSignal(SwitchInsider.MouseLeave, function()
+            local targetColor = Toggle.Value and Creator.GetThemeProperty("ToggleOnColor") or
+                Creator.GetThemeProperty("ToggleOffColor")
+    
+            Tween.Play(SwitchBorder, { Color = targetColor })
+            Tween.Play(SwitchInsider, { BackgroundColor3 = targetColor })
+            Hoving = false
+        end)
+    
+        function Toggle:OnChanged(Func)
+            Toggle.Changed = Func
+            Func(Toggle.Value)
+        end
+    
+        function Toggle:SetValue(Value)
+            Value = not not Value
+            Toggle.Value = Value
+    
+            local currentThemeOn = Creator.GetThemeProperty("ToggleOnColor")
+            local currentThemeOff = Creator.GetThemeProperty("ToggleOffColor")
+            local currentThemeHover = Creator.GetThemeProperty("ToggleHoverColor")
+    
+            local targetColor = Hoving and currentThemeHover or currentThemeOn
+    
+            if Value then
+                Tween.Plays(SwitchInsider, {
+                    {
+                        Props = {
+                            Size = UDim2.new(0, Pick(54, 44), 0, Pick(12, 10)),
+                            Transparency = 0,
+                            BackgroundColor3 = targetColor
+                        },
+                        Preset = { Duration = 0.05 }
+                    },
+                    UIStroke = {
+                        Props = { Color = targetColor }
+                    }
+                }, { Duration = 0.1 })
+            else
+                local strokeColor = Hoving and currentThemeHover or currentThemeOff
+    
+                Tween.Plays(SwitchInsider, {
+                    {
+                        Props = {
+                            Size = UDim2.new(0, Pick(40, 32), 0, Pick(12, 10)),
+                            BackgroundTransparency = 1,
+                            BackgroundColor3 = targetColor
+                        },
+                        Preset = { Duration = 0.05 }
+                    },
+                    UIStroke = {
+                        Props = { Color = strokeColor }
+                    }
+                }, { Duration = 0.1 })
+            end
+    
+            Library:SafeCallback(Toggle.Callback, Toggle.Value)
+            Library:SafeCallback(Toggle.Changed, Toggle.Value)
+        end
+    
+        function Toggle:Destroy()
+            ToggleFrame:Destroy()
+            Library.Options[Flag] = nil
+        end
+    
+        AddSignal(ToggleFrame.Button.Activated, function()
+            ToggleFrame.SoundClick:Play()
+            if ToggleFrame.Fade then
+                ToggleFrame.Fade.BackgroundTransparency = 0.8
+                Tween.Play(ToggleFrame.Fade, { BackgroundTransparency = 0.9 }, { Duration = 0.2 })
+            end
+            Toggle:SetValue(not Toggle.Value)
+        end)
+    
+        Toggle:SetValue(Toggle.Value)
+    
+        Library.Options[Flag] = Toggle
+        return Toggle
+    end
+    
+    return Element
+end
+
+Modules[Everforest] = function(script, require)
+    local RunService = game:GetService("RunService")
+    local LocalPlayer = game:GetService("Players").LocalPlayer
+    
+    local Creator = require(script.modules.creator)
+    local ElementsTable = require(script.elements)
+    local NotificationModule = require(script.components.notification)
+    
+    local New = Creator.New
+    
+    local ProtectGui = protectgui or (syn and syn.protect_gui) or function() end
+    local GUI = New("ScreenGui", {
+        Parent = RunService:IsStudio() and LocalPlayer.PlayerGui or game:GetService("CoreGui"),
+        DisplayOrder = 100000,
+        IgnoreGuiInset = true,
+    })
+    
+    ProtectGui(GUI)
+    NotificationModule:Init(GUI)
+    
+    local Library = {
+        Version = "1.0.0",
+        Window = nil,
+        Options = {},
+        Themes = require(script.themes).Names,
+        Theme = "Dark",
+        GUI = GUI,
+    }
+    
+    function Library:SafeCallback(Function, ...)
+        if not Function then
+            return
+        end
+    
+        local Success, Event = pcall(Function, ...)
+        if not Success then
+            local _, i = Event:find(":%d+: ")
+    
+            if not i then
+                return Library:Notify({
+                    Title = "Callback error: " .. Event,
+                    Duration = 5,
+                })
+            end
+    
+            return Library:Notify({
+                Title = "Callback error: " .. Event:sub(i + 1),
+                Duration = 5,
+            })
+        end
+        return Success
+    end
+    
+    function Library:MergeDictionaries(Default, User)
+        if not User then return Default end
+        local Result = {}
+        for Key, Value in Default do
+            if type(Value) == "table" and type(User[Key]) == "table" then
+                Result[Key] = self:MergeDictionaries(Value, User[Key])
+            else
+                Result[Key] = User[Key] ~= nil and User[Key] or Value
+            end
+        end
+    
+        for Key, Value in User do
+            if Result[Key] == nil then
+                Result[Key] = Value
+            end
+        end
+        return Result
+    end
+    
+    local Icons = require(script.modules.icons).assets
+    function Library:GetIcon(Name)
+        return Name ~= nil and Icons["lucide-" .. Name] or nil
+    end
+    
+    local Elements = {}
+    Elements.__index = Elements
+    Elements.__namecall = function(Table, Key, ...)
+        return Elements[Key](...)
+    end
+    
+    for _, ElementComponent in ElementsTable do
+        Elements["Add" .. ElementComponent.__type] = function(self, Flag, Config)
+            ElementComponent.Container = self.Container
+            ElementComponent.Type = self.Type
+            ElementComponent.Library = Library
+    
+            return ElementComponent:New(Flag, Config)
+        end
+    end
+    
+    Library.Elements = Elements
+    
+    function Library:CreateWindow(Config)
+        if Library.Window then
+            warn("You cannot create more than one window.")
+            return Library.Window
+        end
+    
+        Library.Theme = Config.Theme or "Dark"
+
+        if Config.Mobile ~= nil then
+            Creator.ForceMobile = Config.Mobile and true or false
+            NotificationModule:UpdateLayout()
+        end
+    
+        local DefaultTop = {
+            Title = "Everforest",
+        }
+    
+        local DefaultHeader = {
+            Title = "settings",
+        }
+    
+        local DefaultFooter = {
+            Title = Config.Footer and Config.Footer.Title or Config.Top.Title or DefaultTop.Title,
+            Description = Config.Footer and Config.Footer.Description or ("v" .. Library.Version .. " " .. os.date("%Y.%m.%d")),
+        }
+    
+        local Window = require(script.components.window)({
+            Parent = GUI,
+            Top = self:MergeDictionaries(DefaultTop, Config.Top),
+            Header = self:MergeDictionaries(DefaultHeader, Config.PageHeader),
+            Footer = self:MergeDictionaries(DefaultFooter, Config.PageFooter),
+            TabWidth = Config.TabWidth,
+            Keybind = Config.Keybind,
+            ContainerWidth = Config.ContainerWidth
+        })
+    
+        Library.Window = Window
+        Library:SetTheme(Config.Theme)
+    
+        return Window
+    end
+    
+    function Library:SetTheme(Value)
+        if Library.Window and table.find(Library.Themes, Value) then
+            Library.Theme = Value
+            Creator.UpdateTheme()
+        end
+    end
+    
+    function Library:Destroy()
+        if Library.Window then
+            Creator.Disconnect()
+            Library.GUI:Destroy()
+        end
+    end
+    
+    function Library:Notify(Config)
+        return NotificationModule:New(Config)
+    end
+    
+    if getgenv then
+        getgenv().Everforest = Library
+    end
+    
+    return Library
+end
+
+local v21 = Instance.new("Folder", Everforest)
+v21.Name = "modules"
+local v17 = Instance.new('ModuleScript', v21)
+v17.Name = "creator"
+Modules[v17] = function(script, require)
+    local Themes = require(script.Parent.Parent.themes)
+    
+    local Creator = {
+        Registry = {},
+        Signals = {},
+        DefaultProperties = {
+            ScreenGui = {
+                ResetOnSpawn = false,
+                ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+            },
+            Frame = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderColor3 = Color3.new(0, 0, 0),
+                BorderSizePixel = 0,
+            },
+            ScrollingFrame = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderColor3 = Color3.new(0, 0, 0),
+                ScrollBarImageColor3 = Color3.new(0, 0, 0),
+                ScrollingDirection = Enum.ScrollingDirection.Y
+            },
+            TextLabel = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderColor3 = Color3.new(0, 0, 0),
+                Font = Enum.Font.SourceSans,
+                Text = "",
+                TextColor3 = Color3.new(0, 0, 0),
+                BackgroundTransparency = 1,
+                TextSize = 14,
+            },
+            TextButton = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderColor3 = Color3.new(0, 0, 0),
+                AutoButtonColor = false,
+                Font = Enum.Font.SourceSans,
+                Text = "",
+                TextColor3 = Color3.new(0, 0, 0),
+                TextSize = 14,
+            },
+            TextBox = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderColor3 = Color3.new(0, 0, 0),
+                ClearTextOnFocus = false,
+                Font = Enum.Font.SourceSans,
+                Text = "",
+                TextColor3 = Color3.new(0, 0, 0),
+                TextSize = 14,
+            },
+            ImageLabel = {
+                BackgroundTransparency = 1,
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderColor3 = Color3.new(0, 0, 0),
+                BorderSizePixel = 0,
+            },
+            ImageButton = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderColor3 = Color3.new(0, 0, 0),
+                AutoButtonColor = false,
+            },
+            CanvasGroup = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderColor3 = Color3.new(0, 0, 0),
+                BorderSizePixel = 0,
+            },
+        },
+    }
+    
+    Creator.Registry = setmetatable({}, { __mode = "k" })
+    Creator.Signals = setmetatable({}, { __mode = "k" })
+    
+    local UserInputService = game:GetService("UserInputService")
+
+    -- nil = auto detect, true = force mobile layout, false = force desktop layout
+    Creator.ForceMobile = nil
+
+    function Creator.GetViewport()
+        local Camera = game:GetService("Workspace").CurrentCamera
+        if Camera and Camera.ViewportSize.X > 0 then
+            return Camera.ViewportSize
+        end
+        return Vector2.new(1280, 720)
+    end
+
+    function Creator.IsMobile()
+        if Creator.ForceMobile ~= nil then
+            return Creator.ForceMobile
+        end
+        local Viewport = Creator.GetViewport()
+        local TouchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+        return TouchOnly or math.min(Viewport.X, Viewport.Y) < 450
+    end
+
+    -- Pick(desktopValue, mobileValue)
+    function Creator.Pick(Desktop, Mobile)
+        if Creator.IsMobile() then
+            return Mobile
+        end
+        return Desktop
+    end
+
+    function Creator.AddSignal(Signal, Function)
+        local Connection = Signal:Connect(Function)
+        Creator.Signals[Connection] = true
+        return Connection
+    end
+    
+    function Creator.RemoveSignal(Connection)
+        if Connection then
+            if Connection.Connected then
+                Connection:Disconnect()
+            end
+            Creator.Signals[Connection] = nil
+        end
+    end
+    
+    function Creator.Disconnect()
+        for Connection in Creator.Signals do
+            if Connection.Connected then
+                Connection:Disconnect()
+            end
+        end
+        Creator.Signals = setmetatable({}, { __mode = "k" })
+    end
+    
+    function Creator.GetThemeProperty(Property)
+        local ThemeName = require(script.Parent.Parent).Theme
+        return Themes[ThemeName] and Themes[ThemeName][Property] or Themes["Dark"][Property]
+    end
+    
+    function Creator.ApplyThemeProperty(Object, Prop, Value)
+        Object[Prop] = Creator.GetThemeProperty(Value)
+    end
+    
+    function Creator.UpdateTheme()
+        for Object, ThemeTag in Creator.Registry do
+            if Object and Object.Parent then
+                for Prop, Value in ThemeTag do
+                    pcall(function()
+                        Creator.ApplyThemeProperty(Object, Prop, Value)
+                    end)
+                end
+            end
+        end
+    end
+    
+    function Creator.AddThemeObject(Object, Properties)
+        if not Creator.Registry[Object] then
+            Creator.Registry[Object] = {}
+        end
+    
+        for Property, Value in Properties do
+            Creator.Registry[Object][Property] = Value
+            pcall(function()
+                Creator.ApplyThemeProperty(Object, Property, Value)
+            end)
+        end
+    
+        return Object
+    end
+    
+    function Creator.New(Name, Properties, Children)
+        local Object = Instance.new(Name)
+    
+        for Prop, Value in Creator.DefaultProperties[Name] or {} do
+            Object[Prop] = Value
+        end
+    
+        if Properties then
+            local ThemeTag = Properties.ThemeTag
+    
+            for Prop, Value in Properties do
+                if Prop ~= "ThemeTag" then
+                    Object[Prop] = Value
+                end
+            end
+    
+            if ThemeTag then
+                local ClonedTags = {}
+                for Prop, Value in ThemeTag do
+                    ClonedTags[Prop] = Value
+                    Creator.ApplyThemeProperty(Object, Prop, Value)
+                end
+                Creator.Registry[Object] = ClonedTags
+            end
+        end
+    
+        if Children then
+            for _, Child in Children do
+                if Child then
+                    Child.Parent = Object
+                end
+            end
+        end
+    
+        return Object
+    end
+    
+    return Creator
+end
+
+local v18 = Instance.new('ModuleScript', v21)
+v18.Name = "icons"
+Modules[v18] = function(script, require)
+    -- This file was @generated by Tarmac. It is not intended for manual editing.
+    return {
+        assets = {
+            ["lucide-accessibility"] = "rbxassetid://10709751939",
+            ["lucide-activity"] = "rbxassetid://10709752035",
+            ["lucide-air-vent"] = "rbxassetid://10709752131",
+            ["lucide-airplay"] = "rbxassetid://10709752254",
+            ["lucide-alarm-check"] = "rbxassetid://10709752405",
+            ["lucide-alarm-clock"] = "rbxassetid://10709752630",
+            ["lucide-alarm-clock-off"] = "rbxassetid://10709752508",
+            ["lucide-alarm-minus"] = "rbxassetid://10709752732",
+            ["lucide-alarm-plus"] = "rbxassetid://10709752825",
+            ["lucide-album"] = "rbxassetid://10709752906",
+            ["lucide-alert-circle"] = "rbxassetid://10709752996",
+            ["lucide-alert-octagon"] = "rbxassetid://10709753064",
+            ["lucide-alert-triangle"] = "rbxassetid://10709753149",
+            ["lucide-align-center"] = "rbxassetid://10709753570",
+            ["lucide-align-center-horizontal"] = "rbxassetid://10709753272",
+            ["lucide-align-center-vertical"] = "rbxassetid://10709753421",
+            ["lucide-align-end-horizontal"] = "rbxassetid://10709753692",
+            ["lucide-align-end-vertical"] = "rbxassetid://10709753808",
+            ["lucide-align-horizontal-distribute-center"] = "rbxassetid://10747779791",
+            ["lucide-align-horizontal-distribute-end"] = "rbxassetid://10747784534",
+            ["lucide-align-horizontal-distribute-start"] = "rbxassetid://10709754118",
+            ["lucide-align-horizontal-justify-center"] = "rbxassetid://10709754204",
+            ["lucide-align-horizontal-justify-end"] = "rbxassetid://10709754317",
+            ["lucide-align-horizontal-justify-start"] = "rbxassetid://10709754436",
+            ["lucide-align-horizontal-space-around"] = "rbxassetid://10709754590",
+            ["lucide-align-horizontal-space-between"] = "rbxassetid://10709754749",
+            ["lucide-align-justify"] = "rbxassetid://10709759610",
+            ["lucide-align-left"] = "rbxassetid://10709759764",
+            ["lucide-align-right"] = "rbxassetid://10709759895",
+            ["lucide-align-start-horizontal"] = "rbxassetid://10709760051",
+            ["lucide-align-start-vertical"] = "rbxassetid://10709760244",
+            ["lucide-align-vertical-distribute-center"] = "rbxassetid://10709760351",
+            ["lucide-align-vertical-distribute-end"] = "rbxassetid://10709760434",
+            ["lucide-align-vertical-distribute-start"] = "rbxassetid://10709760612",
+            ["lucide-align-vertical-justify-center"] = "rbxassetid://10709760814",
+            ["lucide-align-vertical-justify-end"] = "rbxassetid://10709761003",
+            ["lucide-align-vertical-justify-start"] = "rbxassetid://10709761176",
+            ["lucide-align-vertical-space-around"] = "rbxassetid://10709761324",
+            ["lucide-align-vertical-space-between"] = "rbxassetid://10709761434",
+            ["lucide-anchor"] = "rbxassetid://10709761530",
+            ["lucide-angry"] = "rbxassetid://10709761629",
+            ["lucide-annoyed"] = "rbxassetid://10709761722",
+            ["lucide-aperture"] = "rbxassetid://10709761813",
+            ["lucide-apple"] = "rbxassetid://10709761889",
+            ["lucide-archive"] = "rbxassetid://10709762233",
+            ["lucide-archive-restore"] = "rbxassetid://10709762058",
+            ["lucide-armchair"] = "rbxassetid://10709762327",
+            ["lucide-arrow-big-down"] = "rbxassetid://10747796644",
+            ["lucide-arrow-big-left"] = "rbxassetid://10709762574",
+            ["lucide-arrow-big-right"] = "rbxassetid://10709762727",
+            ["lucide-arrow-big-up"] = "rbxassetid://10709762879",
+            ["lucide-arrow-down"] = "rbxassetid://10709767827",
+            ["lucide-arrow-down-circle"] = "rbxassetid://10709763034",
+            ["lucide-arrow-down-left"] = "rbxassetid://10709767656",
+            ["lucide-arrow-down-right"] = "rbxassetid://10709767750",
+            ["lucide-arrow-left"] = "rbxassetid://10709768114",
+            ["lucide-arrow-left-circle"] = "rbxassetid://10709767936",
+            ["lucide-arrow-left-right"] = "rbxassetid://10709768019",
+            ["lucide-arrow-right"] = "rbxassetid://10709768347",
+            ["lucide-arrow-right-circle"] = "rbxassetid://10709768226",
+            ["lucide-arrow-up"] = "rbxassetid://10709768939",
+            ["lucide-arrow-up-circle"] = "rbxassetid://10709768432",
+            ["lucide-arrow-up-down"] = "rbxassetid://10709768538",
+            ["lucide-arrow-up-left"] = "rbxassetid://10709768661",
+            ["lucide-arrow-up-right"] = "rbxassetid://10709768787",
+            ["lucide-asterisk"] = "rbxassetid://10709769095",
+            ["lucide-at-sign"] = "rbxassetid://10709769286",
+            ["lucide-award"] = "rbxassetid://10709769406",
+            ["lucide-axe"] = "rbxassetid://10709769508",
+            ["lucide-axis-3d"] = "rbxassetid://10709769598",
+            ["lucide-baby"] = "rbxassetid://10709769732",
+            ["lucide-backpack"] = "rbxassetid://10709769841",
+            ["lucide-baggage-claim"] = "rbxassetid://10709769935",
+            ["lucide-banana"] = "rbxassetid://10709770005",
+            ["lucide-banknote"] = "rbxassetid://10709770178",
+            ["lucide-bar-chart"] = "rbxassetid://10709773755",
+            ["lucide-bar-chart-2"] = "rbxassetid://10709770317",
+            ["lucide-bar-chart-3"] = "rbxassetid://10709770431",
+            ["lucide-bar-chart-4"] = "rbxassetid://10709770560",
+            ["lucide-bar-chart-horizontal"] = "rbxassetid://10709773669",
+            ["lucide-barcode"] = "rbxassetid://10747360675",
+            ["lucide-baseline"] = "rbxassetid://10709773863",
+            ["lucide-bath"] = "rbxassetid://10709773963",
+            ["lucide-battery"] = "rbxassetid://10709774640",
+            ["lucide-battery-charging"] = "rbxassetid://10709774068",
+            ["lucide-battery-full"] = "rbxassetid://10709774206",
+            ["lucide-battery-low"] = "rbxassetid://10709774370",
+            ["lucide-battery-medium"] = "rbxassetid://10709774513",
+            ["lucide-beaker"] = "rbxassetid://10709774756",
+            ["lucide-bed"] = "rbxassetid://10709775036",
+            ["lucide-bed-double"] = "rbxassetid://10709774864",
+            ["lucide-bed-single"] = "rbxassetid://10709774968",
+            ["lucide-beer"] = "rbxassetid://10709775167",
+            ["lucide-bell"] = "rbxassetid://10709775704",
+            ["lucide-bell-minus"] = "rbxassetid://10709775241",
+            ["lucide-bell-off"] = "rbxassetid://10709775320",
+            ["lucide-bell-plus"] = "rbxassetid://10709775448",
+            ["lucide-bell-ring"] = "rbxassetid://10709775560",
+            ["lucide-bike"] = "rbxassetid://10709775894",
+            ["lucide-binary"] = "rbxassetid://10709776050",
+            ["lucide-bitcoin"] = "rbxassetid://10709776126",
+            ["lucide-bluetooth"] = "rbxassetid://10709776655",
+            ["lucide-bluetooth-connected"] = "rbxassetid://10709776240",
+            ["lucide-bluetooth-off"] = "rbxassetid://10709776344",
+            ["lucide-bluetooth-searching"] = "rbxassetid://10709776501",
+            ["lucide-bold"] = "rbxassetid://10747813908",
+            ["lucide-bomb"] = "rbxassetid://10709781460",
+            ["lucide-bone"] = "rbxassetid://10709781605",
+            ["lucide-book"] = "rbxassetid://10709781824",
+            ["lucide-book-open"] = "rbxassetid://10709781717",
+            ["lucide-bookmark"] = "rbxassetid://10709782154",
+            ["lucide-bookmark-minus"] = "rbxassetid://10709781919",
+            ["lucide-bookmark-plus"] = "rbxassetid://10709782044",
+            ["lucide-bot"] = "rbxassetid://10709782230",
+            ["lucide-box"] = "rbxassetid://10709782497",
+            ["lucide-box-select"] = "rbxassetid://10709782342",
+            ["lucide-boxes"] = "rbxassetid://10709782582",
+            ["lucide-briefcase"] = "rbxassetid://10709782662",
+            ["lucide-brush"] = "rbxassetid://10709782758",
+            ["lucide-bug"] = "rbxassetid://10709782845",
+            ["lucide-building"] = "rbxassetid://10709783051",
+            ["lucide-building-2"] = "rbxassetid://10709782939",
+            ["lucide-bus"] = "rbxassetid://10709783137",
+            ["lucide-cake"] = "rbxassetid://10709783217",
+            ["lucide-calculator"] = "rbxassetid://10709783311",
+            ["lucide-calendar"] = "rbxassetid://10709789505",
+            ["lucide-calendar-check"] = "rbxassetid://10709783474",
+            ["lucide-calendar-check-2"] = "rbxassetid://10709783392",
+            ["lucide-calendar-clock"] = "rbxassetid://10709783577",
+            ["lucide-calendar-days"] = "rbxassetid://10709783673",
+            ["lucide-calendar-heart"] = "rbxassetid://10709783835",
+            ["lucide-calendar-minus"] = "rbxassetid://10709783959",
+            ["lucide-calendar-off"] = "rbxassetid://10709788784",
+            ["lucide-calendar-plus"] = "rbxassetid://10709788937",
+            ["lucide-calendar-range"] = "rbxassetid://10709789053",
+            ["lucide-calendar-search"] = "rbxassetid://10709789200",
+            ["lucide-calendar-x"] = "rbxassetid://10709789407",
+            ["lucide-calendar-x-2"] = "rbxassetid://10709789329",
+            ["lucide-camera"] = "rbxassetid://10709789686",
+            ["lucide-camera-off"] = "rbxassetid://10747822677",
+            ["lucide-car"] = "rbxassetid://10709789810",
+            ["lucide-carrot"] = "rbxassetid://10709789960",
+            ["lucide-cast"] = "rbxassetid://10709790097",
+            ["lucide-charge"] = "rbxassetid://10709790202",
+            ["lucide-check"] = "rbxassetid://10709790644",
+            ["lucide-check-circle"] = "rbxassetid://10709790387",
+            ["lucide-check-circle-2"] = "rbxassetid://10709790298",
+            ["lucide-check-square"] = "rbxassetid://10709790537",
+            ["lucide-chef-hat"] = "rbxassetid://10709790757",
+            ["lucide-cherry"] = "rbxassetid://10709790875",
+            ["lucide-chevron-down"] = "rbxassetid://10709790948",
+            ["lucide-chevron-first"] = "rbxassetid://10709791015",
+            ["lucide-chevron-last"] = "rbxassetid://10709791130",
+            ["lucide-chevron-left"] = "rbxassetid://10709791281",
+            ["lucide-chevron-right"] = "rbxassetid://10709791437",
+            ["lucide-chevron-up"] = "rbxassetid://10709791523",
+            ["lucide-chevrons-down"] = "rbxassetid://10709796864",
+            ["lucide-chevrons-down-up"] = "rbxassetid://10709791632",
+            ["lucide-chevrons-left"] = "rbxassetid://10709797151",
+            ["lucide-chevrons-left-right"] = "rbxassetid://10709797006",
+            ["lucide-chevrons-right"] = "rbxassetid://10709797382",
+            ["lucide-chevrons-right-left"] = "rbxassetid://10709797274",
+            ["lucide-chevrons-up"] = "rbxassetid://10709797622",
+            ["lucide-chevrons-up-down"] = "rbxassetid://10709797508",
+            ["lucide-chrome"] = "rbxassetid://10709797725",
+            ["lucide-circle"] = "rbxassetid://10709798174",
+            ["lucide-circle-dot"] = "rbxassetid://10709797837",
+            ["lucide-circle-ellipsis"] = "rbxassetid://10709797985",
+            ["lucide-circle-slashed"] = "rbxassetid://10709798100",
+            ["lucide-citrus"] = "rbxassetid://10709798276",
+            ["lucide-clapperboard"] = "rbxassetid://10709798350",
+            ["lucide-clipboard"] = "rbxassetid://10709799288",
+            ["lucide-clipboard-check"] = "rbxassetid://10709798443",
+            ["lucide-clipboard-copy"] = "rbxassetid://10709798574",
+            ["lucide-clipboard-edit"] = "rbxassetid://10709798682",
+            ["lucide-clipboard-list"] = "rbxassetid://10709798792",
+            ["lucide-clipboard-signature"] = "rbxassetid://10709798890",
+            ["lucide-clipboard-type"] = "rbxassetid://10709798999",
+            ["lucide-clipboard-x"] = "rbxassetid://10709799124",
+            ["lucide-clock"] = "rbxassetid://10709805144",
+            ["lucide-clock-1"] = "rbxassetid://10709799535",
+            ["lucide-clock-10"] = "rbxassetid://10709799718",
+            ["lucide-clock-11"] = "rbxassetid://10709799818",
+            ["lucide-clock-12"] = "rbxassetid://10709799962",
+            ["lucide-clock-2"] = "rbxassetid://10709803876",
+            ["lucide-clock-3"] = "rbxassetid://10709803989",
+            ["lucide-clock-4"] = "rbxassetid://10709804164",
+            ["lucide-clock-5"] = "rbxassetid://10709804291",
+            ["lucide-clock-6"] = "rbxassetid://10709804435",
+            ["lucide-clock-7"] = "rbxassetid://10709804599",
+            ["lucide-clock-8"] = "rbxassetid://10709804784",
+            ["lucide-clock-9"] = "rbxassetid://10709804996",
+            ["lucide-cloud"] = "rbxassetid://10709806740",
+            ["lucide-cloud-cog"] = "rbxassetid://10709805262",
+            ["lucide-cloud-drizzle"] = "rbxassetid://10709805371",
+            ["lucide-cloud-fog"] = "rbxassetid://10709805477",
+            ["lucide-cloud-hail"] = "rbxassetid://10709805596",
+            ["lucide-cloud-lightning"] = "rbxassetid://10709805727",
+            ["lucide-cloud-moon"] = "rbxassetid://10709805942",
+            ["lucide-cloud-moon-rain"] = "rbxassetid://10709805838",
+            ["lucide-cloud-off"] = "rbxassetid://10709806060",
+            ["lucide-cloud-rain"] = "rbxassetid://10709806277",
+            ["lucide-cloud-rain-wind"] = "rbxassetid://10709806166",
+            ["lucide-cloud-snow"] = "rbxassetid://10709806374",
+            ["lucide-cloud-sun"] = "rbxassetid://10709806631",
+            ["lucide-cloud-sun-rain"] = "rbxassetid://10709806475",
+            ["lucide-cloudy"] = "rbxassetid://10709806859",
+            ["lucide-clover"] = "rbxassetid://10709806995",
+            ["lucide-code"] = "rbxassetid://10709810463",
+            ["lucide-code-2"] = "rbxassetid://10709807111",
+            ["lucide-codepen"] = "rbxassetid://10709810534",
+            ["lucide-codesandbox"] = "rbxassetid://10709810676",
+            ["lucide-coffee"] = "rbxassetid://10709810814",
+            ["lucide-cog"] = "rbxassetid://10709810948",
+            ["lucide-coins"] = "rbxassetid://10709811110",
+            ["lucide-columns"] = "rbxassetid://10709811261",
+            ["lucide-command"] = "rbxassetid://10709811365",
+            ["lucide-compass"] = "rbxassetid://10709811445",
+            ["lucide-component"] = "rbxassetid://10709811595",
+            ["lucide-concierge-bell"] = "rbxassetid://10709811706",
+            ["lucide-connection"] = "rbxassetid://10747361219",
+            ["lucide-contact"] = "rbxassetid://10709811834",
+            ["lucide-contrast"] = "rbxassetid://10709811939",
+            ["lucide-cookie"] = "rbxassetid://10709812067",
+            ["lucide-copy"] = "rbxassetid://10709812159",
+            ["lucide-copyleft"] = "rbxassetid://10709812251",
+            ["lucide-copyright"] = "rbxassetid://10709812311",
+            ["lucide-corner-down-left"] = "rbxassetid://10709812396",
+            ["lucide-corner-down-right"] = "rbxassetid://10709812485",
+            ["lucide-corner-left-down"] = "rbxassetid://10709812632",
+            ["lucide-corner-left-up"] = "rbxassetid://10709812784",
+            ["lucide-corner-right-down"] = "rbxassetid://10709812939",
+            ["lucide-corner-right-up"] = "rbxassetid://10709813094",
+            ["lucide-corner-up-left"] = "rbxassetid://10709813185",
+            ["lucide-corner-up-right"] = "rbxassetid://10709813281",
+            ["lucide-cpu"] = "rbxassetid://10709813383",
+            ["lucide-croissant"] = "rbxassetid://10709818125",
+            ["lucide-crop"] = "rbxassetid://10709818245",
+            ["lucide-cross"] = "rbxassetid://10709818399",
+            ["lucide-crosshair"] = "rbxassetid://10709818534",
+            ["lucide-crown"] = "rbxassetid://10709818626",
+            ["lucide-cup-soda"] = "rbxassetid://10709818763",
+            ["lucide-curly-braces"] = "rbxassetid://10709818847",
+            ["lucide-currency"] = "rbxassetid://10709818931",
+            ["lucide-database"] = "rbxassetid://10709818996",
+            ["lucide-delete"] = "rbxassetid://10709819059",
+            ["lucide-diamond"] = "rbxassetid://10709819149",
+            ["lucide-dice-1"] = "rbxassetid://10709819266",
+            ["lucide-dice-2"] = "rbxassetid://10709819361",
+            ["lucide-dice-3"] = "rbxassetid://10709819508",
+            ["lucide-dice-4"] = "rbxassetid://10709819670",
+            ["lucide-dice-5"] = "rbxassetid://10709819801",
+            ["lucide-dice-6"] = "rbxassetid://10709819896",
+            ["lucide-dices"] = "rbxassetid://10723343321",
+            ["lucide-diff"] = "rbxassetid://10723343416",
+            ["lucide-disc"] = "rbxassetid://10723343537",
+            ["lucide-divide"] = "rbxassetid://10723343805",
+            ["lucide-divide-circle"] = "rbxassetid://10723343636",
+            ["lucide-divide-square"] = "rbxassetid://10723343737",
+            ["lucide-dollar-sign"] = "rbxassetid://10723343958",
+            ["lucide-download"] = "rbxassetid://10723344270",
+            ["lucide-download-cloud"] = "rbxassetid://10723344088",
+            ["lucide-droplet"] = "rbxassetid://10723344432",
+            ["lucide-droplets"] = "rbxassetid://10734883356",
+            ["lucide-drumstick"] = "rbxassetid://10723344737",
+            ["lucide-edit"] = "rbxassetid://10734883598",
+            ["lucide-edit-2"] = "rbxassetid://10723344885",
+            ["lucide-edit-3"] = "rbxassetid://10723345088",
+            ["lucide-egg"] = "rbxassetid://10723345518",
+            ["lucide-egg-fried"] = "rbxassetid://10723345347",
+            ["lucide-electricity"] = "rbxassetid://10723345749",
+            ["lucide-electricity-off"] = "rbxassetid://10723345643",
+            ["lucide-equal"] = "rbxassetid://10723345990",
+            ["lucide-equal-not"] = "rbxassetid://10723345866",
+            ["lucide-eraser"] = "rbxassetid://10723346158",
+            ["lucide-euro"] = "rbxassetid://10723346372",
+            ["lucide-expand"] = "rbxassetid://10723346553",
+            ["lucide-external-link"] = "rbxassetid://10723346684",
+            ["lucide-eye"] = "rbxassetid://10723346959",
+            ["lucide-eye-off"] = "rbxassetid://10723346871",
+            ["lucide-factory"] = "rbxassetid://10723347051",
+            ["lucide-fan"] = "rbxassetid://10723354359",
+            ["lucide-fast-forward"] = "rbxassetid://10723354521",
+            ["lucide-feather"] = "rbxassetid://10723354671",
+            ["lucide-figma"] = "rbxassetid://10723354801",
+            ["lucide-file"] = "rbxassetid://10723374641",
+            ["lucide-file-archive"] = "rbxassetid://10723354921",
+            ["lucide-file-audio"] = "rbxassetid://10723355148",
+            ["lucide-file-audio-2"] = "rbxassetid://10723355026",
+            ["lucide-file-axis-3d"] = "rbxassetid://10723355272",
+            ["lucide-file-badge"] = "rbxassetid://10723355622",
+            ["lucide-file-badge-2"] = "rbxassetid://10723355451",
+            ["lucide-file-bar-chart"] = "rbxassetid://10723355887",
+            ["lucide-file-bar-chart-2"] = "rbxassetid://10723355746",
+            ["lucide-file-box"] = "rbxassetid://10723355989",
+            ["lucide-file-check"] = "rbxassetid://10723356210",
+            ["lucide-file-check-2"] = "rbxassetid://10723356100",
+            ["lucide-file-clock"] = "rbxassetid://10723356329",
+            ["lucide-file-code"] = "rbxassetid://10723356507",
+            ["lucide-file-cog"] = "rbxassetid://10723356830",
+            ["lucide-file-cog-2"] = "rbxassetid://10723356676",
+            ["lucide-file-diff"] = "rbxassetid://10723357039",
+            ["lucide-file-digit"] = "rbxassetid://10723357151",
+            ["lucide-file-down"] = "rbxassetid://10723357322",
+            ["lucide-file-edit"] = "rbxassetid://10723357495",
+            ["lucide-file-heart"] = "rbxassetid://10723357637",
+            ["lucide-file-image"] = "rbxassetid://10723357790",
+            ["lucide-file-input"] = "rbxassetid://10723357933",
+            ["lucide-file-json"] = "rbxassetid://10723364435",
+            ["lucide-file-json-2"] = "rbxassetid://10723364361",
+            ["lucide-file-key"] = "rbxassetid://10723364605",
+            ["lucide-file-key-2"] = "rbxassetid://10723364515",
+            ["lucide-file-line-chart"] = "rbxassetid://10723364725",
+            ["lucide-file-lock"] = "rbxassetid://10723364957",
+            ["lucide-file-lock-2"] = "rbxassetid://10723364861",
+            ["lucide-file-minus"] = "rbxassetid://10723365254",
+            ["lucide-file-minus-2"] = "rbxassetid://10723365086",
+            ["lucide-file-output"] = "rbxassetid://10723365457",
+            ["lucide-file-pie-chart"] = "rbxassetid://10723365598",
+            ["lucide-file-plus"] = "rbxassetid://10723365877",
+            ["lucide-file-plus-2"] = "rbxassetid://10723365766",
+            ["lucide-file-question"] = "rbxassetid://10723365987",
+            ["lucide-file-scan"] = "rbxassetid://10723366167",
+            ["lucide-file-search"] = "rbxassetid://10723366550",
+            ["lucide-file-search-2"] = "rbxassetid://10723366340",
+            ["lucide-file-signature"] = "rbxassetid://10723366741",
+            ["lucide-file-spreadsheet"] = "rbxassetid://10723366962",
+            ["lucide-file-symlink"] = "rbxassetid://10723367098",
+            ["lucide-file-terminal"] = "rbxassetid://10723367244",
+            ["lucide-file-text"] = "rbxassetid://10723367380",
+            ["lucide-file-type"] = "rbxassetid://10723367606",
+            ["lucide-file-type-2"] = "rbxassetid://10723367509",
+            ["lucide-file-up"] = "rbxassetid://10723367734",
+            ["lucide-file-video"] = "rbxassetid://10723373884",
+            ["lucide-file-video-2"] = "rbxassetid://10723367834",
+            ["lucide-file-volume"] = "rbxassetid://10723374172",
+            ["lucide-file-volume-2"] = "rbxassetid://10723374030",
+            ["lucide-file-warning"] = "rbxassetid://10723374276",
+            ["lucide-file-x"] = "rbxassetid://10723374544",
+            ["lucide-file-x-2"] = "rbxassetid://10723374378",
+            ["lucide-files"] = "rbxassetid://10723374759",
+            ["lucide-film"] = "rbxassetid://10723374981",
+            ["lucide-filter"] = "rbxassetid://10723375128",
+            ["lucide-fingerprint"] = "rbxassetid://10723375250",
+            ["lucide-flag"] = "rbxassetid://10723375890",
+            ["lucide-flag-off"] = "rbxassetid://10723375443",
+            ["lucide-flag-triangle-left"] = "rbxassetid://10723375608",
+            ["lucide-flag-triangle-right"] = "rbxassetid://10723375727",
+            ["lucide-flame"] = "rbxassetid://10723376114",
+            ["lucide-flashlight"] = "rbxassetid://10723376471",
+            ["lucide-flashlight-off"] = "rbxassetid://10723376365",
+            ["lucide-flask-conical"] = "rbxassetid://10734883986",
+            ["lucide-flask-round"] = "rbxassetid://10723376614",
+            ["lucide-flip-horizontal"] = "rbxassetid://10723376884",
+            ["lucide-flip-horizontal-2"] = "rbxassetid://10723376745",
+            ["lucide-flip-vertical"] = "rbxassetid://10723377138",
+            ["lucide-flip-vertical-2"] = "rbxassetid://10723377026",
+            ["lucide-flower"] = "rbxassetid://10747830374",
+            ["lucide-flower-2"] = "rbxassetid://10723377305",
+            ["lucide-focus"] = "rbxassetid://10723377537",
+            ["lucide-folder"] = "rbxassetid://10723387563",
+            ["lucide-folder-archive"] = "rbxassetid://10723384478",
+            ["lucide-folder-check"] = "rbxassetid://10723384605",
+            ["lucide-folder-clock"] = "rbxassetid://10723384731",
+            ["lucide-folder-closed"] = "rbxassetid://10723384893",
+            ["lucide-folder-cog"] = "rbxassetid://10723385213",
+            ["lucide-folder-cog-2"] = "rbxassetid://10723385036",
+            ["lucide-folder-down"] = "rbxassetid://10723385338",
+            ["lucide-folder-edit"] = "rbxassetid://10723385445",
+            ["lucide-folder-heart"] = "rbxassetid://10723385545",
+            ["lucide-folder-input"] = "rbxassetid://10723385721",
+            ["lucide-folder-key"] = "rbxassetid://10723385848",
+            ["lucide-folder-lock"] = "rbxassetid://10723386005",
+            ["lucide-folder-minus"] = "rbxassetid://10723386127",
+            ["lucide-folder-open"] = "rbxassetid://10723386277",
+            ["lucide-folder-output"] = "rbxassetid://10723386386",
+            ["lucide-folder-plus"] = "rbxassetid://10723386531",
+            ["lucide-folder-search"] = "rbxassetid://10723386787",
+            ["lucide-folder-search-2"] = "rbxassetid://10723386674",
+            ["lucide-folder-symlink"] = "rbxassetid://10723386930",
+            ["lucide-folder-tree"] = "rbxassetid://10723387085",
+            ["lucide-folder-up"] = "rbxassetid://10723387265",
+            ["lucide-folder-x"] = "rbxassetid://10723387448",
+            ["lucide-folders"] = "rbxassetid://10723387721",
+            ["lucide-form-input"] = "rbxassetid://10723387841",
+            ["lucide-forward"] = "rbxassetid://10723388016",
+            ["lucide-frame"] = "rbxassetid://10723394389",
+            ["lucide-framer"] = "rbxassetid://10723394565",
+            ["lucide-frown"] = "rbxassetid://10723394681",
+            ["lucide-fuel"] = "rbxassetid://10723394846",
+            ["lucide-function-square"] = "rbxassetid://10723395041",
+            ["lucide-gamepad"] = "rbxassetid://10723395457",
+            ["lucide-gamepad-2"] = "rbxassetid://10723395215",
+            ["lucide-gauge"] = "rbxassetid://10723395708",
+            ["lucide-gavel"] = "rbxassetid://10723395896",
+            ["lucide-gem"] = "rbxassetid://10723396000",
+            ["lucide-ghost"] = "rbxassetid://10723396107",
+            ["lucide-gift"] = "rbxassetid://10723396402",
+            ["lucide-gift-card"] = "rbxassetid://10723396225",
+            ["lucide-git-branch"] = "rbxassetid://10723396676",
+            ["lucide-git-branch-plus"] = "rbxassetid://10723396542",
+            ["lucide-git-commit"] = "rbxassetid://10723396812",
+            ["lucide-git-compare"] = "rbxassetid://10723396954",
+            ["lucide-git-fork"] = "rbxassetid://10723397049",
+            ["lucide-git-merge"] = "rbxassetid://10723397165",
+            ["lucide-git-pull-request"] = "rbxassetid://10723397431",
+            ["lucide-git-pull-request-closed"] = "rbxassetid://10723397268",
+            ["lucide-git-pull-request-draft"] = "rbxassetid://10734884302",
+            ["lucide-glass"] = "rbxassetid://10723397788",
+            ["lucide-glass-2"] = "rbxassetid://10723397529",
+            ["lucide-glass-water"] = "rbxassetid://10723397678",
+            ["lucide-glasses"] = "rbxassetid://10723397895",
+            ["lucide-globe"] = "rbxassetid://10723404337",
+            ["lucide-globe-2"] = "rbxassetid://10723398002",
+            ["lucide-grab"] = "rbxassetid://10723404472",
+            ["lucide-graduation-cap"] = "rbxassetid://10723404691",
+            ["lucide-grape"] = "rbxassetid://10723404822",
+            ["lucide-grid"] = "rbxassetid://10723404936",
+            ["lucide-grip-horizontal"] = "rbxassetid://10723405089",
+            ["lucide-grip-vertical"] = "rbxassetid://10723405236",
+            ["lucide-hammer"] = "rbxassetid://10723405360",
+            ["lucide-hand"] = "rbxassetid://10723405649",
+            ["lucide-hand-metal"] = "rbxassetid://10723405508",
+            ["lucide-hard-drive"] = "rbxassetid://10723405749",
+            ["lucide-hard-hat"] = "rbxassetid://10723405859",
+            ["lucide-hash"] = "rbxassetid://10723405975",
+            ["lucide-haze"] = "rbxassetid://10723406078",
+            ["lucide-headphones"] = "rbxassetid://10723406165",
+            ["lucide-heart"] = "rbxassetid://10723406885",
+            ["lucide-heart-crack"] = "rbxassetid://10723406299",
+            ["lucide-heart-handshake"] = "rbxassetid://10723406480",
+            ["lucide-heart-off"] = "rbxassetid://10723406662",
+            ["lucide-heart-pulse"] = "rbxassetid://10723406795",
+            ["lucide-help-circle"] = "rbxassetid://10723406988",
+            ["lucide-hexagon"] = "rbxassetid://10723407092",
+            ["lucide-highlighter"] = "rbxassetid://10723407192",
+            ["lucide-history"] = "rbxassetid://10723407335",
+            ["lucide-home"] = "rbxassetid://10723407389",
+            ["lucide-hourglass"] = "rbxassetid://10723407498",
+            ["lucide-ice-cream"] = "rbxassetid://10723414308",
+            ["lucide-image"] = "rbxassetid://10723415040",
+            ["lucide-image-minus"] = "rbxassetid://10723414487",
+            ["lucide-image-off"] = "rbxassetid://10723414677",
+            ["lucide-image-plus"] = "rbxassetid://10723414827",
+            ["lucide-import"] = "rbxassetid://10723415205",
+            ["lucide-inbox"] = "rbxassetid://10723415335",
+            ["lucide-indent"] = "rbxassetid://10723415494",
+            ["lucide-indian-rupee"] = "rbxassetid://10723415642",
+            ["lucide-infinity"] = "rbxassetid://10723415766",
+            ["lucide-info"] = "rbxassetid://10723415903",
+            ["lucide-inspect"] = "rbxassetid://10723416057",
+            ["lucide-italic"] = "rbxassetid://10723416195",
+            ["lucide-japanese-yen"] = "rbxassetid://10723416363",
+            ["lucide-joystick"] = "rbxassetid://10723416527",
+            ["lucide-key"] = "rbxassetid://10723416652",
+            ["lucide-keyboard"] = "rbxassetid://10723416765",
+            ["lucide-lamp"] = "rbxassetid://10723417513",
+            ["lucide-lamp-ceiling"] = "rbxassetid://10723416922",
+            ["lucide-lamp-desk"] = "rbxassetid://10723417016",
+            ["lucide-lamp-floor"] = "rbxassetid://10723417131",
+            ["lucide-lamp-wall-down"] = "rbxassetid://10723417240",
+            ["lucide-lamp-wall-up"] = "rbxassetid://10723417356",
+            ["lucide-landmark"] = "rbxassetid://10723417608",
+            ["lucide-languages"] = "rbxassetid://10723417703",
+            ["lucide-laptop"] = "rbxassetid://10723423881",
+            ["lucide-laptop-2"] = "rbxassetid://10723417797",
+            ["lucide-lasso"] = "rbxassetid://10723424235",
+            ["lucide-lasso-select"] = "rbxassetid://10723424058",
+            ["lucide-laugh"] = "rbxassetid://10723424372",
+            ["lucide-layers"] = "rbxassetid://10723424505",
+            ["lucide-layout"] = "rbxassetid://10723425376",
+            ["lucide-layout-dashboard"] = "rbxassetid://10723424646",
+            ["lucide-layout-grid"] = "rbxassetid://10723424838",
+            ["lucide-layout-list"] = "rbxassetid://10723424963",
+            ["lucide-layout-template"] = "rbxassetid://10723425187",
+            ["lucide-leaf"] = "rbxassetid://10723425539",
+            ["lucide-library"] = "rbxassetid://10723425615",
+            ["lucide-life-buoy"] = "rbxassetid://10723425685",
+            ["lucide-lightbulb"] = "rbxassetid://10723425852",
+            ["lucide-lightbulb-off"] = "rbxassetid://10723425762",
+            ["lucide-line-chart"] = "rbxassetid://10723426393",
+            ["lucide-link"] = "rbxassetid://10723426722",
+            ["lucide-link-2"] = "rbxassetid://10723426595",
+            ["lucide-link-2-off"] = "rbxassetid://10723426513",
+            ["lucide-list"] = "rbxassetid://10723433811",
+            ["lucide-list-checks"] = "rbxassetid://10734884548",
+            ["lucide-list-end"] = "rbxassetid://10723426886",
+            ["lucide-list-minus"] = "rbxassetid://10723426986",
+            ["lucide-list-music"] = "rbxassetid://10723427081",
+            ["lucide-list-ordered"] = "rbxassetid://10723427199",
+            ["lucide-list-plus"] = "rbxassetid://10723427334",
+            ["lucide-list-start"] = "rbxassetid://10723427494",
+            ["lucide-list-video"] = "rbxassetid://10723427619",
+            ["lucide-list-x"] = "rbxassetid://10723433655",
+            ["lucide-loader"] = "rbxassetid://10723434070",
+            ["lucide-loader-2"] = "rbxassetid://10723433935",
+            ["lucide-locate"] = "rbxassetid://10723434557",
+            ["lucide-locate-fixed"] = "rbxassetid://10723434236",
+            ["lucide-locate-off"] = "rbxassetid://10723434379",
+            ["lucide-lock"] = "rbxassetid://10723434711",
+            ["lucide-log-in"] = "rbxassetid://10723434830",
+            ["lucide-log-out"] = "rbxassetid://10723434906",
+            ["lucide-luggage"] = "rbxassetid://10723434993",
+            ["lucide-magnet"] = "rbxassetid://10723435069",
+            ["lucide-mail"] = "rbxassetid://10734885430",
+            ["lucide-mail-check"] = "rbxassetid://10723435182",
+            ["lucide-mail-minus"] = "rbxassetid://10723435261",
+            ["lucide-mail-open"] = "rbxassetid://10723435342",
+            ["lucide-mail-plus"] = "rbxassetid://10723435443",
+            ["lucide-mail-question"] = "rbxassetid://10723435515",
+            ["lucide-mail-search"] = "rbxassetid://10734884739",
+            ["lucide-mail-warning"] = "rbxassetid://10734885015",
+            ["lucide-mail-x"] = "rbxassetid://10734885247",
+            ["lucide-mails"] = "rbxassetid://10734885614",
+            ["lucide-map"] = "rbxassetid://10734886202",
+            ["lucide-map-pin"] = "rbxassetid://10734886004",
+            ["lucide-map-pin-off"] = "rbxassetid://10734885803",
+            ["lucide-maximize"] = "rbxassetid://10734886735",
+            ["lucide-maximize-2"] = "rbxassetid://10734886496",
+            ["lucide-medal"] = "rbxassetid://10734887072",
+            ["lucide-megaphone"] = "rbxassetid://10734887454",
+            ["lucide-megaphone-off"] = "rbxassetid://10734887311",
+            ["lucide-meh"] = "rbxassetid://10734887603",
+            ["lucide-menu"] = "rbxassetid://10734887784",
+            ["lucide-message-circle"] = "rbxassetid://10734888000",
+            ["lucide-message-square"] = "rbxassetid://10734888228",
+            ["lucide-mic"] = "rbxassetid://10734888864",
+            ["lucide-mic-2"] = "rbxassetid://10734888430",
+            ["lucide-mic-off"] = "rbxassetid://10734888646",
+            ["lucide-microscope"] = "rbxassetid://10734889106",
+            ["lucide-microwave"] = "rbxassetid://10734895076",
+            ["lucide-milestone"] = "rbxassetid://10734895310",
+            ["lucide-minimize"] = "rbxassetid://10734895698",
+            ["lucide-minimize-2"] = "rbxassetid://10734895530",
+            ["lucide-minus"] = "rbxassetid://10734896206",
+            ["lucide-minus-circle"] = "rbxassetid://10734895856",
+            ["lucide-minus-square"] = "rbxassetid://10734896029",
+            ["lucide-monitor"] = "rbxassetid://10734896881",
+            ["lucide-monitor-off"] = "rbxassetid://10734896360",
+            ["lucide-monitor-speaker"] = "rbxassetid://10734896512",
+            ["lucide-moon"] = "rbxassetid://10734897102",
+            ["lucide-more-horizontal"] = "rbxassetid://10734897250",
+            ["lucide-more-vertical"] = "rbxassetid://10734897387",
+            ["lucide-mountain"] = "rbxassetid://10734897956",
+            ["lucide-mountain-snow"] = "rbxassetid://10734897665",
+            ["lucide-mouse"] = "rbxassetid://10734898592",
+            ["lucide-mouse-pointer"] = "rbxassetid://10734898476",
+            ["lucide-mouse-pointer-2"] = "rbxassetid://10734898194",
+            ["lucide-mouse-pointer-click"] = "rbxassetid://10734898355",
+            ["lucide-move"] = "rbxassetid://10734900011",
+            ["lucide-move-3d"] = "rbxassetid://10734898756",
+            ["lucide-move-diagonal"] = "rbxassetid://10734899164",
+            ["lucide-move-diagonal-2"] = "rbxassetid://10734898934",
+            ["lucide-move-horizontal"] = "rbxassetid://10734899414",
+            ["lucide-move-vertical"] = "rbxassetid://10734899821",
+            ["lucide-music"] = "rbxassetid://10734905958",
+            ["lucide-music-2"] = "rbxassetid://10734900215",
+            ["lucide-music-3"] = "rbxassetid://10734905665",
+            ["lucide-music-4"] = "rbxassetid://10734905823",
+            ["lucide-navigation"] = "rbxassetid://10734906744",
+            ["lucide-navigation-2"] = "rbxassetid://10734906332",
+            ["lucide-navigation-2-off"] = "rbxassetid://10734906144",
+            ["lucide-navigation-off"] = "rbxassetid://10734906580",
+            ["lucide-network"] = "rbxassetid://10734906975",
+            ["lucide-newspaper"] = "rbxassetid://10734907168",
+            ["lucide-octagon"] = "rbxassetid://10734907361",
+            ["lucide-option"] = "rbxassetid://10734907649",
+            ["lucide-outdent"] = "rbxassetid://10734907933",
+            ["lucide-package"] = "rbxassetid://10734909540",
+            ["lucide-package-2"] = "rbxassetid://10734908151",
+            ["lucide-package-check"] = "rbxassetid://10734908384",
+            ["lucide-package-minus"] = "rbxassetid://10734908626",
+            ["lucide-package-open"] = "rbxassetid://10734908793",
+            ["lucide-package-plus"] = "rbxassetid://10734909016",
+            ["lucide-package-search"] = "rbxassetid://10734909196",
+            ["lucide-package-x"] = "rbxassetid://10734909375",
+            ["lucide-paint-bucket"] = "rbxassetid://10734909847",
+            ["lucide-paintbrush"] = "rbxassetid://10734910187",
+            ["lucide-paintbrush-2"] = "rbxassetid://10734910030",
+            ["lucide-palette"] = "rbxassetid://10734910430",
+            ["lucide-palmtree"] = "rbxassetid://10734910680",
+            ["lucide-paperclip"] = "rbxassetid://10734910927",
+            ["lucide-party-popper"] = "rbxassetid://10734918735",
+            ["lucide-pause"] = "rbxassetid://10734919336",
+            ["lucide-pause-circle"] = "rbxassetid://10735024209",
+            ["lucide-pause-octagon"] = "rbxassetid://10734919143",
+            ["lucide-pen-tool"] = "rbxassetid://10734919503",
+            ["lucide-pencil"] = "rbxassetid://10734919691",
+            ["lucide-percent"] = "rbxassetid://10734919919",
+            ["lucide-person-standing"] = "rbxassetid://10734920149",
+            ["lucide-phone"] = "rbxassetid://10734921524",
+            ["lucide-phone-call"] = "rbxassetid://10734920305",
+            ["lucide-phone-forwarded"] = "rbxassetid://10734920508",
+            ["lucide-phone-incoming"] = "rbxassetid://10734920694",
+            ["lucide-phone-missed"] = "rbxassetid://10734920845",
+            ["lucide-phone-off"] = "rbxassetid://10734921077",
+            ["lucide-phone-outgoing"] = "rbxassetid://10734921288",
+            ["lucide-pie-chart"] = "rbxassetid://10734921727",
+            ["lucide-piggy-bank"] = "rbxassetid://10734921935",
+            ["lucide-pin"] = "rbxassetid://10734922324",
+            ["lucide-pin-off"] = "rbxassetid://10734922180",
+            ["lucide-pipette"] = "rbxassetid://10734922497",
+            ["lucide-pizza"] = "rbxassetid://10734922774",
+            ["lucide-plane"] = "rbxassetid://10734922971",
+            ["lucide-play"] = "rbxassetid://10734923549",
+            ["lucide-play-circle"] = "rbxassetid://10734923214",
+            ["lucide-plus"] = "rbxassetid://10734924532",
+            ["lucide-plus-circle"] = "rbxassetid://10734923868",
+            ["lucide-plus-square"] = "rbxassetid://10734924219",
+            ["lucide-podcast"] = "rbxassetid://10734929553",
+            ["lucide-pointer"] = "rbxassetid://10734929723",
+            ["lucide-pound-sterling"] = "rbxassetid://10734929981",
+            ["lucide-power"] = "rbxassetid://10734930466",
+            ["lucide-power-off"] = "rbxassetid://10734930257",
+            ["lucide-printer"] = "rbxassetid://10734930632",
+            ["lucide-puzzle"] = "rbxassetid://10734930886",
+            ["lucide-quote"] = "rbxassetid://10734931234",
+            ["lucide-radio"] = "rbxassetid://10734931596",
+            ["lucide-radio-receiver"] = "rbxassetid://10734931402",
+            ["lucide-rectangle-horizontal"] = "rbxassetid://10734931777",
+            ["lucide-rectangle-vertical"] = "rbxassetid://10734932081",
+            ["lucide-recycle"] = "rbxassetid://10734932295",
+            ["lucide-redo"] = "rbxassetid://10734932822",
+            ["lucide-redo-2"] = "rbxassetid://10734932586",
+            ["lucide-refresh-ccw"] = "rbxassetid://10734933056",
+            ["lucide-refresh-cw"] = "rbxassetid://10734933222",
+            ["lucide-refrigerator"] = "rbxassetid://10734933465",
+            ["lucide-regex"] = "rbxassetid://10734933655",
+            ["lucide-repeat"] = "rbxassetid://10734933966",
+            ["lucide-repeat-1"] = "rbxassetid://10734933826",
+            ["lucide-reply"] = "rbxassetid://10734934252",
+            ["lucide-reply-all"] = "rbxassetid://10734934132",
+            ["lucide-rewind"] = "rbxassetid://10734934347",
+            ["lucide-rocket"] = "rbxassetid://10734934585",
+            ["lucide-rocking-chair"] = "rbxassetid://10734939942",
+            ["lucide-rotate-3d"] = "rbxassetid://10734940107",
+            ["lucide-rotate-ccw"] = "rbxassetid://10734940376",
+            ["lucide-rotate-cw"] = "rbxassetid://10734940654",
+            ["lucide-rss"] = "rbxassetid://10734940825",
+            ["lucide-ruler"] = "rbxassetid://10734941018",
+            ["lucide-russian-ruble"] = "rbxassetid://10734941199",
+            ["lucide-sailboat"] = "rbxassetid://10734941354",
+            ["lucide-save"] = "rbxassetid://10734941499",
+            ["lucide-scale"] = "rbxassetid://10734941912",
+            ["lucide-scale-3d"] = "rbxassetid://10734941739",
+            ["lucide-scaling"] = "rbxassetid://10734942072",
+            ["lucide-scan"] = "rbxassetid://10734942565",
+            ["lucide-scan-face"] = "rbxassetid://10734942198",
+            ["lucide-scan-line"] = "rbxassetid://10734942351",
+            ["lucide-scissors"] = "rbxassetid://10734942778",
+            ["lucide-screen-share"] = "rbxassetid://10734943193",
+            ["lucide-screen-share-off"] = "rbxassetid://10734942967",
+            ["lucide-scroll"] = "rbxassetid://10734943448",
+            ["lucide-search"] = "rbxassetid://10734943674",
+            ["lucide-send"] = "rbxassetid://10734943902",
+            ["lucide-separator-horizontal"] = "rbxassetid://10734944115",
+            ["lucide-separator-vertical"] = "rbxassetid://10734944326",
+            ["lucide-server"] = "rbxassetid://10734949856",
+            ["lucide-server-cog"] = "rbxassetid://10734944444",
+            ["lucide-server-crash"] = "rbxassetid://10734944554",
+            ["lucide-server-off"] = "rbxassetid://10734944668",
+            ["lucide-settings"] = "rbxassetid://10734950309",
+            ["lucide-settings-2"] = "rbxassetid://10734950020",
+            ["lucide-share"] = "rbxassetid://10734950813",
+            ["lucide-share-2"] = "rbxassetid://10734950553",
+            ["lucide-sheet"] = "rbxassetid://10734951038",
+            ["lucide-shield"] = "rbxassetid://10734951847",
+            ["lucide-shield-alert"] = "rbxassetid://10734951173",
+            ["lucide-shield-check"] = "rbxassetid://10734951367",
+            ["lucide-shield-close"] = "rbxassetid://10734951535",
+            ["lucide-shield-off"] = "rbxassetid://10734951684",
+            ["lucide-shirt"] = "rbxassetid://10734952036",
+            ["lucide-shopping-bag"] = "rbxassetid://10734952273",
+            ["lucide-shopping-cart"] = "rbxassetid://10734952479",
+            ["lucide-shovel"] = "rbxassetid://10734952773",
+            ["lucide-shower-head"] = "rbxassetid://10734952942",
+            ["lucide-shrink"] = "rbxassetid://10734953073",
+            ["lucide-shrub"] = "rbxassetid://10734953241",
+            ["lucide-shuffle"] = "rbxassetid://10734953451",
+            ["lucide-sidebar"] = "rbxassetid://10734954301",
+            ["lucide-sidebar-close"] = "rbxassetid://10734953715",
+            ["lucide-sidebar-open"] = "rbxassetid://10734954000",
+            ["lucide-sigma"] = "rbxassetid://10734954538",
+            ["lucide-signal"] = "rbxassetid://10734961133",
+            ["lucide-signal-high"] = "rbxassetid://10734954807",
+            ["lucide-signal-low"] = "rbxassetid://10734955080",
+            ["lucide-signal-medium"] = "rbxassetid://10734955336",
+            ["lucide-signal-zero"] = "rbxassetid://10734960878",
+            ["lucide-siren"] = "rbxassetid://10734961284",
+            ["lucide-skip-back"] = "rbxassetid://10734961526",
+            ["lucide-skip-forward"] = "rbxassetid://10734961809",
+            ["lucide-skull"] = "rbxassetid://10734962068",
+            ["lucide-slack"] = "rbxassetid://10734962339",
+            ["lucide-slash"] = "rbxassetid://10734962600",
+            ["lucide-slice"] = "rbxassetid://10734963024",
+            ["lucide-sliders"] = "rbxassetid://10734963400",
+            ["lucide-sliders-horizontal"] = "rbxassetid://10734963191",
+            ["lucide-smartphone"] = "rbxassetid://10734963940",
+            ["lucide-smartphone-charging"] = "rbxassetid://10734963671",
+            ["lucide-smile"] = "rbxassetid://10734964441",
+            ["lucide-smile-plus"] = "rbxassetid://10734964188",
+            ["lucide-snowflake"] = "rbxassetid://10734964600",
+            ["lucide-sofa"] = "rbxassetid://10734964852",
+            ["lucide-sort-asc"] = "rbxassetid://10734965115",
+            ["lucide-sort-desc"] = "rbxassetid://10734965287",
+            ["lucide-speaker"] = "rbxassetid://10734965419",
+            ["lucide-sprout"] = "rbxassetid://10734965572",
+            ["lucide-square"] = "rbxassetid://10734965702",
+            ["lucide-star"] = "rbxassetid://10734966248",
+            ["lucide-star-half"] = "rbxassetid://10734965897",
+            ["lucide-star-off"] = "rbxassetid://10734966097",
+            ["lucide-stethoscope"] = "rbxassetid://10734966384",
+            ["lucide-sticker"] = "rbxassetid://10734972234",
+            ["lucide-sticky-note"] = "rbxassetid://10734972463",
+            ["lucide-stop-circle"] = "rbxassetid://10734972621",
+            ["lucide-stretch-horizontal"] = "rbxassetid://10734972862",
+            ["lucide-stretch-vertical"] = "rbxassetid://10734973130",
+            ["lucide-strikethrough"] = "rbxassetid://10734973290",
+            ["lucide-subscript"] = "rbxassetid://10734973457",
+            ["lucide-sun"] = "rbxassetid://10734974297",
+            ["lucide-sun-dim"] = "rbxassetid://10734973645",
+            ["lucide-sun-medium"] = "rbxassetid://10734973778",
+            ["lucide-sun-moon"] = "rbxassetid://10734973999",
+            ["lucide-sun-snow"] = "rbxassetid://10734974130",
+            ["lucide-sunrise"] = "rbxassetid://10734974522",
+            ["lucide-sunset"] = "rbxassetid://10734974689",
+            ["lucide-superscript"] = "rbxassetid://10734974850",
+            ["lucide-swiss-franc"] = "rbxassetid://10734975024",
+            ["lucide-switch-camera"] = "rbxassetid://10734975214",
+            ["lucide-sword"] = "rbxassetid://10734975486",
+            ["lucide-swords"] = "rbxassetid://10734975692",
+            ["lucide-syringe"] = "rbxassetid://10734975932",
+            ["lucide-table"] = "rbxassetid://10734976230",
+            ["lucide-table-2"] = "rbxassetid://10734976097",
+            ["lucide-tablet"] = "rbxassetid://10734976394",
+            ["lucide-tag"] = "rbxassetid://10734976528",
+            ["lucide-tags"] = "rbxassetid://10734976739",
+            ["lucide-target"] = "rbxassetid://10734977012",
+            ["lucide-tent"] = "rbxassetid://10734981750",
+            ["lucide-terminal"] = "rbxassetid://10734982144",
+            ["lucide-terminal-square"] = "rbxassetid://10734981995",
+            ["lucide-text-cursor"] = "rbxassetid://10734982395",
+            ["lucide-text-cursor-input"] = "rbxassetid://10734982297",
+            ["lucide-thermometer"] = "rbxassetid://10734983134",
+            ["lucide-thermometer-snowflake"] = "rbxassetid://10734982571",
+            ["lucide-thermometer-sun"] = "rbxassetid://10734982771",
+            ["lucide-thumbs-down"] = "rbxassetid://10734983359",
+            ["lucide-thumbs-up"] = "rbxassetid://10734983629",
+            ["lucide-ticket"] = "rbxassetid://10734983868",
+            ["lucide-timer"] = "rbxassetid://10734984606",
+            ["lucide-timer-off"] = "rbxassetid://10734984138",
+            ["lucide-timer-reset"] = "rbxassetid://10734984355",
+            ["lucide-toggle-left"] = "rbxassetid://10734984834",
+            ["lucide-toggle-right"] = "rbxassetid://10734985040",
+            ["lucide-tornado"] = "rbxassetid://10734985247",
+            ["lucide-toy-brick"] = "rbxassetid://10747361919",
+            ["lucide-train"] = "rbxassetid://10747362105",
+            ["lucide-trash"] = "rbxassetid://10747362393",
+            ["lucide-trash-2"] = "rbxassetid://10747362241",
+            ["lucide-tree-deciduous"] = "rbxassetid://10747362534",
+            ["lucide-tree-pine"] = "rbxassetid://10747362748",
+            ["lucide-trees"] = "rbxassetid://10747363016",
+            ["lucide-trending-down"] = "rbxassetid://10747363205",
+            ["lucide-trending-up"] = "rbxassetid://10747363465",
+            ["lucide-triangle"] = "rbxassetid://10747363621",
+            ["lucide-trophy"] = "rbxassetid://10747363809",
+            ["lucide-truck"] = "rbxassetid://10747364031",
+            ["lucide-tv"] = "rbxassetid://10747364593",
+            ["lucide-tv-2"] = "rbxassetid://10747364302",
+            ["lucide-type"] = "rbxassetid://10747364761",
+            ["lucide-umbrella"] = "rbxassetid://10747364971",
+            ["lucide-underline"] = "rbxassetid://10747365191",
+            ["lucide-undo"] = "rbxassetid://10747365484",
+            ["lucide-undo-2"] = "rbxassetid://10747365359",
+            ["lucide-unlink"] = "rbxassetid://10747365771",
+            ["lucide-unlink-2"] = "rbxassetid://10747397871",
+            ["lucide-unlock"] = "rbxassetid://10747366027",
+            ["lucide-upload"] = "rbxassetid://10747366434",
+            ["lucide-upload-cloud"] = "rbxassetid://10747366266",
+            ["lucide-usb"] = "rbxassetid://10747366606",
+            ["lucide-user"] = "rbxassetid://10747373176",
+            ["lucide-user-check"] = "rbxassetid://10747371901",
+            ["lucide-user-cog"] = "rbxassetid://10747372167",
+            ["lucide-user-minus"] = "rbxassetid://10747372346",
+            ["lucide-user-plus"] = "rbxassetid://10747372702",
+            ["lucide-user-x"] = "rbxassetid://10747372992",
+            ["lucide-users"] = "rbxassetid://10747373426",
+            ["lucide-utensils"] = "rbxassetid://10747373821",
+            ["lucide-utensils-crossed"] = "rbxassetid://10747373629",
+            ["lucide-venetian-mask"] = "rbxassetid://10747374003",
+            ["lucide-verified"] = "rbxassetid://10747374131",
+            ["lucide-vibrate"] = "rbxassetid://10747374489",
+            ["lucide-vibrate-off"] = "rbxassetid://10747374269",
+            ["lucide-video"] = "rbxassetid://10747374938",
+            ["lucide-video-off"] = "rbxassetid://10747374721",
+            ["lucide-view"] = "rbxassetid://10747375132",
+            ["lucide-voicemail"] = "rbxassetid://10747375281",
+            ["lucide-volume"] = "rbxassetid://10747376008",
+            ["lucide-volume-1"] = "rbxassetid://10747375450",
+            ["lucide-volume-2"] = "rbxassetid://10747375679",
+            ["lucide-volume-x"] = "rbxassetid://10747375880",
+            ["lucide-wallet"] = "rbxassetid://10747376205",
+            ["lucide-wand"] = "rbxassetid://10747376565",
+            ["lucide-wand-2"] = "rbxassetid://10747376349",
+            ["lucide-watch"] = "rbxassetid://10747376722",
+            ["lucide-waves"] = "rbxassetid://10747376931",
+            ["lucide-webcam"] = "rbxassetid://10747381992",
+            ["lucide-wifi"] = "rbxassetid://10747382504",
+            ["lucide-wifi-off"] = "rbxassetid://10747382268",
+            ["lucide-wind"] = "rbxassetid://10747382750",
+            ["lucide-wrap-text"] = "rbxassetid://10747383065",
+            ["lucide-wrench"] = "rbxassetid://10747383470",
+            ["lucide-x"] = "rbxassetid://10747384394",
+            ["lucide-x-circle"] = "rbxassetid://10747383819",
+            ["lucide-x-octagon"] = "rbxassetid://10747384037",
+            ["lucide-x-square"] = "rbxassetid://10747384217",
+            ["lucide-zoom-in"] = "rbxassetid://10747384552",
+            ["lucide-zoom-out"] = "rbxassetid://10747384679",
+        },
+    }
+end
+
+local v19 = Instance.new('ModuleScript', v21)
+v19.Name = "presets"
+Modules[v19] = function(script, require)
+    return {
+        Default = { Duration = 0.1, EasingStyle = Enum.EasingStyle.Exponential, EasingDirection = Enum.EasingDirection.Out },
+    }
+end
+
+local v20 = Instance.new('ModuleScript', v21)
+v20.Name = "tween"
+Modules[v20] = function(script, require)
+    local TweenService = game:GetService("TweenService")
+    local Creator = require(script.Parent.creator)
+    local AddSignal = Creator.AddSignal
+    
+    local Tween = {
+        Presets = require(script.Parent.presets),
+        InfoCache = {},
+        RunningTweens = {}
+    }
+    
+    function Tween.ParseEnum(EnumType, Value)
+        if typeof(Value) == "EnumItem" then return Value end
+        if type(Value) == "string" then
+            local Success, Result = pcall(function() return Enum[EnumType][Value] end)
+            if Success then return Result end
+        end
+        return Tween.Presets.Default[EnumType]
+    end
+    
+    function Tween.GetTweenInfo(Preset)
+        local CurrentPreset = type(Preset) == "table" and Preset or type(Preset) == "string" and Tween.Presets[Preset] or Tween.Presets.Default
+        local Duration = tonumber(CurrentPreset.Duration) or Tween.Presets.Default.Duration
+        local EasingStyle = Tween.ParseEnum("EasingStyle", CurrentPreset.EasingStyle)
+        local EasingDirection = Tween.ParseEnum("EasingDirection", CurrentPreset.EasingDirection)
+    
+        if not Tween.InfoCache[Duration] then Tween.InfoCache[Duration] = {} end
+        if not Tween.InfoCache[Duration][EasingStyle] then Tween.InfoCache[Duration][EasingStyle] = {} end
+        if not Tween.InfoCache[Duration][EasingStyle][EasingDirection] then
+            Tween.InfoCache[Duration][EasingStyle][EasingDirection] = TweenInfo.new(Duration, EasingStyle, EasingDirection)
+        end
+        return Tween.InfoCache[Duration][EasingStyle][EasingDirection]
+    end
+    
+    function Tween.GetTransparencyProperty(Object)
+        if Object:IsA("TextLabel") or Object:IsA("TextButton") or Object:IsA("TextBox") then return "TextTransparency" end
+        if Object:IsA("ImageLabel") or Object:IsA("ImageButton") then return "ImageTransparency" end
+        if Object:IsA("UIStroke") then return "Transparency" end
+        return "BackgroundTransparency"
+    end
+    
+    function Tween.Play(Object, Props, Preset, Callback)
+        local FormattedProps = {}
+        for Prop, Value in Props do
+            local success = pcall(function() return Object[Prop] end)
+            if success then
+                if Prop == "Transparency" then FormattedProps[Tween.GetTransparencyProperty(Object)] = Value
+                else FormattedProps[Prop] = Value end
+            else
+                warn("Tween Error: " .. Object.Name .. " không có thuộc tính " .. Prop)
+            end
+        end
+    
+        if next(FormattedProps) == nil then return nil end
+    
+        if Tween.RunningTweens[Object] and Tween.RunningTweens[Object].Props == FormattedProps then Tween.RunningTweens[Object].Tween:Cancel() end
+        local TweenObject = TweenService:Create(Object, Tween.GetTweenInfo(Preset), FormattedProps)
+        Tween.RunningTweens[Object] = { Tween = TweenObject, Props = FormattedProps }
+    
+        local Connection
+        Connection = AddSignal(TweenObject.Completed, function(PlaybackState)
+            Connection:Disconnect()
+            if Tween.RunningTweens[Object] and Tween.RunningTweens[Object].Tween == TweenObject then Tween.RunningTweens[Object] = nil end
+            if Callback and type(Callback) == "function" and PlaybackState == Enum.PlaybackState.Completed then
+                Callback(PlaybackState)
+            end
+        end)
+        TweenObject:Play()
+        return TweenObject
+    end
+    
+    function Tween._applyRecursive(Target, Structure, Props, Preset, Callback, Tweens)
+        for Key, Value in Structure do
+            if Key == "Props" or Key == "Preset" or Key == "Callback" or Key == "Delay" or Key == "Condition" then
+                continue
+            end
+            local Target = type(Value) == "string" and ((Target.FindFirstChild and Target:FindFirstChild(Key)) or Target[Value]) or type(Key) == "string" and (Target.FindFirstChild and Target:FindFirstChild(Key) or Target[Key]) or type(Key) == "number" and Target
+            local Props = Value.Props or Props
+            local Preset = Value.Preset or Preset
+            local Callback = Value.Callback or Callback
+            if Target then
+                task.delay(Value.Delay or 0, function()
+                    if Value.Condition and type(Value.Condition) == "function" and not Value.Condition() then return end
+                    table.insert(Tweens, Tween.Play(Target, Props, Preset, Callback))
+                end)
+            end
+            if type(Key) == "string" and type(Value) == "table" then
+                Tween._applyRecursive(Target, Value, Props, Preset, Callback, Tweens)
+            end
+        end
+    end
+    
+    function Tween.Plays(Target, Structure, Props, Preset, Callback)
+        local Tweens = {}
+    
+        if typeof(Target) == "Instance" or type(Target) == "table" then
+            Tween._applyRecursive(Target, Structure, Props, Preset, Callback, Tweens)
+        end
+    
+        return {
+            Tweens = Tweens,
+            Pause = function(self) for _, v in self.Tweens do v:Pause() end end,
+            Cancel = function(self) for _, v in self.Tweens do v:Cancel() end end,
+        }
+    end
+    
+    return Tween
+end
+
+local v24 = Instance.new("ModuleScript", Everforest)
+v24.Name = "themes"
+local v22 = Instance.new('ModuleScript', v24)
+v22.Name = "dark"
+Modules[v22] = function(script, require)
+    return {
+        Name = "Dark",
+    
+        Notification = Color3.fromRGB(61, 57, 70),
+        NotificationBorder = Color3.fromRGB(222, 208, 255),
+        NotificationTitle = Color3.fromRGB(218, 213, 233),
+    
+        Top = Color3.fromRGB(10, 10, 10),
+        TopTitle = Color3.fromRGB(255, 255, 255),
+        TopDescription = Color3.fromRGB(255, 255, 255),
+        TopTransparency = 0.1,
+        TopHoverTransparency = 0,
+    
+        Indicator = Color3.fromRGB(138, 104, 253),
+        TabSelected = Color3.fromRGB(255, 255, 255),
+        TabNotSelected = Color3.fromRGB(163, 148, 209),
+        TabHover = Color3.fromRGB(46, 41, 59),
+        TabSoundHoverId = "rbxassetid://7147619379",
+        TabSoundHoverVolume = 0.04,
+        TabSoundClickId = "rbxassetid://18215157567",
+        TabSoundClickVolume = 5,
+    
+        Container = Color3.fromRGB(49, 47, 57),
+        ContainerFade = Color3.fromRGB(48, 46, 56),
+    
+        HeaderTitle = Color3.fromRGB(255, 255, 255),
+        HeaderDescription = Color3.fromRGB(224, 219, 240),
+    
+        SearchBoxPlaceholder = Color3.fromRGB(147, 142, 162),
+        SearchBoxText = Color3.fromRGB(254, 254, 254),
+    
+        Element = Color3.fromRGB(44, 42, 51),
+        ElementText = Color3.fromRGB(217, 212, 232),
+        ElementTransparency = 0,
+        ElementBorder = Color3.fromRGB(99, 75, 172),
+        ElementSoundHoverId = "rbxassetid://125236580407249",
+        ElementSoundHoverVolume = 2,
+        ElementSoundClickId = "rbxassetid://139719503904449",
+        ElementSoundClickVolume = 10,
+        ElementFade = Color3.fromRGB(128, 94, 233),
+    
+        SectionText = Color3.fromRGB(255, 255, 255),
+    
+        Paragraph = Color3.fromRGB(69, 61, 92),
+        ParagraphText = Color3.fromRGB(224, 219, 240),
+        ParagraphTransparency = 0,
+    
+        ToggleSlider = Color3.fromRGB(128, 94, 233),
+        ToggleBorder = Color3.fromRGB(103, 77, 179),
+        ToggleOnColor = Color3.fromRGB(127, 93, 232),
+        ToggleHoverColor = Color3.fromRGB(140, 102, 255),
+        ToggleOffColor = Color3.fromRGB(102, 76, 178),
+    
+        DropdownSelected = Color3.fromRGB(102, 76, 178),
+        DropdownBorder = Color3.fromRGB(140, 102, 254),
+        DropdownText = Color3.fromRGB(249, 249, 249),
+        DropdownImage = Color3.fromRGB(255, 255, 255),
+        DropdownImageId = "rbxassetid://120679435135651",
+        Item = Color3.fromRGB(61, 57, 70),
+        ItemText = Color3.fromRGB(252, 252, 252),
+        ItemHold = Color3.fromRGB(102, 76, 178),
+        ItemHoldArrow = Color3.fromRGB(37, 35, 45),
+    
+        SliderText = Color3.fromRGB(250, 250, 250),
+        SliderTrack = Color3.fromRGB(37, 35, 43),
+        SliderFill = Color3.fromRGB(103, 77, 179),
+        SliderDot = Color3.fromRGB(128, 94, 233),
+        SliderHold = Color3.fromRGB(139, 101, 253),
+        SliderDotHold = Color3.fromRGB(140, 102, 255),
+    
+        InputPlaceholder = Color3.fromRGB(147, 142, 162),
+        InputText = Color3.fromRGB(254, 254, 254),
+        InputBorder = Color3.fromRGB(139, 101, 253),
+    
+        Button = Color3.fromRGB(90, 52, 205),
+        ButtonText = Color3.fromRGB(218, 213, 233),
+        ButtonSoundHoverId = "rbxassetid://7147619379",
+        ButtonSoundHoverVolume = 0.04,
+        ButtonSoundClickId = "rbxassetid://18215157567",
+        ButtonSoundClickVolume = 5,
+    }
+end
+
+Modules[v24] = function(script, require)
+    local Themes = {
+        Names = { "Dark" }
+    }
+    
+    for _, Theme in script:GetChildren() do
+        local Required = require(Theme)
+        Themes[Required.Name] = Required
+    end
+    
+    return Themes
+end
+
+
+local Cache = {}
+local Loading = {}
+local OldRequire = require
+
+function Require(target)
+    if Modules[target] ~= nil then
+        if Cache[target] == Loading then
+            error("Circular require detected: " .. target:GetFullName())
+        end
+        if Cache[target] ~= nil then
+            return Cache[target]
+        end
+        Cache[target] = Loading
+        local factory = Modules[target]
+        local result = factory(target, Require)
+
+        if result == nil then
+            error("ModuleScript '" .. target:GetFullName() .. "' did not return exactly one value", 2)
+        end
+        Cache[target] = result
+        return result
+    end
+
+    return OldRequire(target)
+end
+
+return Require(Everforest)
