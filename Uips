@@ -1,0 +1,1571 @@
+local loaded = loadstring([=[
+-- مطور السكربت MBN (النسخة النهائية v8.9 - درع أسطوري + انتقال سيرفر محسّن)
+-- 🎯 الإيم الأسطوري: توقع حركة القاتل 100%
+-- 🛡️ درع ما يخليك تموت - ما تموت أبداً حتى لو ضربوك بالسكين ألف مرة
+-- 🌪️ فلينق خارق 900 دورة + انتقالات ذكية
+-- 💰 جمع فلوس ناعم يتوقف عند 40 + ذاكرة ذكية
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local Config = {
+    ShowRoles = false, GodMode = false, Noclip = false,
+    InfiniteJump = false,
+    MurdererAim = false, KillAll = false,
+    FlingAll = false, AutoGun = false,
+    CoinESP = false,
+    HighJump = false,
+    AutoCollectCoins = false,
+}
+local KillAllActive = false
+local KilledPlayers = {}
+local FlingActive = false
+local NoclipConn = nil
+local AutoGunActive = false
+local AutoCollectRunning = false
+local LastSafePos = nil
+local CoinsCollectedCount = 0
+local CollectedCoins = {}
+local SkippedCoins = {}
+-- ══════════════════════════════════════════════════════════
+-- 🛡️ درع ما يخليك تموت
+-- ══════════════════════════════════════════════════════════
+local GodModeConnections = {}
+local GodModeActive = false
+local function ApplyLegendaryGodMode()
+    local character = LocalPlayer.Character
+    if not character then return end
+    if not character:FindFirstChild("MM2_FF") then
+        local ForceField = Instance.new("ForceField")
+        ForceField.Name = "MM2_FF"
+        ForceField.Visible = false
+        ForceField.Parent = character
+    end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        pcall(function() humanoid.MaxHealth = math.huge end)
+        pcall(function() humanoid.Health = math.huge end)
+        pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
+        pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Dying, false) end)
+        pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false) end)
+        pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Dropped, false) end)
+        pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false) end)
+        if not humanoid:FindFirstChild("MM2_HUM_PROTECT") then
+            local StringValue = Instance.new("StringValue")
+            StringValue.Name = "MM2_HUM_PROTECT"
+            StringValue.Parent = humanoid
+        end
+    end
+end
+local function StartLegendaryGodMode()
+    if GodModeActive then return end
+    GodModeActive = true
+    ApplyLegendaryGodMode()
+    local hbConn = RunService.Heartbeat:Connect(function()
+        if not Config.GodMode then return end
+        pcall(function()
+            local character2 = LocalPlayer.Character
+            if not character2 then return end
+            local humanoid2 = character2:FindFirstChildOfClass("Humanoid")
+            if humanoid2 then
+                if humanoid2.Health < math.huge then
+                    humanoid2.MaxHealth = math.huge
+                    humanoid2.Health = math.huge
+                end
+                humanoid2:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                humanoid2:SetStateEnabled(Enum.HumanoidStateType.Dying, false)
+                humanoid2:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                local state = humanoid2:GetState()
+                if state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.Dying then
+                    humanoid2:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end
+            if not character2:FindFirstChild("MM2_FF") then
+                local ForceField2 = Instance.new("ForceField")
+                ForceField2.Name = "MM2_FF"
+                ForceField2.Visible = false
+                ForceField2.Parent = character2
+            end
+        end)
+    end)
+    table.insert(GodModeConnections, hbConn)
+    local rsConn = RunService.RenderStepped:Connect(function()
+        if not Config.GodMode then return end
+        pcall(function()
+            local character3 = LocalPlayer.Character
+            if not character3 then return end
+            local humanoid3 = character3:FindFirstChildOfClass("Humanoid")
+            if humanoid3 then
+                humanoid3.MaxHealth = math.huge
+                humanoid3.Health = math.huge
+                humanoid3:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                humanoid3:SetStateEnabled(Enum.HumanoidStateType.Dying, false)
+            end
+        end)
+    end)
+    table.insert(GodModeConnections, rsConn)
+    local character4 = LocalPlayer.Character
+    if character4 then
+        local humanoid4 = character4:FindFirstChildOfClass("Humanoid")
+        if humanoid4 then
+            local connect = humanoid4.Changed:Connect(function(prop)
+                if not Config.GodMode then return end
+                if prop == "Health" or prop == "MaxHealth" then
+                    pcall(function()
+                        humanoid4.MaxHealth = math.huge
+                        humanoid4.Health = math.huge
+                    end)
+                end
+            end)
+            table.insert(GodModeConnections, connect)
+            local connect2 = humanoid4.HealthChanged:Connect(function(newHealth)
+                if not Config.GodMode then return end
+                if newHealth < math.huge then
+                    pcall(function()
+                        humanoid4.MaxHealth = math.huge
+                        humanoid4.Health = math.huge
+                    end)
+                end
+            end)
+            table.insert(GodModeConnections, connect2)
+            local diedConn = humanoid4.Died:Connect(function()
+                if not Config.GodMode then return end
+                pcall(function()
+                    humanoid4:ChangeState(Enum.HumanoidStateType.GettingUp)
+                    humanoid4.MaxHealth = math.huge
+                    humanoid4.Health = math.huge
+                end)
+            end)
+            table.insert(GodModeConnections, diedConn)
+        end
+    end
+end
+local function StopLegendaryGodMode()
+    GodModeActive = false
+    Config.GodMode = false
+    for _, conn in pairs(GodModeConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    GodModeConnections = {}
+    local character5 = LocalPlayer.Character
+    if character5 then
+        local MM2_FF = character5:FindFirstChild("MM2_FF")
+        if MM2_FF then MM2_FF:Destroy() end
+        local humanoid5 = character5:FindFirstChildOfClass("Humanoid")
+        if humanoid5 then
+            pcall(function() humanoid5.MaxHealth = 100 end)
+            pcall(function() humanoid5.Health = 100 end)
+        end
+    end
+end
+-- ══════════ دوال أساسية ══════════
+local function GetChar() return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() end
+local function GetHum() local c = GetChar() return c and c:FindFirstChildOfClass("Humanoid") end
+local function GetRP() local c = GetChar() return c and c:FindFirstChild("HumanoidRootPart") end
+local function TP(cf) local rp = GetRP() if rp then rp.CFrame = cf end end
+local function GetRole(plr)
+    local backpack = plr:FindFirstChildOfClass("Backpack")
+    local character6 = plr.Character
+    local function has(n) return (backpack and backpack:FindFirstChild(n)) or (character6 and character6:FindFirstChild(n)) end
+    if has("Knife") or has("KnifeRaw") then return "Murderer" end
+    if has("Gun") or has("Revolver") or has("Pistol") then return "Sheriff" end
+    return "Innocent"
+end
+local function GetMurderer()
+    for _, ScrollingFrame in pairs(Players:GetPlayers()) do
+        if ScrollingFrame ~= LocalPlayer and GetRole(ScrollingFrame) == "Murderer" then return ScrollingFrame end
+    end
+    return nil
+end
+local function GetSheriff()
+    for _, ScrollingFrame in pairs(Players:GetPlayers()) do
+        if ScrollingFrame ~= LocalPlayer and GetRole(ScrollingFrame) == "Sheriff" then return ScrollingFrame end
+    end
+    return nil
+end
+local function LocalPlayerHasGun()
+    local backpack2 = LocalPlayer:FindFirstChildOfClass("Backpack")
+    local character7 = LocalPlayer.Character
+    for _, n in pairs({"Gun", "Revolver", "Pistol"}) do
+        if (backpack2 and backpack2:FindFirstChild(n)) or (character7 and character7:FindFirstChild(n)) then return true end
+    end
+    return false
+end
+-- ══════════ فلوس ══════════
+local function GetRealCoins()
+    local tbl = {}
+    for _, tbl5 in pairs(Workspace:GetDescendants()) do
+        if tbl5:IsA("BasePart") or tbl5:IsA("MeshPart") then
+            local n = tbl5.Name:lower()
+            local lower = tbl5.Parent and tbl5.Parent.Name:lower() or ""
+            if not n:find("counter") and not n:find("ui") and not n:find("screen") and not n:find("board")
+                and not n:find("text") and not n:find("wall") and not n:find("floor") and not n:find("door")
+                and not lower:find("ui") and not lower:find("camera") then
+                local match = (n == "coin" or n:match("^coin%%d") or n == "pickup" or n == "collectible"
+                    or n == "money" or n == "cash" or n:find("collect") or lower:find("coin") or lower == "pickups")
+                if match and tbl5.Size.X < 15 and tbl5.Size.Y < 15 and tbl5.Size.Z < 15
+                    and tbl5.Transparency < 0.9 and tbl5.Position.Y > -50 and tbl5:IsDescendantOf(Workspace) then
+                    table.insert(tbl, tbl5)
+                end
+            end
+        end
+    end
+    return tbl
+end
+-- ══════════ مسدس ══════════
+local function FindGun()
+    for _, tbl5 in pairs(Workspace:GetDescendants()) do
+        if tbl5:IsA("Tool") then
+            for _, n in pairs({"Gun", "Revolver", "Pistol"}) do
+                if tbl5.Name == n then return {tbl = "dropped", tool = tbl5} end
+            end
+        end
+    end
+    for _, tbl5 in pairs(Workspace:GetDescendants()) do
+        if tbl5:IsA("BasePart") then
+            if tbl5.Name == "Handle" and tbl5.Parent and tbl5.Parent:IsA("Tool") then
+                for _, n in pairs({"Gun", "Revolver", "Pistol"}) do
+                    if tbl5.Parent.Name == n then return {tbl = "dropped", tool = tbl5.Parent} end
+                end
+            end
+            if tbl5.Name == "GunDrop" or tbl5.Name == "DroppedGun" then return {tbl = "dropped_part", part = tbl5} end
+        end
+    end
+    return nil
+end
+-- ══════════════════════════════════════════════════════════
+-- 🔥 الإيم الأسطوري
+-- ══════════════════════════════════════════════════════════
+local AimConns = {}
+local AimRunning = false
+local function GetAimTarget(char)
+    local head = char:FindFirstChild("Head")
+    if head then return head end
+    local HumanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+    if HumanoidRootPart then return HumanoidRootPart end
+    for _, v in pairs(char:GetChildren()) do if v:IsA("BasePart") then return v end end
+    return nil
+end
+local function AbsoluteLockMAX()
+    local getMurdererResult = GetMurderer()
+    if not getMurdererResult or not getMurdererResult.Character then return end
+    local humanoid6 = getMurdererResult.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid6 or humanoid6.Health <= 0 then return end
+    local getAimTargetResult = GetAimTarget(getMurdererResult.Character)
+    if not getAimTargetResult then return end
+    local assemblyLinearVelocity = getAimTargetResult.AssemblyLinearVelocity
+    local num = 0.16
+    local targetPos = getAimTargetResult.Position + (assemblyLinearVelocity * num)
+    if assemblyLinearVelocity.Y > 5 then
+        targetPos = targetPos + Vector3.new(0, (assemblyLinearVelocity.Y * 0.08), 0)
+    end
+    local camPos = Camera.CFrame.Position
+    local targetPos = (targetPos - camPos)
+    if targetPos.Magnitude < 0.001 then return end
+    targetPos = targetPos.Unit
+    local lockCF = CFrame.new(camPos, camPos + targetPos)
+    Camera.CFrame = lockCF
+    Camera.Focus = CFrame.new(targetPos)
+end
+local function StartMurdererAim()
+    if AimRunning then return end
+    AimRunning = true
+    Camera.CameraType = Enum.CameraType.Custom
+    for _, c in pairs(AimConns) do pcall(function() c:Disconnect() end) end
+    AimConns = {}
+    pcall(function() RunService:UnbindFromRenderStep("MBN_A1") end)
+    RunService:BindToRenderStep("MBN_A1", 999, function()
+        if AimRunning then pcall(AbsoluteLockMAX) end
+    end)
+    table.insert(AimConns, RunService.Heartbeat:Connect(function()
+        if AimRunning then pcall(AbsoluteLockMAX) end
+    end))
+end
+local function StopMurdererAim()
+    AimRunning = false
+    Config.MurdererAim = false
+    pcall(function() RunService:UnbindFromRenderStep("MBN_A1") end)
+    for _, c in pairs(AimConns) do pcall(function() c:Disconnect() end) end
+    AimConns = {}
+end
+-- ══════════ قتل الكل ══════════
+local function StartKillAll()
+    KillAllActive = true
+    KilledPlayers = {}
+    spawn(function()
+        while KillAllActive do
+            if GetRole(LocalPlayer) ~= "Murderer" then
+                KilledPlayers = {}
+                wait(1)
+                continue
+            end
+            local tbl2 = {}
+            for _, ScrollingFrame in pairs(Players:GetPlayers()) do
+                if ScrollingFrame ~= LocalPlayer and ScrollingFrame.Character and not table.find(KilledPlayers, ScrollingFrame.UserId) then
+                    local humanoid7 = ScrollingFrame.Character:FindFirstChildOfClass("Humanoid")
+                    if humanoid7 and humanoid7.Health > 0 then table.insert(tbl2, ScrollingFrame) end
+                end
+            end
+            for i = #tbl2, 2, -1 do local j = math.random(1, i) tbl2[i], tbl2[j] = tbl2[j], tbl2[i] end
+            for _, tbl in ipairs(tbl2) do
+                if not KillAllActive then break end
+                local getRPResult = GetRP()
+                if not getRPResult then break end
+                if tbl.Character and tbl.Character:FindFirstChild("HumanoidRootPart") then
+                    local humanoid8 = tbl.Character:FindFirstChildOfClass("Humanoid")
+                    if humanoid8 and humanoid8.Health > 0 then
+                        local humanoidRootPart = tbl.Character.HumanoidRootPart
+                        getRPResult.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, 1.5)
+                        RunService.Heartbeat:Wait()
+                        getRPResult.CFrame = CFrame.new(humanoidRootPart.Position + Vector3.new(0, 3, 0))
+                        RunService.Heartbeat:Wait()
+                        getRPResult.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, 1.5)
+                        RunService.Heartbeat:Wait()
+                        getRPResult.CFrame = CFrame.new(humanoidRootPart.Position + Vector3.new(0, 5, 0))
+                        table.insert(KilledPlayers, tbl.UserId)
+                        wait(0.15)
+                    end
+                end
+            end
+            wait(0.15)
+        end
+    end)
+end
+local function StopKillAll()
+    KillAllActive = false
+    KilledPlayers = {}
+end
+-- ══════════ مسدس تلقائي ══════════
+local function StartAutoGun()
+    AutoGunActive = true
+    spawn(function()
+        while AutoGunActive do
+            local flag = false
+            for _, ScrollingFrame in pairs(Players:GetPlayers()) do
+                if ScrollingFrame ~= LocalPlayer and GetRole(ScrollingFrame) == "Sheriff" then
+                    local humanoid9 = ScrollingFrame.Character and ScrollingFrame.Character:FindFirstChildOfClass("Humanoid")
+                    if humanoid9 and humanoid9.Health > 0 then flag = true break end
+                end
+            end
+            if not flag and not LocalPlayerHasGun() then
+                local info = FindGun()
+                if info and (info.tbl == "dropped" or info.tbl == "dropped_part") then
+                    local getRPResult2 = GetRP()
+                    if getRPResult2 then
+                        local savedPos = getRPResult2.CFrame
+                        if info.tbl == "dropped" and info.tool:FindFirstChild("Handle") then
+                            getRPResult2.CFrame = info.tool.Handle.CFrame
+                        elseif info.tbl == "dropped_part" then
+                            getRPResult2.CFrame = info.part.CFrame
+                        end
+                        local timeout = 0
+                        while timeout < 2 do
+                            if LocalPlayerHasGun() then break end
+                            wait(0.1)
+                            timeout = timeout + 0.1
+                        end
+                        wait(0.2)
+                        getRPResult2.CFrame = savedPos
+                    end
+                end
+            end
+            wait(0.5)
+        end
+    end)
+end
+local function StopAutoGun() AutoGunActive = false end
+-- ══════════ نو كليب ══════════
+local function StartNoclip()
+    NoclipConn = RunService.Stepped:Connect(function()
+        if not Config.Noclip then return end
+        local getCharResult = GetChar()
+        if getCharResult then
+            for _, ScrollingFrame in pairs(getCharResult:GetDescendants()) do
+                if ScrollingFrame:IsA("BasePart") then ScrollingFrame.CanCollide = false end
+            end
+        end
+    end)
+end
+local function StopNoclip()
+    Config.Noclip = false
+    if NoclipConn then NoclipConn:Disconnect() NoclipConn = nil end
+end
+-- ══════════ ازالة لاق ══════════
+local function CleanLag()
+    for _, tbl5 in pairs(Workspace:GetDescendants()) do
+        if tbl5:IsA("BasePart") or tbl5:IsA("MeshPart") then
+            pcall(function() tbl5.Material = Enum.Material.Plastic tbl5.Reflectance = 0 end)
+        end
+        if tbl5:IsA("Texture") or tbl5:IsA("Decal") or tbl5:IsA("SurfaceAppearance") then
+            pcall(function() tbl5:Destroy() end)
+        end
+        if tbl5:IsA("SpecialMesh") then pcall(function() tbl5.TextureId = "" end) end
+        if tbl5:IsA("ParticleEmitter") or tbl5:IsA("Trail") or tbl5:IsA("Smoke") or tbl5:IsA("Fire") or tbl5:IsA("Sparkles") then
+            pcall(function() tbl5.Enabled = false end)
+        end
+    end
+    for _, tbl5 in pairs(Lighting:GetDescendants()) do
+        if tbl5:IsA("PostEffect") or tbl5:IsA("BloomEffect") or tbl5:IsA("BlurEffect") or tbl5:IsA("SunRaysEffect") or tbl5:IsA("Atmosphere") then
+            pcall(function() tbl5.Enabled = false end)
+        end
+    end
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 100000
+    pcall(function() settings().Rendering.QualityLevel = 1 end)
+end
+-- ══════════ فلينق ══════════
+local function FlingPlayer(targetName)
+    if not targetName or targetName == "" then return end
+    local getRPResult3 = GetRP()
+    if not getRPResult3 then return end
+    local n = targetName:lower()
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and (plr.Name:lower():find(n) or plr.DisplayName:lower():find(n)) then
+            if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                local humanoidRootPart2 = plr.Character.HumanoidRootPart
+                getRPResult3.CFrame = humanoidRootPart2.CFrame
+                local BodyAngularVelocity = Instance.new("BodyAngularVelocity")
+                BodyAngularVelocity.AngularVelocity = Vector3.new(99999, 99999, 99999)
+                BodyAngularVelocity.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                BodyAngularVelocity.Parent = getRPResult3
+                local BodyVelocity = Instance.new("BodyVelocity")
+                BodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                BodyVelocity.Parent = getRPResult3
+                for j = 1, 900 do
+                    getRPResult3.CFrame = humanoidRootPart2.CFrame * CFrame.Angles(math.rad(j * 50), math.rad(j * 60), math.rad(j * 45)) * CFrame.new(0, 0, 0.3)
+                    if j % 5 == 0 then RunService.Heartbeat:Wait() end
+                end
+                BodyVelocity.Velocity = (humanoidRootPart2.CFrame.LookVector * 1500) + Vector3.new(0, 500, 0)
+                wait(0.1)
+                BodyVelocity:Destroy()
+                BodyAngularVelocity:Destroy()
+            end
+            break
+        end
+    end
+end
+-- ══════════════════════════════════════════════════════════
+-- 🚀 انتقال سيرفر ثاني
+-- ══════════════════════════════════════════════════════════
+local function TeleportToNewServer()
+    spawn(function()
+        pcall(function()
+            local HttpService = game:GetService("HttpService")
+            local TeleportService = game:GetService("TeleportService")
+            local placeId = game.PlaceId
+            local jobId = game.JobId
+            local https = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100"
+            local response = HttpService:JSONDecode(game:HttpGet(https))
+            if response and response.data then
+                for _, server in pairs(response.data) do
+                    if server.id ~= jobId and server.playing < server.maxPlayers then
+                        TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
+                        return
+                    end
+                end
+            end
+        end)
+    end)
+end
+-- ══════════ جمع الفلوس ══════════
+local function StartAutoCollect()
+    if AutoCollectRunning then return end
+    AutoCollectRunning = true
+    Config.AutoCollectCoins = true
+    CoinsCollectedCount = 0
+    CollectedCoins = {}
+    SkippedCoins = {}
+    spawn(function()
+        while AutoCollectRunning and CoinsCollectedCount < 40 do
+            pcall(function()
+                local getHumResult = GetHum()
+                local getRPResult4 = GetRP()
+                local char = GetChar()
+                if not getHumResult or not getRPResult4 or not char or getHumResult.Health <= 0 then return end
+                if getRPResult4.Position.Y > -5 then LastSafePos = getRPResult4.CFrame end
+                if getRPResult4.Position.Y < -20 then
+                    if LastSafePos then getRPResult4.CFrame = LastSafePos
+                    else getRPResult4.CFrame = CFrame.new(getRPResult4.Position.X, 50, getRPResult4.Position.Z) end
+                    return
+                end
+                local coins = GetRealCoins()
+                if #coins == 0 then return end
+                local tbl3 = {}
+                for _, c in pairs(coins) do
+                    if not table.find(CollectedCoins, c) and not table.find(SkippedCoins, c) then
+                        table.insert(tbl3, c)
+                    end
+                end
+                if #tbl3 == 0 then return end
+                table.sort(tbl3, function(tbl2, b)
+                    return (tbl2.Position - getRPResult4.Position).Magnitude < (b.Position - getRPResult4.Position).Magnitude
+                end)
+                local availableCoins = tbl3[1]
+                local walkSpeed = getHumResult.WalkSpeed
+                getHumResult.WalkSpeed = 32
+                local num2 = 0
+                local lastPos = getRPResult4.Position
+                while AutoCollectRunning and CoinsCollectedCount < 40 and availableCoins
+                    and availableCoins.Parent and availableCoins:IsDescendantOf(Workspace) do
+                    local currentRp = GetRP()
+                    local getHumResult2 = GetHum()
+                    local getCharResult2 = GetChar()
+                    if not currentRp or not getHumResult2 or not getCharResult2 or getHumResult2.Health <= 0 then break end
+                    local dist = (currentRp.Position - availableCoins.Position).Magnitude
+                    if dist < 5 then
+                        CoinsCollectedCount = CoinsCollectedCount + 1
+                        table.insert(CollectedCoins, availableCoins)
+                        break
+                    end
+                    if (currentRp.Position - lastPos).Magnitude < 0.5 then
+                        num2 = num2 + 0.015
+                    else
+                        num2 = 0
+                    end
+                    lastPos = currentRp.Position
+                    if num2 > 2.5 then
+                        table.insert(SkippedCoins, availableCoins)
+                        break
+                    end
+                    getHumResult2:MoveTo(availableCoins.Position)
+                    for _, part in pairs(getCharResult2:GetDescendants()) do
+                        if part:IsA("BasePart") then part.CanCollide = false end
+                    end
+                    if currentRp.Position.Y < -20 then
+                        if LastSafePos then currentRp.CFrame = LastSafePos end
+                        break
+                    end
+                    RunService.Heartbeat:Wait()
+                end
+                hum.WalkSpeed = walkSpeed
+            end)
+            wait(0.03)
+        end
+        if CoinsCollectedCount >= 40 then
+            AutoCollectRunning = false
+            Config.AutoCollectCoins = false
+            local getHumResult3 = GetHum()
+            if getHumResult3 then getHumResult3.WalkSpeed = 16 end
+        end
+    end)
+end
+local function StopAutoCollect()
+    AutoCollectRunning = false
+    Config.AutoCollectCoins = false
+    local getHumResult4 = GetHum()
+    if getHumResult4 then getHumResult4.WalkSpeed = 16 end
+end
+-- ══════════ Draggable ══════════
+local function MakeDrag(topbar, frame)
+    local dragging, dragInput, dragStart, startPos
+    topbar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    topbar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local input = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + input.X, startPos.Y.Scale, startPos.Y.Offset + input.Y)
+        end
+    end)
+end
+-- ══════════════════════════════════════════════════════════
+-- 🎨 GUI
+-- ══════════════════════════════════════════════════════════
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MBN"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+local Frame = Instance.new("Frame")
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+Frame.BorderSizePixel = 0
+Frame.Position = UDim2.new(0.02, 0, 0.35, 0)
+Frame.Size = UDim2.new(0, 310, 0, 270)
+Frame.ClipsDescendants = true
+Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 8)
+local UIStroke = Instance.new("UIStroke", Frame)
+UIStroke.Color = Color3.fromRGB(100, 50, 255)
+UIStroke.Thickness = 1
+local Frame2 = Instance.new("Frame")
+Frame2.Parent = Frame
+Frame2.BackgroundColor3 = Color3.fromRGB(12, 12, 22)
+Frame2.BorderSizePixel = 0
+Frame2.Size = UDim2.new(1, 0, 0, 24)
+Instance.new("UICorner", Frame2).CornerRadius = UDim.new(0, 8)
+local UIGradient = Instance.new("UIGradient", Frame2)
+UIGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 20, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 80))
+}
+local TextLabel = Instance.new("TextLabel")
+TextLabel.Parent = Frame2
+TextLabel.BackgroundTransparency = 1
+TextLabel.Size = UDim2.new(1, -50, 1, 0)
+TextLabel.Position = UDim2.new(0, 8, 0, 0)
+TextLabel.Text = "مطور السكربت MBN"
+TextLabel.TextColor3 = Color3.new(1, 1, 1)
+TextLabel.TextSize = 11
+TextLabel.Font = Enum.Font.GothamBold
+TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+local TextButton = Instance.new("TextButton")
+TextButton.Parent = Frame2
+TextButton.BackgroundTransparency = 1
+TextButton.Size = UDim2.new(0, 22, 0, 22)
+TextButton.Position = UDim2.new(1, -24, 0, 1)
+TextButton.Text = "×"
+TextButton.TextColor3 = Color3.new(1, 1, 1)
+TextButton.TextSize = 12
+TextButton.Font = Enum.Font.GothamBold
+TextButton.MouseButton1Click:Connect(function()
+    StopMurdererAim()
+    StopKillAll()
+    StopNoclip()
+    StopAutoGun()
+    StopAutoCollect()
+    StopLegendaryGodMode()
+    FlingActive = false
+    ScreenGui:Destroy()
+end)
+local TextButton2 = Instance.new("TextButton")
+TextButton2.Parent = Frame2
+TextButton2.BackgroundTransparency = 1
+TextButton2.Size = UDim2.new(0, 22, 0, 22)
+TextButton2.Position = UDim2.new(1, -48, 0, 1)
+TextButton2.Text = "—"
+TextButton2.TextColor3 = Color3.new(1, 1, 1)
+TextButton2.TextSize = 12
+TextButton2.Font = Enum.Font.GothamBold
+local Frame3 = Instance.new("Frame")
+Frame3.Parent = Frame
+Frame3.BackgroundTransparency = 1
+Frame3.Size = UDim2.new(1, 0, 1, -24)
+Frame3.Position = UDim2.new(0, 0, 0, 24)
+TextButton2.MouseButton1Click:Connect(function()
+    Frame3.Visible = not Frame3.Visible
+    TextButton2.Text = Frame3.Visible and "—" or "+"
+    Frame.Size = Frame3.Visible and UDim2.new(0, 310, 0, 270) or UDim2.new(0, 310, 0, 24)
+end)
+MakeDrag(Frame2, Frame)
+-- ══════════ تابات ══════════
+local Frame4 = Instance.new("Frame")
+Frame4.Parent = Frame3
+Frame4.BackgroundTransparency = 1
+Frame4.Size = UDim2.new(1, 0, 0, 20)
+Frame4.Position = UDim2.new(0, 3, 0, 2)
+local UIListLayout = Instance.new("UIListLayout", Frame4)
+UIListLayout.FillDirection = Enum.FillDirection.Horizontal
+UIListLayout.Padding = UDim.new(0, 2)
+local Tabs = {}
+local Pages = {}
+local tbl4 = {"الرئيسيه", "القتال", "فلوس", "انتقال", "اخرى"}
+local function CTab(name, idx)
+    local TextButton3 = Instance.new("TextButton")
+    TextButton3.Parent = Frame4
+    TextButton3.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    TextButton3.BorderSizePixel = 0
+    TextButton3.Size = UDim2.new(0, 55, 0, 18)
+    TextButton3.Text = name
+    TextButton3.TextColor3 = Color3.fromRGB(160, 160, 180)
+    TextButton3.TextSize = 8
+    TextButton3.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", TextButton3).CornerRadius = UDim.new(0, 6)
+    TextButton3.MouseButton1Click:Connect(function()
+        for i, ScrollingFrame in pairs(Pages) do ScrollingFrame.Visible = (i == idx) end
+        for i, tbl in pairs(Tabs) do
+            tbl.BackgroundColor3 = (i == idx) and Color3.fromRGB(100, 50, 255) or Color3.fromRGB(25, 25, 40)
+            tbl.TextColor3 = (i == idx) and Color3.new(1, 1, 1) or Color3.fromRGB(160, 160, 180)
+        end
+    end)
+    table.insert(Tabs, TextButton3)
+end
+local function CPage(idx)
+    local ScrollingFrame = Instance.new("ScrollingFrame")
+    ScrollingFrame.Parent = Frame3
+    ScrollingFrame.BackgroundTransparency = 1
+    ScrollingFrame.Size = UDim2.new(1, -6, 1, -26)
+    ScrollingFrame.Position = UDim2.new(0, 3, 0, 24)
+    ScrollingFrame.ScrollBarThickness = 2
+    ScrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 255)
+    ScrollingFrame.BorderSizePixel = 0
+    ScrollingFrame.Visible = (idx == 1)
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ScrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    local UIGridLayout = Instance.new("UIGridLayout", ScrollingFrame)
+    UIGridLayout.CellSize = UDim2.new(0, 97, 0, 25)
+    UIGridLayout.CellPadding = UDim2.new(0, 2, 0, 2)
+    table.insert(Pages, ScrollingFrame)
+end
+for i, n in pairs(tbl4) do CTab(n, i) CPage(i) end
+Tabs[1].BackgroundColor3 = Color3.fromRGB(100, 50, 255)
+Tabs[1].TextColor3 = Color3.new(1, 1, 1)
+-- ══════════ Toggle ══════════
+local function MakeToggle(parent, text, key, cb)
+    local Frame5 = Instance.new("Frame")
+    Frame5.Parent = parent
+    Frame5.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+    Frame5.BorderSizePixel = 0
+    Instance.new("UICorner", Frame5).CornerRadius = UDim.new(0, 6)
+    local TextLabel2 = Instance.new("TextLabel")
+    TextLabel2.Parent = Frame5
+    TextLabel2.BackgroundTransparency = 1
+    TextLabel2.Size = UDim2.new(1, -30, 1, 0)
+    TextLabel2.Position = UDim2.new(0, 5, 0, 0)
+    TextLabel2.Text = text
+    TextLabel2.TextColor3 = Color3.fromRGB(180, 180, 200)
+    TextLabel2.TextSize = 8
+    TextLabel2.Font = Enum.Font.GothamBold
+    TextLabel2.TextXAlignment = Enum.TextXAlignment.Left
+    local TextButton4 = Instance.new("TextButton")
+    TextButton4.Parent = Frame5
+    TextButton4.Size = UDim2.new(0, 24, 0, 12)
+    TextButton4.Position = UDim2.new(1, -27, 0.5, -6)
+    TextButton4.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    TextButton4.Text = ""
+    TextButton4.BorderSizePixel = 0
+    Instance.new("UICorner", TextButton4).CornerRadius = UDim.new(1, 0)
+    local Frame6 = Instance.new("Frame")
+    Frame6.Parent = TextButton4
+    Frame6.Size = UDim2.new(0, 8, 0, 8)
+    Frame6.Position = UDim2.new(0, 2, 0.5, -4)
+    Frame6.BackgroundColor3 = Color3.new(1, 1, 1)
+    Frame6.BorderSizePixel = 0
+    Instance.new("UICorner", Frame6).CornerRadius = UDim.new(1, 0)
+    TextButton4.MouseButton1Click:Connect(function()
+        Config[key] = not Config[key]
+        local config = Config[key]
+        local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        TweenService:Create(TextButton4, tweenInfo, {BackgroundColor3 = config and Color3.fromRGB(0, 200, 80) or Color3.fromRGB(50, 50, 70)}):Play()
+        TweenService:Create(Frame6, tweenInfo, {Position = config and UDim2.new(0, 14, 0.5, -4) or UDim2.new(0, 2, 0.5, -4)}):Play()
+        if cb then cb(config) end
+    end)
+end
+-- ══════════ Button ══════════
+local function MakeBtn(parent, text, color, cb)
+    local TextButton5 = Instance.new("TextButton")
+    TextButton5.Parent = parent
+    TextButton5.BackgroundColor3 = color or Color3.fromRGB(100, 50, 255)
+    TextButton5.BorderSizePixel = 0
+    TextButton5.Text = text
+    TextButton5.TextColor3 = Color3.new(1, 1, 1)
+    TextButton5.TextSize = 8
+    TextButton5.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", TextButton5).CornerRadius = UDim.new(0, 6)
+    TextButton5.MouseButton1Click:Connect(function() if cb then cb() end end)
+    return TextButton5
+end
+-- ══════════ TextBox ══════════
+local SpeedBox = nil
+local FlingBox = nil
+local PlayerBox = nil
+local function MakeSpeedBox(parent)
+    local Frame7 = Instance.new("Frame")
+    Frame7.Parent = parent
+    Frame7.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+    Frame7.BorderSizePixel = 0
+    Instance.new("UICorner", Frame7).CornerRadius = UDim.new(0, 6)
+    local TextBox = Instance.new("TextBox")
+    TextBox.Parent = Frame7
+    TextBox.Size = UDim2.new(0.9, 0, 0.8, 0)
+    TextBox.Position = UDim2.new(0.05, 0, 0.1, 0)
+    TextBox.BackgroundTransparency = 1
+    TextBox.PlaceholderText = "رقم السرعه..."
+    TextBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 120)
+    TextBox.Text = ""
+    TextBox.TextColor3 = Color3.fromRGB(220, 220, 240)
+    TextBox.TextSize = 8
+    TextBox.Font = Enum.Font.GothamBold
+    TextBox.TextXAlignment = Enum.TextXAlignment.Left
+    TextBox.ClearTextOnFocus = true
+    SpeedBox = TextBox
+end
+local function MakeFlingBox(parent)
+    local Frame8 = Instance.new("Frame")
+    Frame8.Parent = parent
+    Frame8.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+    Frame8.BorderSizePixel = 0
+    Instance.new("UICorner", Frame8).CornerRadius = UDim.new(0, 6)
+    local TextBox2 = Instance.new("TextBox")
+    TextBox2.Parent = Frame8
+    TextBox2.Size = UDim2.new(0.9, 0, 0.8, 0)
+    TextBox2.Position = UDim2.new(0.05, 0, 0.1, 0)
+    TextBox2.BackgroundTransparency = 1
+    TextBox2.PlaceholderText = "اسم لاعب للفلينق..."
+    TextBox2.PlaceholderColor3 = Color3.fromRGB(100, 100, 120)
+    TextBox2.Text = ""
+    TextBox2.TextColor3 = Color3.fromRGB(220, 220, 240)
+    TextBox2.TextSize = 8
+    TextBox2.Font = Enum.Font.GothamBold
+    TextBox2.TextXAlignment = Enum.TextXAlignment.Left
+    TextBox2.ClearTextOnFocus = true
+    FlingBox = TextBox2
+end
+local function MakePlayerBox(parent)
+    local Frame9 = Instance.new("Frame")
+    Frame9.Parent = parent
+    Frame9.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+    Frame9.BorderSizePixel = 0
+    Instance.new("UICorner", Frame9).CornerRadius = UDim.new(0, 6)
+    local TextBox3 = Instance.new("TextBox")
+    TextBox3.Parent = Frame9
+    TextBox3.Size = UDim2.new(0.9, 0, 0.8, 0)
+    TextBox3.Position = UDim2.new(0.05, 0, 0.1, 0)
+    TextBox3.BackgroundTransparency = 1
+    TextBox3.PlaceholderText = "3 حروف من اسم اللاعب..."
+    TextBox3.PlaceholderColor3 = Color3.fromRGB(100, 100, 120)
+    TextBox3.Text = ""
+    TextBox3.TextColor3 = Color3.fromRGB(220, 220, 240)
+    TextBox3.TextSize = 8
+    TextBox3.Font = Enum.Font.GothamBold
+    TextBox3.TextXAlignment = Enum.TextXAlignment.Left
+    TextBox3.ClearTextOnFocus = true
+    PlayerBox = TextBox3
+end
+-- ══════════════════════════════════════════
+-- صفحة 1: الرئيسية
+-- ══════════════════════════════════════════
+MakeToggle(Pages[1], "كشف الناس", "ShowRoles")
+MakeToggle(Pages[1], "ميزه قيد تطوير", "GodMode", function(config)
+    if config then StartLegendaryGodMode() else StopLegendaryGodMode() end
+end)
+MakeToggle(Pages[1], "تعدى الجدران", "Noclip", function(config)
+    if config then StartNoclip() else StopNoclip() end
+end)
+MakeToggle(Pages[1], "نط لا نهائي", "InfiniteJump")
+-- ══════════════════════════════════════════
+-- صفحة 2: قتال
+-- ══════════════════════════════════════════
+MakeToggle(Pages[2], "ايم ثابت على القاتل", "MurdererAim", function(config)
+    if config then Config.MurdererAim = true StartMurdererAim() else StopMurdererAim() end
+end)
+MakeToggle(Pages[2], "قتل الكل (تحتاج سكين)", "KillAll", function(config)
+    if config then StartKillAll() else StopKillAll() end
+end)
+MakeToggle(Pages[2], "اخذ السلاح من شرطي", "AutoGun", function(config)
+    if config then StartAutoGun() else StopAutoGun() end
+end)
+MakeToggle(Pages[2], "فلينق الكل", "FlingAll", function(config)
+    FlingActive = config
+    if config then
+        spawn(function()
+            while FlingActive do
+                local getRPResult5 = GetRP()
+                if getRPResult5 then
+                    for _, plr in pairs(Players:GetPlayers()) do
+                        if not FlingActive then break end
+                        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                            local humanoidRootPart3 = plr.Character.HumanoidRootPart
+                            getRPResult5.CFrame = humanoidRootPart3.CFrame
+                            local BodyAngularVelocity2 = Instance.new("BodyAngularVelocity")
+                            BodyAngularVelocity2.AngularVelocity = Vector3.new(99999, 99999, 99999)
+                            BodyAngularVelocity2.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                            BodyAngularVelocity2.Parent = getRPResult5
+                            local BodyVelocity2 = Instance.new("BodyVelocity")
+                            BodyVelocity2.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                            BodyVelocity2.Velocity = Vector3.new(0, 0, 0)
+                            BodyVelocity2.Parent = getRPResult5
+                            for j = 1, 900 do
+                                getRPResult5.CFrame = humanoidRootPart3.CFrame * CFrame.Angles(math.rad(j * 50), math.rad(j * 60), math.rad(j * 45)) * CFrame.new(0, 0, 0.3)
+                                if j % 5 == 0 then RunService.Heartbeat:Wait() end
+                            end
+                            BodyVelocity2.Velocity = (humanoidRootPart3.CFrame.LookVector * 1500) + Vector3.new(0, 500, 0)
+                            wait(0.1)
+                            BodyVelocity2:Destroy()
+                            BodyAngularVelocity2:Destroy()
+                        end
+                    end
+                end
+                wait(3)
+            end
+        end)
+    end
+end)
+MakeFlingBox(Pages[2])
+MakeBtn(Pages[2], "فلينق لاعب", Color3.fromRGB(255, 80, 80), function()
+    if FlingBox and FlingBox.Text ~= "" then FlingPlayer(FlingBox.Text) end
+end)
+-- ══════════════════════════════════════════
+-- صفحة 3: فلوس
+-- ══════════════════════════════════════════
+MakeToggle(Pages[3], "جمع فلوس تلقائي", "AutoCollectCoins", function(config)
+    if config then StartAutoCollect() else StopAutoCollect() end
+end)
+MakeToggle(Pages[3], "كشف الفلوس", "CoinESP")
+-- ══════════════════════════════════════════
+-- صفحة 4: انتقال
+-- ══════════════════════════════════════════
+MakeBtn(Pages[4], "روح للشرطي", Color3.fromRGB(50, 150, 255), function()
+    local getSheriffResult = GetSheriff()
+    if getSheriffResult and getSheriffResult.Character and getSheriffResult.Character:FindFirstChild("HumanoidRootPart") then
+        TP(getSheriffResult.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3))
+    end
+end)
+MakeBtn(Pages[4], "روح للقاتل", Color3.fromRGB(255, 50, 50), function()
+    local getMurdererResult2 = GetMurderer()
+    if getMurdererResult2 and getMurdererResult2.Character and getMurdererResult2.Character:FindFirstChild("HumanoidRootPart") then
+        TP(getMurdererResult2.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3))
+    end
+end)
+MakeBtn(Pages[4], "انتقال عشوائي", Color3.fromRGB(200, 100, 255), function()
+    local tbl5 = {}
+    for _, ScrollingFrame in pairs(Players:GetPlayers()) do
+        if ScrollingFrame ~= LocalPlayer and ScrollingFrame.Character and ScrollingFrame.Character:FindFirstChild("HumanoidRootPart") then
+            table.insert(tbl5, ScrollingFrame)
+        end
+    end
+    if #tbl5 > 0 then TP(tbl5[math.random(1, #tbl5)].Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)) end
+end)
+MakePlayerBox(Pages[4])
+MakeBtn(Pages[4], "روح للاعب", Color3.fromRGB(100, 50, 255), function()
+    if PlayerBox and PlayerBox.Text ~= "" then
+        local n = PlayerBox.Text:lower()
+        for _, ScrollingFrame in pairs(Players:GetPlayers()) do
+            if ScrollingFrame ~= LocalPlayer and (ScrollingFrame.Name:lower():find(n) or ScrollingFrame.DisplayName:lower():find(n)) then
+                if ScrollingFrame.Character and ScrollingFrame.Character:FindFirstChild("HumanoidRootPart") then
+                    TP(ScrollingFrame.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3))
+                end
+                break
+            end
+        end
+    end
+end)
+-- ══════════════════════════════════════════
+-- صفحة 5: اخرى
+-- ══════════════════════════════════════════
+MakeSpeedBox(Pages[5])
+MakeBtn(Pages[5], "شغل سرعه", Color3.fromRGB(0, 150, 255), function()
+    if SpeedBox and SpeedBox.Text ~= "" then
+        local tonumberResult = tonumber(SpeedBox.Text)
+        if tonumberResult and tonumberResult > 0 then
+            tonumberResult = math.clamp(tonumberResult, 1, 100)
+            local getHumResult5 = GetHum()
+            if getHumResult5 then getHumResult5.WalkSpeed = tonumberResult end
+        end
+    end
+end)
+MakeToggle(Pages[5], "نط عالي", "HighJump", function(config)
+    local getHumResult6 = GetHum()
+    if getHumResult6 then getHumResult6.JumpPower = config and 150 or 50 end
+end)
+MakeBtn(Pages[5], "ميزه قيد تطوير", Color3.fromRGB(100, 50, 255), function()
+    TeleportToNewServer()
+end)
+MakeBtn(Pages[5], "ادخل من جديد", Color3.fromRGB(255, 50, 50), function()
+    game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+end)
+MakeBtn(Pages[5], "ازاله الاق", Color3.fromRGB(0, 200, 80), function()
+    CleanLag()
+end)
+-- ══════════════════════════════════════════════════════════
+-- 🔄 إعادة تطبيق الدرع عند رسبون
+-- ══════════════════════════════════════════════════════════
+LocalPlayer.CharacterAdded:Connect(function(ch)
+    task.wait(0.5)
+    GodModeActive = false
+    GodModeConnections = {}
+    if Config.GodMode then
+        StartLegendaryGodMode()
+    end
+end)
+-- ══════════════════════════════════════════════════════════
+-- 🔄 الحلقة الرئيسية
+-- ══════════════════════════════════════════════════════════
+RunService.RenderStepped:Connect(function()
+    if Config.ShowRoles then
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local getRoleResult = GetRole(plr)
+                local c, rn
+                if getRoleResult == "Murderer" then c = Color3.fromRGB(255, 50, 50) rn = "قاتل"
+                elseif getRoleResult == "Sheriff" then c = Color3.fromRGB(50, 150, 255) rn = "شرطي"
+                else c = Color3.fromRGB(50, 255, 50) rn = "عادي" end
+                local MM2_HL = plr.Character:FindFirstChild("MM2_HL")
+                if not MM2_HL then
+                    MM2_HL = Instance.new("Highlight")
+                    MM2_HL.Name = "MM2_HL"
+                    MM2_HL.FillTransparency = 0.5
+                    MM2_HL.Parent = plr.Character
+                end
+                MM2_HL.FillColor = c
+                MM2_HL.OutlineColor = c
+                local head = plr.Character:FindFirstChild("Head")
+                if head then
+                    local MM2_ESP = head:FindFirstChild("MM2_ESP")
+                    if not MM2_ESP then
+                        MM2_ESP = Instance.new("BillboardGui")
+                        MM2_ESP.Name = "MM2_ESP"
+                        MM2_ESP.Size = UDim2.new(0, 140, 0, 25)
+                        MM2_ESP.StudsOffset = Vector3.new(0, 3, 0)
+                        MM2_ESP.AlwaysOnTop = true
+                        MM2_ESP.Parent = head
+                        local TextLabel3 = Instance.new("TextLabel")
+                        TextLabel3.Name = "Label"
+                        TextLabel3.Size = UDim2.new(1, 0, 1, 0)
+                        TextLabel3.BackgroundTransparency = 1
+                        TextLabel3.TextSize = 10
+                        TextLabel3.Font = Enum.Font.GothamBold
+                        TextLabel3.TextStrokeTransparency = 0
+                        TextLabel3.Parent = MM2_ESP
+                    end
+                    local Label = MM2_ESP:FindFirstChild("Label")
+                    if Label then
+                        Label.Text = rn .. " — " .. plr.DisplayName
+                        Label.TextColor3 = c
+                    end
+                end
+            end
+        end
+    else
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local MM2_HL2 = plr.Character:FindFirstChild("MM2_HL")
+                if MM2_HL2 then MM2_HL2:Destroy() end
+                local head = plr.Character:FindFirstChild("Head")
+                if head then
+                    local MM2_ESP2 = head:FindFirstChild("MM2_ESP")
+                    if MM2_ESP2 then MM2_ESP2:Destroy() end
+                end
+            end
+        end
+    end
+    if Config.CoinESP then
+        local getRPResult6 = GetRP()
+        for _, c in pairs(GetRealCoins()) do
+            if c and c.Parent and not c:FindFirstChild("MM2_CE") then
+                local BillboardGui = Instance.new("BillboardGui")
+                BillboardGui.Name = "MM2_CE"
+                BillboardGui.Size = UDim2.new(0, 80, 0, 22)
+                BillboardGui.StudsOffset = Vector3.new(0, 2, 0)
+                BillboardGui.AlwaysOnTop = true
+                BillboardGui.Parent = c
+                local TextLabel4 = Instance.new("TextLabel")
+                TextLabel4.Size = UDim2.new(1, 0, 1, 0)
+                TextLabel4.BackgroundTransparency = 1
+                local floor = getRPResult6 and " [" .. tostring(math.floor((c.Position - getRPResult6.Position).Magnitude)) .. "]" or ""
+                TextLabel4.Text = "فلوس" .. floor
+                TextLabel4.TextColor3 = Color3.fromRGB(255, 200, 0)
+                TextLabel4.TextSize = 9
+                TextLabel4.Font = Enum.Font.GothamBold
+                TextLabel4.TextStrokeTransparency = 0
+                TextLabel4.Parent = BillboardGui
+            end
+        end
+    else
+        for _, c in pairs(Workspace:GetDescendants()) do
+            if c:FindFirstChild("MM2_CE") then c.MM2_CE:Destroy() end
+        end
+    end
+end)
+-- نط لا نهائي
+UserInputService.JumpRequest:Connect(function()
+    if Config.InfiniteJump then
+        local getHumResult7 = GetHum()
+        if getHumResult7 then getHumResult7:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+-- ══════════════════════════════════════════
+-- 🔔 شعار البداية
+-- ══════════════════════════════════════════
+local ScreenGui2 = Instance.new("ScreenGui")
+ScreenGui2.Name = "MBN_N"
+ScreenGui2.Parent = CoreGui
+local Frame10 = Instance.new("Frame")
+Frame10.Parent = ScreenGui2
+Frame10.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+Frame10.BorderSizePixel = 0
+Frame10.Size = UDim2.new(0, 260, 0, 35)
+Frame10.Position = UDim2.new(0.5, -130, 0, -50)
+Instance.new("UICorner", Frame10).CornerRadius = UDim.new(0, 8)
+local nstk = Instance.new("UIStroke", Frame10)
+nstk.Color = Color3.fromRGB(100, 50, 255)
+nstk.Thickness = 1
+local UIGradient2 = Instance.new("UIGradient", Frame10)
+UIGradient2.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 20, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 80))
+}
+local TextLabel5 = Instance.new("TextLabel")
+TextLabel5.Parent = Frame10
+TextLabel5.BackgroundTransparency = 1
+TextLabel5.Size = UDim2.new(1, -10, 1, 0)
+TextLabel5.Position = UDim2.new(0, 5, 0, 0)
+TextLabel5.Text = "منور سكربت اتمنى ان يعجبك"
+TextLabel5.TextColor3 = Color3.new(1, 1, 1)
+TextLabel5.TextSize = 11
+TextLabel5.Font = Enum.Font.GothamBold
+TweenService:Create(Frame10, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    {Position = UDim2.new(0.5, -130, 0, 10)}):Play()
+spawn(function()
+    wait(3)
+    TweenService:Create(Frame10, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {Position = UDim2.new(0.5, -130, 0, -50)}):Play()
+    wait(0.4)
+    ScreenGui2:Destroy()
+end)
+print("═══════════════════════════════════")
+print("مطور السكربت MBN — النسخة v8.9")
+print("🛡️ درع مايخليك تموت - ما تموت أبداً")
+print("🔪 قتل الكل + إيم توقع 100%%")
+print("💰 جمع 40 فلوسة ناعم + ذاكرة ذكية")
+print("🚀 انتقال سيرفر ثاني من اخرى")
+print("═══════════════════════════════════")
+]=])()
+local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ScreenGui3 = Instance.new("ScreenGui")
+ScreenGui3.Name = "MBN"
+ScreenGui3.Parent = game:GetService("CoreGui")
+ScreenGui3.ResetOnSpawn = false
+ScreenGui3.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+local Frame11 = Instance.new("Frame")
+Frame11.Parent = ScreenGui3
+Frame11.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+Frame11.BorderSizePixel = 0
+Frame11.Position = UDim2.new(0.02, 0, 0.35, 0)
+Frame11.Size = UDim2.new(0, 310, 0, 270)
+Frame11.ClipsDescendants = true
+local UICorner = Instance.new("UICorner", Frame11)
+UICorner.CornerRadius = UDim.new(0, 8)
+local UIStroke2 = Instance.new("UIStroke", Frame11)
+UIStroke2.Color = Color3.fromRGB(100, 50, 255)
+UIStroke2.Thickness = 1
+local Frame12 = Instance.new("Frame")
+Frame12.Parent = Frame11
+Frame12.BackgroundColor3 = Color3.fromRGB(12, 12, 22)
+Frame12.BorderSizePixel = 0
+Frame12.Size = UDim2.new(1, 0, 0, 24)
+local UICorner2 = Instance.new("UICorner", Frame12)
+UICorner2.CornerRadius = UDim.new(0, 8)
+local UIGradient3 = Instance.new("UIGradient", Frame12)
+UIGradient3.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 20, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 80))
+    })
+local TextLabel6 = Instance.new("TextLabel")
+TextLabel6.Parent = Frame12
+TextLabel6.BackgroundTransparency = 1
+TextLabel6.Size = UDim2.new(1, -50, 1, 0)
+TextLabel6.Position = UDim2.new(0, 8, 0, 0)
+TextLabel6.Text = "مطور السكربت MBN"
+TextLabel6.TextColor3 = Color3.new(1, 1, 1)
+TextLabel6.TextSize = 11
+TextLabel6.Font = Enum.Font.GothamBold
+TextLabel6.TextXAlignment = Enum.TextXAlignment.Left
+local TextButton6 = Instance.new("TextButton")
+TextButton6.Parent = Frame12
+TextButton6.BackgroundTransparency = 1
+TextButton6.Size = UDim2.new(0, 22, 0, 22)
+TextButton6.Position = UDim2.new(1, -24, 0, 1)
+TextButton6.Text = "×"
+TextButton6.TextColor3 = Color3.new(1, 1, 1)
+TextButton6.TextSize = 12
+TextButton6.Font = Enum.Font.GothamBold
+TextButton6:Connect(function(arg1, arg2, arg3)
+    game:GetService("RunService"):UnbindFromRenderStep("MBN_A1")
+    local Players = game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass('Humanoid')
+    Players.WalkSpeed = 16
+    local Players2 = game:GetService("Players").LocalPlayer.Character:FindFirstChild('MM2_FF')
+    Players2:Destroy()
+    local Players3 = game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass('Humanoid')
+    Players3.MaxHealth = 100
+    Players3.Health = 100
+    local screenGui10Result = ScreenGui3(ScreenGui3)
+end)
+local TextButton7 = Instance.new("TextButton")
+TextButton7.Parent = Frame12
+TextButton7.BackgroundTransparency = 1
+TextButton7.Size = UDim2.new(0, 22, 0, 22)
+TextButton7.Position = UDim2.new(1, -48, 0, 1)
+TextButton7.Text = "—"
+TextButton7.TextColor3 = Color3.new(1, 1, 1)
+TextButton7.TextSize = 12
+TextButton7.Font = Enum.Font.GothamBold
+local Frame13 = Instance.new("Frame")
+Frame13.Parent = Frame11
+Frame13.BackgroundTransparency = 1
+Frame13.Size = UDim2.new(1, 0, 1, -24)
+Frame13.Position = UDim2.new(0, 0, 0, 24)
+TextButton7:Connect(function(arg1, arg2, arg3)
+    Frame13.Visible = false
+    TextButton7.Text = "—"
+    Frame11.Size = UDim2.new(0, 310, 0, 270)
+end)
+Frame12:Connect(function(arg1) --[[ Fail to get function body!! ]] end)
+Frame12:Connect(function(arg1) --[[ Fail to get function body!! ]] end)
+game:GetService("UserInputService").InputChanged:Connect(function(arg1) --[[ Fail to get function body!! ]] end)
+local Frame14 = Instance.new("Frame")
+Frame14.Parent = Frame13
+Frame14.BackgroundTransparency = 1
+Frame14.Size = UDim2.new(1, 0, 0, 20)
+Frame14.Position = UDim2.new(0, 3, 0, 2)
+local UIListLayout2 = Instance.new("UIListLayout", Frame14)
+UIListLayout2.FillDirection = Enum.FillDirection.Horizontal
+UIListLayout2.Padding = UDim.new(0, 2)
+for key_82, val_82 in pairs({
+        'الرئيسيه',
+        'القتال',
+        'فلوس',
+        'انتقال',
+        'اخرى'
+    }) do
+    local TextButton8 = Instance.new("TextButton")
+    TextButton8.Parent = Frame14
+    TextButton8.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    TextButton8.BorderSizePixel = 0
+    TextButton8.Size = UDim2.new(0, 55, 0, 18)
+    TextButton8.Text = "الرئيسيه"
+    TextButton8.TextColor3 = Color3.fromRGB(160, 160, 180)
+    TextButton8.TextSize = 8
+    TextButton8.Font = Enum.Font.GothamBold
+    local UICorner3 = Instance.new("UICorner", TextButton8)
+    UICorner3.CornerRadius = UDim.new(0, 6)
+    TextButton8:Connect(function(arg1, arg2, arg3) --[[ Fail to get function body!! ]] end)
+    local ScrollingFrame2 = Instance.new("ScrollingFrame")
+    ScrollingFrame2.Parent = Frame13
+    ScrollingFrame2.BackgroundTransparency = 1
+    ScrollingFrame2.Size = UDim2.new(1, -6, 1, -26)
+    ScrollingFrame2.Position = UDim2.new(0, 3, 0, 24)
+    ScrollingFrame2.ScrollBarThickness = 2
+    ScrollingFrame2.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 255)
+    ScrollingFrame2.BorderSizePixel = 0
+    ScrollingFrame2.Visible = true
+    ScrollingFrame2.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ScrollingFrame2.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    local UIGridLayout2 = Instance.new("UIGridLayout", ScrollingFrame2)
+    UIGridLayout2.CellSize = UDim2.new(0, 97, 0, 25)
+    UIGridLayout2.CellPadding = UDim2.new(0, 2, 0, 2)
+    local TextButton9 = Instance.new("TextButton")
+    TextButton9.Parent = Frame14
+    TextButton9.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    TextButton9.BorderSizePixel = 0
+    TextButton9.Size = UDim2.new(0, 55, 0, 18)
+    TextButton9.Text = "القتال"
+    TextButton9.TextColor3 = Color3.fromRGB(160, 160, 180)
+    TextButton9.TextSize = 8
+    TextButton9.Font = Enum.Font.GothamBold
+    local UICorner4 = Instance.new("UICorner", TextButton9)
+    UICorner4.CornerRadius = UDim.new(0, 6)
+    TextButton9:Connect(function(arg1, arg2, arg3)
+            for key_1, val_1 in pairs({
+                                ScrollingFrame2
+                            }) do
+            ScrollingFrame2.Visible = false
+            end
+            for key_4, val_4 in pairs({
+                                TextButton8
+                            }) do
+            TextButton8.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+            TextButton8.TextColor3 = Color3.fromRGB(160, 160, 180)
+            end
+        end)
+    local ScrollingFrame3 = Instance.new("ScrollingFrame")
+    ScrollingFrame3.Parent = Frame13
+    ScrollingFrame3.BackgroundTransparency = 1
+    ScrollingFrame3.Size = UDim2.new(1, -6, 1, -26)
+    ScrollingFrame3.Position = UDim2.new(0, 3, 0, 24)
+    ScrollingFrame3.ScrollBarThickness = 2
+    ScrollingFrame3.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 255)
+    ScrollingFrame3.BorderSizePixel = 0
+    ScrollingFrame3.Visible = false
+    ScrollingFrame3.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ScrollingFrame3.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    local UIGridLayout3 = Instance.new("UIGridLayout", ScrollingFrame3)
+    UIGridLayout3.CellSize = UDim2.new(0, 97, 0, 25)
+    UIGridLayout3.CellPadding = UDim2.new(0, 2, 0, 2)
+    local TextButton10 = Instance.new("TextButton")
+    TextButton10.Parent = Frame14
+    TextButton10.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    TextButton10.BorderSizePixel = 0
+    TextButton10.Size = UDim2.new(0, 55, 0, 18)
+    TextButton10.Text = "فلوس"
+    TextButton10.TextColor3 = Color3.fromRGB(160, 160, 180)
+    TextButton10.TextSize = 8
+    TextButton10.Font = Enum.Font.GothamBold
+    local UICorner5 = Instance.new("UICorner", TextButton10)
+    UICorner5.CornerRadius = UDim.new(0, 6)
+    TextButton10:Connect(function(arg1, arg2, arg3)
+            for key_1, val_1 in pairs({
+                                ScrollingFrame2,
+                                ScrollingFrame3
+                            }) do
+            ScrollingFrame2.Visible = false
+            ScrollingFrame3.Visible = false
+            end
+            for key_5, val_5 in pairs({
+                                TextButton8,
+                                TextButton9
+                            }) do
+            TextButton8.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+            TextButton8.TextColor3 = Color3.fromRGB(160, 160, 180)
+            TextButton9.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+            TextButton9.TextColor3 = Color3.fromRGB(160, 160, 180)
+            end
+        end)
+    local ScrollingFrame4 = Instance.new("ScrollingFrame")
+    ScrollingFrame4.Parent = Frame13
+    ScrollingFrame4.BackgroundTransparency = 1
+    ScrollingFrame4.Size = UDim2.new(1, -6, 1, -26)
+    ScrollingFrame4.Position = UDim2.new(0, 3, 0, 24)
+    ScrollingFrame4.ScrollBarThickness = 2
+    ScrollingFrame4.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 255)
+    ScrollingFrame4.BorderSizePixel = 0
+    ScrollingFrame4.Visible = false
+    ScrollingFrame4.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ScrollingFrame4.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    local UIGridLayout4 = Instance.new("UIGridLayout", ScrollingFrame4)
+    UIGridLayout4.CellSize = UDim2.new(0, 97, 0, 25)
+    UIGridLayout4.CellPadding = UDim2.new(0, 2, 0, 2)
+    local TextButton11 = Instance.new("TextButton")
+    TextButton11.Parent = Frame14
+    TextButton11.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    TextButton11.BorderSizePixel = 0
+    TextButton11.Size = UDim2.new(0, 55, 0, 18)
+    TextButton11.Text = "انتقال"
+    TextButton11.TextColor3 = Color3.fromRGB(160, 160, 180)
+    TextButton11.TextSize = 8
+    TextButton11.Font = Enum.Font.GothamBold
+    local UICorner6 = Instance.new("UICorner", TextButton11)
+    UICorner6.CornerRadius = UDim.new(0, 6)
+    TextButton11:Connect(function(arg1, arg2, arg3)
+            for key_1, val_1 in pairs({
+                                ScrollingFrame2,
+                                ScrollingFrame3,
+                                ScrollingFrame4
+                            }) do
+            ScrollingFrame2.Visible = false
+            ScrollingFrame3.Visible = false
+            ScrollingFrame4.Visible = false
+            end
+            for key_6, val_6 in pairs({
+                                TextButton8,
+                                TextButton9,
+                                TextButton10
+                            }) do
+            TextButton8.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+            TextButton8.TextColor3 = Color3.fromRGB(160, 160, 180)
+            TextButton9.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+            TextButton9.TextColor3 = Color3.fromRGB(160, 160, 180)
+            TextButton10.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+            TextButton10.TextColor3 = Color3.fromRGB(160, 160, 180)
+            end
+        end)
+    local ScrollingFrame5 = Instance.new("ScrollingFrame")
+    ScrollingFrame5.Parent = Frame13
+    ScrollingFrame5.BackgroundTransparency = 1
+    ScrollingFrame5.Size = UDim2.new(1, -6, 1, -26)
+    ScrollingFrame5.Position = UDim2.new(0, 3, 0, 24)
+    ScrollingFrame5.ScrollBarThickness = 2
+    ScrollingFrame5.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 255)
+    ScrollingFrame5.BorderSizePixel = 0
+    ScrollingFrame5.Visible = false
+    ScrollingFrame5.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ScrollingFrame5.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    local UIGridLayout5 = Instance.new("UIGridLayout", ScrollingFrame5)
+    UIGridLayout5.CellSize = UDim2.new(0, 97, 0, 25)
+    UIGridLayout5.CellPadding = UDim2.new(0, 2, 0, 2)
+    local TextButton12 = Instance.new("TextButton")
+    TextButton12.Parent = Frame14
+    TextButton12.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    TextButton12.BorderSizePixel = 0
+    TextButton12.Size = UDim2.new(0, 55, 0, 18)
+    TextButton12.Text = "اخرى"
+    TextButton12.TextColor3 = Color3.fromRGB(160, 160, 180)
+    TextButton12.TextSize = 8
+    TextButton12.Font = Enum.Font.GothamBold
+    local UICorner7 = Instance.new("UICorner", TextButton12)
+    UICorner7.CornerRadius = UDim.new(0, 6)
+    TextButton12:Connect(function(arg1, arg2, arg3)
+            for key_1, val_1 in pairs({
+                                ScrollingFrame2,
+                                ScrollingFrame3,
+                                ScrollingFrame4,
+                                ScrollingFrame5
+                            }) do
+for i = 1, 4 do
+                ScrollingFrame2.Visible = false
+end
+            end
+            for key_7, val_7 in pairs({
+                                TextButton8,
+                                TextButton9,
+                                TextButton10,
+                                TextButton11
+                            }) do
+for i = 1, 4 do
+                TextButton8.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+                TextButton8.TextColor3 = Color3.fromRGB(160, 160, 180)
+end
+            end
+        end)
+    local ScrollingFrame6 = Instance.new("ScrollingFrame")
+    ScrollingFrame6.Parent = Frame13
+    ScrollingFrame6.BackgroundTransparency = 1
+    ScrollingFrame6.Size = UDim2.new(1, -6, 1, -26)
+    ScrollingFrame6.Position = UDim2.new(0, 3, 0, 24)
+    ScrollingFrame6.ScrollBarThickness = 2
+    ScrollingFrame6.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 255)
+    ScrollingFrame6.BorderSizePixel = 0
+    ScrollingFrame6.Visible = false
+    ScrollingFrame6.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ScrollingFrame6.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    local UIGridLayout6 = Instance.new("UIGridLayout", ScrollingFrame6)
+    UIGridLayout6.CellSize = UDim2.new(0, 97, 0, 25)
+    UIGridLayout6.CellPadding = UDim2.new(0, 2, 0, 2)
+end
+TextButton8.BackgroundColor3 = Color3.fromRGB(100, 50, 255)
+TextButton8.TextColor3 = Color3.new(1, 1, 1)
+local Frame11 = Instance.new("Frame")
+Frame11.Parent = ScrollingFrame2
+Frame11.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+Frame11.BorderSizePixel = 0
+local UICorner8 = Instance.new("UICorner", Frame11)
+UICorner8.CornerRadius = UDim.new(0, 6)
+local TextLabel7 = Instance.new("TextLabel")
+TextLabel7.Parent = Frame11
+TextLabel7.BackgroundTransparency = 1
+TextLabel7.Size = UDim2.new(1, -30, 1, 0)
+TextLabel7.Position = UDim2.new(0, 5, 0, 0)
+TextLabel7.Text = "كشف الناس"
+TextLabel7.TextColor3 = Color3.fromRGB(180, 180, 200)
+TextLabel7.TextSize = 8
+TextLabel7.Font = Enum.Font.GothamBold
+TextLabel7.TextXAlignment = Enum.TextXAlignment.Left
+local TextButton13 = Instance.new("TextButton")
+TextButton13.Parent = Frame11
+TextButton13.Size = UDim2.new(0, 24, 0, 12)
+TextButton13.Position = UDim2.new(1, -27, 0.5, -6)
+TextButton13.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+TextButton13.Text = ""
+TextButton13.BorderSizePixel = 0
+local UICorner9 = Instance.new("UICorner", TextButton13)
+UICorner9.CornerRadius = UDim.new(1, 0)
+local Frame16 = Instance.new("Frame")
+Frame16.Parent = TextButton13
+Frame16.Size = UDim2.new(0, 8, 0, 8)
+Frame16.Position = UDim2.new(0, 2, 0.5, -4)
+Frame16.BackgroundColor3 = Color3.new(1, 1, 1)
+Frame16.BorderSizePixel = 0
+local UICorner10 = Instance.new("UICorner", Frame16)
+UICorner10.CornerRadius = UDim.new(1, 0)
+TextButton13:Connect(function(arg1, arg2, arg3)
+    local TweenService = game:GetService("TweenService"):Create(TextButton13, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(0, 200, 80)
+        })
+    local play = TweenService:Play()
+    local TweenService2 = game:GetService("TweenService"):Create(Frame16, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0, 14, 0.5, -4)
+        })
+    local play2 = TweenService2:Play()
+end)
+local Frame17 = Instance.new("Frame")
+Frame17.Parent = ScrollingFrame2
+Frame17.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+Frame17.BorderSizePixel = 0
+local UICorner11 = Instance.new("UICorner", Frame17)
+UICorner11.CornerRadius = UDim.new(0, 6)
+local TextLabel8 = Instance.new("TextLabel")
+TextLabel8.Parent = Frame17
+TextLabel8.BackgroundTransparency = 1
+TextLabel8.Size = UDim2.new(1, -30, 1, 0)
+TextLabel8.Position = UDim2.new(0, 5, 0, 0)
+TextLabel8.Text = "ميزه قيد تطوير"
+TextLabel8.TextColor3 = Color3.fromRGB(180, 180, 200)
+TextLabel8.TextSize = 8
+TextLabel8.Font = Enum.Font.GothamBold
+TextLabel8.TextXAlignment = Enum.TextXAlignment.Left
+local TextButton14 = Instance.new("TextButton")
+TextButton14.Parent = Frame17
+TextButton14.Size = UDim2.new(0, 24, 0, 12)
+TextButton14.Position = UDim2.new(1, -27, 0.5, -6)
+TextButton14.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+TextButton14.Text = ""
+TextButton14.BorderSizePixel = 0
+local UICorner12 = Instance.new("UICorner", TextButton14)
+UICorner12.CornerRadius = UDim.new(1, 0)
+local Frame18 = Instance.new("Frame")
+Frame18.Parent = TextButton14
+Frame18.Size = UDim2.new(0, 8, 0, 8)
+Frame18.Position = UDim2.new(0, 2, 0.5, -4)
+Frame18.BackgroundColor3 = Color3.new(1, 1, 1)
+Frame18.BorderSizePixel = 0
+local UICorner13 = Instance.new("UICorner", Frame18)
+UICorner13.CornerRadius = UDim.new(1, 0)
+TextButton14:Connect(function(arg1, arg2, arg3)
+    local TweenService3 = game:GetService("TweenService"):Create(TextButton14, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(0, 200, 80)
+        })
+    local play3 = TweenService3:Play()
+    local TweenService4 = game:GetService("TweenService"):Create(Frame18, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0, 14, 0.5, -4)
+        })
+    local play4 = TweenService4:Play()
+    local Players4 = game:GetService("Players").LocalPlayer.Character:FindFirstChild('MM2_FF')
+    local Players5 = game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass('Humanoid')
+    Players5.MaxHealth = inf
+    Players5.Health = inf
+    local setStateEnabled = Players5:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+    local setStateEnabled2 = Players5:SetStateEnabled(Enum.HumanoidStateType.Dying, false)
+    local setStateEnabled3 = Players5:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+    local setStateEnabled4 = Players5:SetStateEnabled(Enum.HumanoidStateType.Dropped, false)
+    local setStateEnabled5 = Players5:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+    local MM2_HUM_PROTECT = Players5:FindFirstChild('MM2_HUM_PROTECT')
+    local RunService = game:GetService("RunService").Heartbeat:Connect(function(arg1, arg2, arg3)
+        local Players6 = game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass('Humanoid')
+    end)
+for i = 1, 122 do
+        local Players7 = game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass('Humanoid')
+end
+    local RunService2 = game:GetService("RunService").RenderStepped:Connect(function(arg1, arg2, arg3)
+        game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass.MaxHealth = inf
+        game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass.Health = inf
+        local Players8 = game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+        local Players9 = game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass:SetStateEnabled(Enum.HumanoidStateType.Dying, false)
+    end)
+for i = 1, 61 do
+        game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass.MaxHealth = inf
+        game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass.Health = inf
+        local Players10 = game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+        local Players11 = game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass:SetStateEnabled(Enum.HumanoidStateType.Dying, false)
+end
+for i = 1, 281 do
+        game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass.MaxHealth = inf
+        game:GetService("Players").LocalPlayer.Character.FindFirstChildOfClass.Health = inf
+end
+end)
+local Frame19 = Instance.new("Frame")
+Frame19.Parent = ScrollingFrame2
+Frame19.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+Frame19.BorderSizePixel = 0
+local UICorner14 = Instance.new("UICorner", Frame19)
+UICorner14.CornerRadius = UDim.new(0, 6)
+local TextLabel9 = Instance.new("TextLabel")
+TextLabel9.Parent = Frame19
+TextLabel9.BackgroundTransparency = 1
+TextLabel9.Size = UDim2.new(1, -30, 1, 0)
+TextLabel9.Position = UDim2.new(0, 5, 0, 0)
+TextLabel9.Text = "تعدى الجدران"
+TextLabel9.TextColor3 = Color3.fromRGB(180, 180, 200)
+TextLabel9.TextSize = 8
