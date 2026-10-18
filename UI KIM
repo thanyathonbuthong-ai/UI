@@ -140,10 +140,12 @@ return function(window)
 
     local layout = look:Group({ Title = "Layout", Icon = "layout-dashboard", Opened = false })
     layout:Toggle({ Title = "Expand modules when enabled", Default = interface.AutoExpand, Callback = function(on) window:SetInterface("AutoExpand", on) end })
-    layout:Toggle({ Title = "Compact sidebar", Default = interface.Compact, Callback = function(on)
+    local compactToggle = layout:Toggle({ Title = "Compact sidebar", Default = interface.Compact, Callback = function(on)
         window:SetCompact(on)
         window:SaveState()
     end })
+    -- the "hide tab names" button in the title bar flips the same setting
+    window.Maid:Give(window.CompactChanged:Connect(function(on) compactToggle:Set(on, true) end))
     layout:Toggle({ Title = "Card descriptions", Default = interface.Descriptions ~= false, Callback = function(on)
         window:SetInterface("Descriptions", on)
         for _, module in window:Modules() do module.StateChanged:Fire("Description") end
@@ -1397,7 +1399,7 @@ end
 function Module:Render(parent, maid, view)
     view = view or {}
     local window = self.Window
-    local hover = false
+    local hover, pressed = false, false
     table.insert(self._mounts, maid)
     maid:Give(function()
         local index = table.find(self._mounts, maid)
@@ -1409,7 +1411,10 @@ function Module:Render(parent, maid, view)
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         Visible = self.Visible,
-        Theme = { BackgroundColor3 = "Surface", BackgroundTransparency = "SurfaceTransparency" },
+        Theme = {
+            BackgroundColor3 = function(t) return pressed and t.SurfaceHover or t.Surface end,
+            BackgroundTransparency = "SurfaceTransparency",
+        },
         Parent = parent,
     }))
     Util.Corner("ElementRadius", card)
@@ -1570,8 +1575,12 @@ function Module:Render(parent, maid, view)
             Parent = controls,
         })
         local switchHit = Util.New("TextButton", { BackgroundTransparency = 1, Size = UDim2.fromOffset(30, 16), LayoutOrder = 2, Parent = controls })
-        local _, paint = Widgets.Switch(switchHit, { AnchorPoint = Vector2.zero, Position = UDim2.fromScale(0, 0) })
+        local _, paint, press = Widgets.Switch(switchHit, { AnchorPoint = Vector2.zero, Position = UDim2.fromScale(0, 0) })
         switchPaint = paint
+        Util.PressState(switchHit, function(down)
+            if down and self.Locked then return end
+            press(down)
+        end)
         switchPaint(self.Enabled, false)
         switchHit.MouseButton1Click:Connect(function() if not self.Locked then self:ToggleEnabled() end end)
         chevron.MouseButton1Click:Connect(function() self:SetExpanded(not self.Expanded) end)
@@ -1686,6 +1695,12 @@ function Module:Render(parent, maid, view)
     -- touch: a long press opens the menu that right-click opens with a mouse
     local press, consumed = Util.LongPress(hit, function(point) self:_menu(view, point) end)
     maid:Give(press)
+    -- held header: the card eases to its hover shade and back (a locked toggle module does not react)
+    Util.PressState(hit, function(down)
+        if down and self.Locked and self.Toggleable then return end
+        pressed = down
+        Theme.Refresh(card, down and 0.08 or 0.3)
+    end)
     hit.MouseButton1Click:Connect(function()
         if consumed() then return end
         if self.Toggleable then
@@ -2930,6 +2945,7 @@ __modules["Components/Popup"] = function(...)
 local import = ...
 local Services = import("Core/Services")
 local Util = import("Core/Util")
+local Theme = import("Core/Theme")
 local Maid = import("Core/Maid")
 local Signal = import("Core/Signal")
 local Layer = import("Components/Layer")
@@ -2948,7 +2964,8 @@ local function scrollParent(gui)
     return nil
 end
 
--- options: Anchor | Point, Width, Align ("Start" | "End"), Build(frame, popup), OnClose, Padding
+-- options: Anchor | Point, Width, Align ("Start" | "End"), Build(frame, popup), OnClose, Padding,
+--          OriginX (0..1, the point on the popup's top/bottom edge it grows from while opening)
 function Popup.Open(options)
     if Popup.Current then Popup.Current:Close() end
 
@@ -2958,17 +2975,21 @@ function Popup.Open(options)
     local scroller = anchor and scrollParent(anchor)
     local padding = options.Padding or 6
 
-    local frame = maid:Give(Util.New("Frame", {
+    -- a CanvasGroup so stroke, rows and text fade together; not given to the maid, because the
+    -- frame has to outlive Close for the exit animation (it destroys itself afterwards)
+    local frame = Util.New("CanvasGroup", {
         Name = "Popup",
+        BorderSizePixel = 0,
         AutomaticSize = Enum.AutomaticSize.Y,
+        GroupTransparency = 1,
         ZIndex = 100,
         Theme = { BackgroundColor3 = "Elevated" },
         Parent = Layer.Root,
-    }))
+    })
     Util.Corner("ElementRadius", frame)
     Util.Stroke(frame, "Stroke", function(t) return math.max(t.StrokeTransparency - 0.15, 0) end)
     Util.Padding(frame, padding)
-    local scale = Util.New("UIScale", { Scale = 0.96, Parent = frame })
+    local scale = Util.New("UIScale", { Scale = 0.88, Parent = frame })
     popup.Frame = frame
 
     local function width()
@@ -2977,26 +2998,42 @@ function Popup.Open(options)
         return 180
     end
 
+    -- the popup scales about the point it grows from: the edge facing the anchor, OriginX along it
+    local originX = options.OriginX or (options.Align == "End" and 1 or 0)
+
     local function place()
         local w = width()
         frame.Size = UDim2.fromOffset(w, 0)
         local viewport = Layer.Bounds()
-        local size = frame.AbsoluteSize
+        -- UIScale shrinks AbsoluteSize while the popup animates; position from the full size
+        local absolute = frame.AbsoluteSize
+        local fullWidth = w * Layer.Scale
+        local fullHeight = absolute.Y
+        if absolute.X < fullWidth - 0.5 then fullHeight /= math.max(scale.Scale, 0.01) end
+        local size = Vector2.new(fullWidth, fullHeight)
         local x, y
+        local above = false
         if anchor then
             local position, anchorSize = anchor.AbsolutePosition, anchor.AbsoluteSize
             x = options.Align == "End" and position.X + anchorSize.X - size.X or position.X
             y = position.Y + anchorSize.Y + 4
             if y + size.Y > viewport.Y - 8 and position.Y - size.Y - 4 > 8 then
                 y = position.Y - size.Y - 4
+                above = true
             end
         else
             x, y = options.Point.X, options.Point.Y
-            if y + size.Y > viewport.Y - 8 then y = y - size.Y end
+            if y + size.Y > viewport.Y - 8 then
+                y = y - size.Y
+                above = true
+            end
         end
-        x = math.clamp(x, 8, math.max(8, viewport.X - size.X - 8))
-        y = math.clamp(y, 8, math.max(8, viewport.Y - size.Y - 8))
-        frame.Position = UDim2.fromOffset(x / Layer.Scale, y / Layer.Scale)
+        -- whole pixels keep the text of the canvas crisp
+        x = math.round(math.clamp(x, 8, math.max(8, viewport.X - size.X - 8)))
+        y = math.round(math.clamp(y, 8, math.max(8, viewport.Y - size.Y - 8)))
+        local originY = above and 1 or 0
+        frame.AnchorPoint = Vector2.new(originX, originY)
+        frame.Position = UDim2.fromOffset((x + originX * size.X) / Layer.Scale, (y + originY * size.Y) / Layer.Scale)
     end
 
     local closed = false
@@ -3010,6 +3047,15 @@ function Popup.Open(options)
         Util.Safe(options.OnClose)
         popup.Closed:Fire()
         popup.Closed:Destroy()
+        -- exit: fade out while shrinking a little towards the same point it grew from
+        local speed = Theme.Current.AnimSpeed or 1
+        if speed <= 0 or not frame.Parent then
+            frame:Destroy()
+            return
+        end
+        Util.Tween(scale, 0.16, { Scale = 0.94 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        Util.Tween(frame, 0.16, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        task.delay(0.18 / math.max(speed, 0.05), function() frame:Destroy() end)
     end
 
     -- tooltips of things under the popup would stick to the mouse
@@ -3017,7 +3063,9 @@ function Popup.Open(options)
     Tooltip.Owner = frame
     if options.Build then options.Build(frame, popup) end
     place()
-    Util.Tween(scale, 0.14, { Scale = 1 })
+    -- enter: scales up from the anchor with a slight overshoot (spring-like) while fading in
+    Util.Tween(scale, 0.34, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    Util.Tween(frame, 0.16, { GroupTransparency = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
     maid:Give(Services.RunService.RenderStepped:Connect(function()
         if anchor then
@@ -3925,7 +3973,9 @@ local Tooltip = import("Components/Tooltip")
 -- small controls shared by modules and elements
 local Widgets = {}
 
--- returns frame, paint(on, animate)
+-- returns track, paint(on, animate), press(down)
+-- iOS-style switch: the knob nearly fills the track, widens inward while held,
+-- stretches while it travels and settles back with a soft squish
 function Widgets.Switch(parent, props)
     local state = { on = false }
     local track = Util.New("Frame", {
@@ -3939,27 +3989,61 @@ function Widgets.Switch(parent, props)
     })
     Util.Corner(UDim.new(1, 0), track)
     Util.Stroke(track, function(t) return state.on and t.Accent or t.Stroke end, function(t) return state.on and 1 or t.StrokeTransparency end)
+    -- centre-anchored; 2 px margin on both sides at rest
+    local OFF, ON = UDim2.new(0, 8, 0.5, 0), UDim2.new(0, 22, 0.5, 0)
+    -- held: the knob widens toward the inside of the track, never past the edge
+    local OFF_HELD, ON_HELD = UDim2.new(0, 9, 0.5, 0), UDim2.new(0, 21, 0.5, 0)
+    local REST, HELD, STRETCH = UDim2.fromOffset(12, 12), UDim2.fromOffset(14, 12), UDim2.fromOffset(15, 12)
     local knob = Util.New("Frame", {
-        Size = UDim2.fromOffset(10, 10),
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 3, 0.5, 0),
+        Size = REST,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = OFF,
         Theme = { BackgroundColor3 = function(t) return state.on and t.OnAccent or t.TextDim end },
         Parent = track,
     })
     Util.Corner(UDim.new(1, 0), knob)
+    local run = 0
     local function paint(on, animate)
         state.on = on
-        local time = animate and 0.22 or 0
+        run += 1
+        local mine = run
+        local goal = on and ON or OFF
+        local time = animate and 0.32 or 0
         Theme.Refresh(track, time)
         Theme.Refresh(track:FindFirstChildOfClass("UIStroke"), time)
         Theme.Refresh(knob, time)
-        Util.Tween(knob, time, { Position = on and UDim2.new(1, -13, 0.5, 0) or UDim2.new(0, 3, 0.5, 0) })
+        -- a new tween on the same property replaces the old one, so rapid clicks glide back from where the knob is
+        Util.Tween(knob, time, { Position = goal }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        if not animate then
+            knob.Size = REST
+            return
+        end
+        local speed = Theme.Current.AnimSpeed or 1
+        if speed <= 0 then return end
+        -- stretch quickly while it starts moving, then settle with a tiny squish at the end
+        Util.Tween(knob, 0.14, { Size = STRETCH }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+        task.delay(0.14 / math.max(speed, 0.05), function()
+            if mine ~= run then return end
+            Util.Tween(knob, 0.3, { Size = REST }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        end)
     end
-    return track, paint
+    -- held: the knob widens under the finger (also mid-animation); let go without toggling and it eases back
+    local function press(down)
+        if down then
+            Util.Tween(knob, 0.15, { Size = HELD, Position = state.on and ON_HELD or OFF_HELD }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            return
+        end
+        local mine = run
+        task.defer(function()
+            if mine ~= run then return end -- the click already toggled it, paint takes over from here
+            Util.Tween(knob, 0.3, { Size = REST, Position = state.on and ON or OFF }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        end)
+    end
+    return track, paint, press
 end
 
 function Widgets.Checkbox(parent, props)
-    local state = { on = false }
+    local state = { on = false, down = false }
     local box = Util.New("Frame", {
         Name = "Checkbox",
         Size = UDim2.fromOffset(16, 16),
@@ -3967,7 +4051,10 @@ function Widgets.Checkbox(parent, props)
         Position = props and props.Position or UDim2.new(1, 0, 0.5, 0),
         LayoutOrder = props and props.LayoutOrder or 0,
         Theme = {
-            BackgroundColor3 = function(t) return state.on and t.Accent or t.Elevated end,
+            BackgroundColor3 = function(t)
+                if state.on then return t.Accent end
+                return state.down and t.ElevatedHover or t.Elevated
+            end,
         },
         Parent = parent,
     })
@@ -3982,15 +4069,31 @@ function Widgets.Checkbox(parent, props)
         Parent = box,
     })
     local scale = Util.New("UIScale", { Scale = 0.6, Parent = check })
+    -- the check follows the state: off + held shows a faint preview of it, on + held dips it
+    local function settle(time, style)
+        local previewing = state.down and not state.on
+        local transparency = state.on and 0 or (previewing and 0.65 or 1)
+        local size = state.on and (state.down and 0.8 or 1) or (state.down and 0.85 or 0.6)
+        Util.Tween(check, time, { ImageTransparency = transparency }, style)
+        Util.Tween(scale, time, { Scale = size }, style or Enum.EasingStyle.Back)
+    end
     local function paint(on, animate)
         state.on = on
         local time = animate and 0.18 or 0
         Theme.Refresh(box, time)
         Theme.Refresh(box:FindFirstChildOfClass("UIStroke"), time)
-        Util.Tween(check, time, { ImageTransparency = on and 0 or 1 })
-        Util.Tween(scale, time, { Scale = on and 1 or 0.6 }, Enum.EasingStyle.Back)
+        settle(time)
     end
-    return box, paint
+    local function press(down)
+        state.down = down
+        Theme.Refresh(box, 0.1)
+        if down then
+            settle(0.12, Enum.EasingStyle.Quad)
+        else
+            settle(0.25)
+        end
+    end
+    return box, paint, press
 end
 
 -- key pill for a Binding; click binds, right click opens modes
@@ -4116,6 +4219,7 @@ local Acrylic = import("Components/Acrylic")
 local Panel = import("Components/Panel")
 local ScreenButton = import("Components/ScreenButton")
 local Menu = import("Components/Menu")
+local Signal = import("Core/Signal")
 
 local UIS = Services.UserInputService
 local Window = {}
@@ -4154,7 +4258,8 @@ local INTERFACE = {
 --      ComboKeys (default keys per bind, 1-4), SearchShortcut (false: no Ctrl+F),
 --      AutoSave (default of Settings > Auto save), DefaultConfig (name: created and set as autoload on the first run),
 --      User (false | { Name, Subtitle, Avatar (asset | false), Callback }),
---      ScrollBars (true: show the thin scroll position line; hidden by default)
+--      ScrollBars (true: show the thin scroll position line; hidden by default),
+--      CompactButton (false: no "hide tab names" button next to Minimize)
 function Window.new(library, def)
     local self = setmetatable({
         Library = library,
@@ -4167,7 +4272,9 @@ function Window.new(library, def)
         _binds = {},
         Visible = true,
         Minimized = false,
+        CompactChanged = Signal.new(),   -- fires (compact: boolean) when the tab names are hidden / shown
     }, Window)
+    self.Maid:Give(self.CompactChanged)
     Util.ShowScrollBars = def.ScrollBars == true
     self.Folder = def.Folder or (def.Title and def.Title:gsub("[^%w_%- ]", "")) or "OasisUI"
     self.SidebarWidth = def.SidebarWidth or 164
@@ -4597,10 +4704,21 @@ function Window:_build()
         end
     end))
 
-    local minimize, minimizeIcon = iconButton(actions, "minus", 2, "Minimize")
+    -- hide / show the tab names (icon-only sidebar), sits right next to Minimize
+    local compactButton = iconButton(actions, "panel-left", 2, function()
+        return self.Interface.Compact and "Show tab names" or "Hide tab names"
+    end)
+    compactButton.Visible = def.CompactButton ~= false
+    self.CompactButton = compactButton
+    compactButton.MouseButton1Click:Connect(function()
+        self:SetCompact(not self.Interface.Compact)
+        self:SaveState()
+    end)
+
+    local minimize, minimizeIcon = iconButton(actions, "minus", 3, "Minimize")
     minimize.Visible = def.Minimizable ~= false
     local closeAction = def.CloseAction or "Hide"
-    local close = iconButton(actions, "x", 3, function()
+    local close = iconButton(actions, "x", 4, function()
         if closeAction ~= "Hide" then return "Close" end
         return "Hide (" .. Util.KeyLabel(self.MenuBinding and self.MenuBinding.Key) .. ")"
     end)
@@ -4788,6 +4906,7 @@ function Window:_userCard(parent)
         Name = "User",
         Size = UDim2.new(1, 0, 0, 42),
         LayoutOrder = 2,
+        ClipsDescendants = true,
         Theme = {
             BackgroundColor3 = "Elevated",
             BackgroundTransparency = function(t) return math.min(t.ElevatedTransparency + (state.Hover and 0.1 or 0.25), 0.95) end,
@@ -4804,8 +4923,8 @@ function Window:_userCard(parent)
     })
     Util.Corner(UDim.new(1, 0), avatar)
     local placeholder = Util.Icon("user", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(7, 7), Color = "TextMuted", Parent = avatar })
-    local name = Util.Label({ TextSize = 12, Weight = Enum.FontWeight.SemiBold, Position = UDim2.fromOffset(42, 7), Size = UDim2.new(1, -48, 0, 15), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
-    local handle = Util.Label({ TextSize = 10, Color = "TextMuted", Position = UDim2.fromOffset(42, 22), Size = UDim2.new(1, -48, 0, 12), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+    local name = Util.Label({ TextSize = 12, Weight = Enum.FontWeight.SemiBold, Position = UDim2.fromOffset(42, 7), Size = UDim2.new(0, self.SidebarWidth - 68, 0, 15), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+    local handle = Util.Label({ TextSize = 10, Color = "TextMuted", Position = UDim2.fromOffset(42, 22), Size = UDim2.new(0, self.SidebarWidth - 68, 0, 12), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
     local thumbnail
     task.spawn(function()
         local ok, result = pcall(Services.Players.GetUserThumbnailAsync, Services.Players, player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
@@ -4868,10 +4987,12 @@ function Window:_entry(parent, text, icon, order, onClick)
         Name = text,
         Size = UDim2.new(1, 0, 0, 30),
         LayoutOrder = order,
+        ClipsDescendants = true,
         Theme = {
             BackgroundColor3 = "Elevated",
             BackgroundTransparency = function(t)
                 if entry.Selected then return t.ElevatedTransparency end
+                if entry.Down then return math.min(t.ElevatedTransparency + 0.25, 0.7) end
                 return entry.Hover and math.min(t.ElevatedTransparency + 0.45, 0.85) or 1
             end,
         },
@@ -4922,7 +5043,7 @@ function Window:_entry(parent, text, icon, order, onClick)
         TextSize = 13,
         Weight = Enum.FontWeight.Medium,
         Position = UDim2.fromOffset(40, 0),
-        Size = UDim2.new(1, -48, 1, 0),
+        Size = UDim2.new(0, self.SidebarWidth - 68, 1, 0),
         TextTruncate = Enum.TextTruncate.AtEnd,
         Theme = { TextColor3 = function() return Color3.fromRGB(255, 255, 255) end },
         Parent = button,
@@ -4949,17 +5070,30 @@ function Window:_entry(parent, text, icon, order, onClick)
         Theme.Refresh(label, time)
         Util.Tween(indicator, time, { Size = UDim2.fromOffset(3, entry.Selected and 16 or 0) })
     end
-    entry.Button, entry.Label, entry.Icon, entry.Badge = button, label, image, badge
+    entry.Button, entry.Label, entry.Icon, entry.Badge, entry.BadgeText = button, label, image, badge, badgeText
+    if self.Interface.Compact then
+        -- tabs added while the names are hidden start hidden too
+        label.Visible = false
+        label.TextTransparency = 1
+    end
     function entry.SetSelected(on)
         entry.Selected = on
         paint(true)
     end
     function entry.SetBadge(value)
+        badge.BackgroundTransparency, badgeText.TextTransparency = 0, 0
         badge.Visible = value ~= nil and value ~= 0 and not self.Interface.Compact
         badgeText.Text = tostring(value or "")
         entry.BadgeValue = value
     end
     Util.Hover(button, function(on) entry.Hover = on; paint(true) end)
+    -- pressed like an iOS list row: the row highlights and the icon dips, then both ease back on release
+    local dip = Util.New("UIScale", { Parent = image })
+    Util.PressState(button, function(down)
+        entry.Down = down
+        Theme.Refresh(button, down and 0.08 or 0.3)
+        Util.Tween(dip, down and 0.12 or 0.4, { Scale = down and 0.82 or 1 }, down and Enum.EasingStyle.Quad or Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    end)
     button.MouseButton1Click:Connect(onClick)
     Tooltip.Attach(button, function() return self.Interface.Compact and text or nil end)
     paint(false)
@@ -4969,21 +5103,95 @@ end
 
 -- layout ----------------------------------------------------------------------
 
+-- hides / shows the tab names. The sidebar glides between its full width and icon-only width while the
+-- names fade (and the section captions fold) instead of snapping; instant = true skips every animation
 function Window:SetCompact(compact, instant)
-    self.Interface.Compact = compact and true or false
+    compact = compact and true or false
+    local changed = self.Interface.Compact ~= compact
+    self.Interface.Compact = compact
+    self._compactToken = (self._compactToken or 0) + 1
+    local token = self._compactToken
+    local alive = function() return self._compactToken == token end
+
+    -- animation speed 0% means no animation at all: take the instant path (no delayed hides)
+    local speed = Theme.Current.AnimSpeed or 1
+    if speed <= 0 then instant = true end
+    speed = math.max(speed, 0.05)
+
     local width = compact and COMPACT or self.SidebarWidth
-    local time = instant and 0 or 0.25
-    Util.Tween(self.Sidebar, time, { Size = UDim2.new(0, width, 1, -TOP - 1) })
-    Util.Tween(self.SideDivider, time, { Position = UDim2.fromOffset(width, TOP + 12) })
-    Util.Tween(self.Content, time, { Position = UDim2.fromOffset(width + 14, TOP + 12), Size = UDim2.new(1, -width - 26, 1, -TOP - 12) })
+    -- InOut: the sidebar eases in and out instead of lurching off at full speed (Out easings are front-loaded)
+    local slide = instant and 0 or 0.42
+    local EASE, DIR = Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut
+    Util.Tween(self.Sidebar, slide, { Size = UDim2.new(0, width, 1, -TOP - 1) }, EASE, DIR)
+    Util.Tween(self.SideDivider, slide, { Position = UDim2.fromOffset(width, TOP + 12) }, EASE, DIR)
+    Util.Tween(self.Content, slide, { Position = UDim2.fromOffset(width + 14, TOP + 12), Size = UDim2.new(1, -width - 26, 1, -TOP - 12) }, EASE, DIR)
+
+    -- one text label. Hiding: fades during the slow start of the slide, then leaves the layout.
+    -- Showing: waits until the sidebar is mostly open, then fades in. height (optional) also folds /
+    -- unfolds the row on the same curve so the list below moves with the sidebar
+    local function fadeLabel(label, show, height)
+        if not label then return end
+        if instant then
+            label.Visible = show
+            label.TextTransparency = show and 0 or 1
+            if height then label.Size = UDim2.new(1, 0, 0, show and height or 0) end
+            return
+        end
+        if show then
+            if not label.Visible then
+                label.TextTransparency = 1
+                if height then label.Size = UDim2.new(1, 0, 0, 0) end
+            end
+            label.Visible = true
+            if height then Util.Tween(label, slide, { Size = UDim2.new(1, 0, 0, height) }, EASE, DIR) end
+            task.delay(0.18 / speed, function()
+                if alive() then Util.Tween(label, 0.24, { TextTransparency = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out) end
+            end)
+        else
+            Util.Tween(label, 0.14, { TextTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            if height then Util.Tween(label, slide, { Size = UDim2.new(1, 0, 0, 0) }, EASE, DIR) end
+            task.delay(((height and slide or 0.14) + 0.02) / speed, function()
+                if alive() then label.Visible = false end
+            end)
+        end
+    end
+
+    local function fadeBadge(entry, show)
+        local badge, text = entry.Badge, entry.BadgeText
+        if not badge then return end
+        local has = entry.BadgeValue ~= nil and entry.BadgeValue ~= 0
+        if instant or not has then
+            badge.BackgroundTransparency, text.TextTransparency = 0, 0
+            badge.Visible = show and has
+            return
+        end
+        if show then
+            badge.BackgroundTransparency, text.TextTransparency = 1, 1
+            badge.Visible = true
+            task.delay(0.18 / speed, function()
+                if not alive() then return end
+                Util.Tween(badge, 0.24, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                Util.Tween(text, 0.24, { TextTransparency = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            end)
+        else
+            Util.Tween(badge, 0.14, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            Util.Tween(text, 0.14, { TextTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            task.delay(0.16 / speed, function()
+                if alive() then badge.Visible = false end
+            end)
+        end
+    end
+
     for _, entry in self.Entries do
-        entry.Label.Visible = not compact
-        if entry.Badge then entry.Badge.Visible = not compact and entry.BadgeValue ~= nil and entry.BadgeValue ~= 0 end
+        fadeLabel(entry.Label, not compact)
+        fadeBadge(entry, not compact)
     end
-    for _, header in self._headers or {} do header.Visible = not compact end
+    for _, header in self._headers or {} do fadeLabel(header, not compact, 22) end
     if self.UserLabels then
-        for _, label in self.UserLabels do label.Visible = not compact end
+        for _, label in self.UserLabels do fadeLabel(label, not compact) end
     end
+
+    if changed then self.CompactChanged:Fire(compact) end
 end
 
 -- final scale = (screen fit or 1) x user multiplier; with the fit on the window always stays on screen
@@ -5123,6 +5331,7 @@ function Window:SetMinimized(minimized)
         self.Sidebar.Visible, self.Content.Visible, self.SideDivider.Visible = false, false, false
         self.TopDivider.Visible, self.Grip.Visible = false, false
         self.SearchHolder.Visible = false
+        self.CompactButton.Visible = false
         self.SubtitleLabel.Visible = false
         self.SearchHolder.GroupTransparency, self.SearchBar.Position = 0, UDim2.fromOffset(2, 2)
         self.SubtitleLabel.TextTransparency, self.SubtitleLabel.Position = 0, UDim2.new()
@@ -5132,6 +5341,7 @@ function Window:SetMinimized(minimized)
     else
         local target = self._restoreSize or root.Size
         self.TopDivider.Visible = true
+        self.CompactButton.Visible = self.Def.CompactButton ~= false
         self:_revealMain()
         Util.Tween(root, 0.4, { Size = target }, Enum.EasingStyle.Quint)
         -- subtitle, search bar and resize grip fade in once the window has started to open
@@ -5242,6 +5452,8 @@ function Window:TabSection(text)
     self._headers = self._headers or {}
     table.insert(self._headers, label)
     label.Visible = not self.Interface.Compact
+    label.ClipsDescendants = true
+    if self.Interface.Compact then label.TextTransparency = 1 end
     return label
 end
 
@@ -7039,28 +7251,82 @@ function Util.Grip(props)
     return grip
 end
 
--- hover state + press scale for any button; state.Hover / state.Down feed its theme functions
-function Util.Feedback(button, state, refresh)
-    state = state or {}
+-- iOS-style press for any button: it dips quickly on touch-down and springs back on release. A quick tap
+-- still shows the whole dip (a short minimum hold), and the button eases back on its own when the pointer
+-- slides off while held. onState(down) is optional; returns the UIScale
+local MIN_DIP = 0.12
+function Util.PressScale(button, depth, onState)
     local scale = Util.New("UIScale", { Parent = button })
-    local function paint()
-        if refresh then refresh() else Theme.Refresh(button, 0.12) end
-    end
-    Util.Hover(button, function(on)
-        state.Hover = on
-        if not on then
-            state.Down = false
-            Util.Tween(scale, 0.1, { Scale = 1 })
+    local held, downAt, token = false, 0, 0
+    local function settle(spring)
+        token += 1
+        local mine = token
+        local speed = Theme.Current.AnimSpeed or 1
+        local function go()
+            if mine ~= token then return end
+            if spring then
+                Util.Tween(scale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            else
+                Util.Tween(scale, 0.3, { Scale = 1 }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+            end
         end
-        paint()
-    end)
+        local hold = MIN_DIP - (os.clock() - downAt)
+        if hold > 0 and speed > 0 then task.delay(hold / speed, go) else go() end
+    end
+    local function cancel()
+        if not held then return end
+        held = false
+        if onState then onState(false) end
+        settle(false)
+    end
     button.MouseButton1Down:Connect(function()
-        state.Down = true
-        Util.Tween(scale, 0.08, { Scale = 0.95 })
+        held, downAt = true, os.clock()
+        token += 1
+        if onState then onState(true) end
+        Util.Tween(scale, 0.12, { Scale = depth or 0.96 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     end)
     button.MouseButton1Up:Connect(function()
-        state.Down = false
-        Util.Tween(scale, 0.14, { Scale = 1 }, Enum.EasingStyle.Back)
+        if not held then return end
+        held = false
+        if onState then onState(false) end
+        settle(true)
+    end)
+    button.MouseLeave:Connect(cancel)
+    -- a finger lifted away from the button; deferred so a normal release is handled by MouseButton1Up first
+    button.InputEnded:Connect(function(input)
+        local kind = input.UserInputType
+        if kind == Enum.UserInputType.Touch or kind == Enum.UserInputType.MouseButton1 then task.defer(cancel) end
+    end)
+    return scale
+end
+
+-- fn(true) when a press starts, fn(false) when it ends: released, pointer slid off, or finger lifted away
+function Util.PressState(button, fn)
+    local held = false
+    local function finish()
+        if not held then return end
+        held = false
+        fn(false)
+    end
+    button.MouseButton1Down:Connect(function()
+        held = true
+        fn(true)
+    end)
+    button.MouseButton1Up:Connect(finish)
+    button.MouseLeave:Connect(finish)
+    button.InputEnded:Connect(function(input)
+        local kind = input.UserInputType
+        if kind == Enum.UserInputType.Touch or kind == Enum.UserInputType.MouseButton1 then task.defer(finish) end
+    end)
+end
+
+-- hover state + press scale for any button; state.Hover / state.Down feed its theme functions
+function Util.Feedback(button, state, refresh, depth)
+    state = state or {}
+    Util.PressScale(button, depth, function(down) state.Down = down end)
+    Util.Hover(button, function(on)
+        state.Hover = on
+        if refresh then refresh() else Theme.Refresh(button, 0.12) end
     end)
     return state
 end
@@ -7509,10 +7775,8 @@ function Button.Draw(parent, spec, getState, onPress)
         end },
         Parent = button,
     })
-    local scale = Util.New("UIScale", { Parent = button })
+    Util.PressScale(button, 0.96)
     Util.Hover(button, function(on) hover = on; Theme.Refresh(button, 0.12) end)
-    button.MouseButton1Down:Connect(function() Util.Tween(scale, 0.08, { Scale = 0.97 }) end)
-    button.MouseButton1Up:Connect(function() Util.Tween(scale, 0.12, { Scale = 1 }) end)
     button.MouseButton1Click:Connect(onPress)
     local function paint()
         local state = getState()
@@ -8439,6 +8703,7 @@ function Dropdown:_open(field, chevron)
         Anchor = field,
         MinWidth = 170,
         Padding = 5,
+        OriginX = 0.5,
         OnClose = function() chevron.Image = Util.IconId("chevron-down") end,
         Build = function(frame, popup)
             Util.List(frame, 4)
@@ -9716,8 +9981,8 @@ function RangeSlider:Render(parent, maid)
 
     Util.List(row.Below, 3)
     local track = Slider.Track(row.Below, self, 1)
-    local knobLow, scaleLow = Slider.Knob(track.Rail)
-    local knobHigh, scaleHigh = Slider.Knob(track.Rail)
+    local knobLow, _, fxLow = Slider.Knob(track.Rail)
+    local knobHigh, _, fxHigh = Slider.Knob(track.Rail)
     local paintRange = self.Def.ShowRange and Slider.RangeLabels(row.Below, self, 2)
 
     local dragging = nil
@@ -9762,14 +10027,14 @@ function RangeSlider:Render(parent, maid)
         local which = math.abs(value - self.Value.Min) <= math.abs(value - self.Value.Max) and "Min" or "Max"
         if self.Value.Min == self.Value.Max then which = value < self.Value.Min and "Min" or "Max" end
         dragging = which
-        local scale = which == "Min" and scaleLow or scaleHigh
-        Util.Tween(scale, 0.1, { Scale = 1.15 })
+        local fx = which == "Min" and fxLow or fxHigh
+        fx.State("press")
         move(which, value, not live)
         Drag.Follow(input, function(point)
             move(which, fromPoint(point), not live)
         end, function()
             dragging = nil
-            Util.Tween(scale, 0.12, { Scale = 0.85 })
+            fx.State("idle")
             if not live then self:_notify() end
         end, track.Bar)
     end)
@@ -9885,6 +10150,11 @@ function Segmented:Render(parent, maid)
     local row = Row.new(self, parent, maid, { Below = true })
     local wrap = self.Def.Wrap
     if wrap == nil then wrap = self.Multi end
+    -- single-choice rows get an iOS-style thumb that slides between chips; multi / wrapped rows keep per-chip fills
+    local slide = not wrap and not self.Multi and #self.Options > 0
+    local GAP = 3
+    local count = #self.Options
+
     local track = Util.New("Frame", {
         Size = UDim2.new(1, 0, 0, wrap and 0 or 26),
         AutomaticSize = wrap and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
@@ -9902,41 +10172,144 @@ function Segmented:Render(parent, maid)
             SortOrder = Enum.SortOrder.LayoutOrder,
             Parent = track,
         })
-    else
-        Util.List(track, 3, Enum.FillDirection.Horizontal)
     end
+
+    -- slide mode lays everything out with Scale + Offset maths instead of a list layout, so the thumb
+    -- always lines up with its chip regardless of UIScale or resizing
+    local function chipPosition(index)
+        return UDim2.new((index - 1) / count, GAP * (index - 1) / count, 0, 0)
+    end
+    local function chipSize()
+        return UDim2.new(1 / count, -GAP * (count - 1) / count, 1, 0)
+    end
+    local function thumbPosition(index)
+        return UDim2.new((index - 0.5) / count, GAP * (index - (count + 1) / 2) / count, 0.5, 0)
+    end
+    local function thumbSize(extra)
+        return UDim2.new(1 / count, -GAP * (count - 1) / count + (extra or 0), 1, 0)
+    end
+
+    local thumb, thumbScale
+    if slide then
+        thumb = Util.New("Frame", {
+            Name = "Thumb",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = thumbSize(0),
+            Position = thumbPosition(1),
+            ZIndex = 1,
+            Theme = { BackgroundColor3 = "Accent" },
+            Parent = track,
+        })
+        Util.Corner(4, thumb)
+        thumbScale = Util.New("UIScale", { Parent = thumb })
+    end
+
     local chips = {}
     for index, option in self.Options do
         local chip = { hover = false }
-        chip.Button = Util.New("TextButton", {
-            Size = wrap and UDim2.fromOffset(0, 22) or UDim2.new(0, 0, 1, 0),
-            AutomaticSize = wrap and Enum.AutomaticSize.X or Enum.AutomaticSize.None,
+        local props = {
             Text = option,
             TextSize = 11,
-            LayoutOrder = index,
+            ZIndex = 2,
             Theme = {
-                BackgroundColor3 = function(t) return self:IsSelected(option) and t.Accent or t.ElevatedHover end,
-                BackgroundTransparency = function() return self:IsSelected(option) and 0 or (chip.hover and 0.3 or 1) end,
+                BackgroundColor3 = function(t)
+                    if slide then return t.ElevatedHover end
+                    return self:IsSelected(option) and t.Accent or t.ElevatedHover
+                end,
+                BackgroundTransparency = function()
+                    if slide then return (not self:IsSelected(option) and chip.hover) and 0.3 or 1 end
+                    return self:IsSelected(option) and 0 or (chip.hover and 0.3 or 1)
+                end,
                 TextColor3 = function(t) return self:IsSelected(option) and t.OnAccent or t.TextDim end,
                 FontFace = Theme.Font(Enum.FontWeight.SemiBold),
             },
             Parent = track,
-        })
-        Util.Corner(4, chip.Button)
-        if wrap then
-            Util.Padding(chip.Button, 0, 10, 0, 10)
+        }
+        if slide then
+            props.Size = chipSize()
+            props.Position = chipPosition(index)
         else
-            Util.New("UIFlexItem", { FlexMode = Enum.UIFlexMode.Fill, Parent = chip.Button })
+            props.Size = wrap and UDim2.fromOffset(0, 22) or UDim2.new(0, 0, 1, 0)
+            props.AutomaticSize = wrap and Enum.AutomaticSize.X or Enum.AutomaticSize.None
+            props.LayoutOrder = index
+        end
+        chip.Button = Util.New("TextButton", props)
+        Util.Corner(4, chip.Button)
+        if not slide then
+            if wrap then
+                Util.Padding(chip.Button, 0, 10, 0, 10)
+            else
+                Util.New("UIFlexItem", { FlexMode = Enum.UIFlexMode.Fill, Parent = chip.Button })
+            end
         end
         Util.Hover(chip.Button, function(on) chip.hover = on; Theme.Refresh(chip.Button, 0.1) end)
+
+        if slide then
+            -- iOS press: holding the selected segment squeezes the thumb, holding another one dims its label
+            local target
+            Util.PressState(chip.Button, function(down)
+                if down then
+                    if self.Locked then return end
+                    target = self:IsSelected(option) and "thumb" or "label"
+                    if target == "thumb" then
+                        Util.Tween(thumbScale, 0.12, { Scale = 0.94 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                    else
+                        Util.Tween(chip.Button, 0.12, { TextTransparency = 0.55 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                    end
+                    return
+                end
+                if target == "thumb" then
+                    Util.Tween(thumbScale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                elseif target == "label" then
+                    Util.Tween(chip.Button, 0.3, { TextTransparency = 0 }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+                end
+                target = nil
+            end)
+        else
+            Util.PressScale(chip.Button, 0.94)
+        end
+
         chip.Button.MouseButton1Click:Connect(function()
             if self.Locked then return end
             if self.Multi then self:Toggle(option) else self:Set(option) end
         end)
         table.insert(chips, chip)
     end
+
+    -- moves the thumb under the selected chip; it stretches a little while travelling, then settles
+    local run, shown = 0, nil
+    local function place(animate)
+        if not slide then return end
+        local index = table.find(self.Options, self.Value)
+        thumb.Visible = index ~= nil
+        if not index then shown = nil; return end
+        run += 1
+        local mine = run
+        local goal = thumbPosition(index)
+        local speed = Theme.Current.AnimSpeed or 1
+        if not animate or speed <= 0 or shown == nil then
+            thumb.Position = goal
+            thumb.Size = thumbSize(0)
+            shown = index
+            return
+        end
+        local steps = math.abs(index - shown)
+        shown = index
+        local stretch = math.min(4 + 3 * steps, 14)
+        -- a new tween on the same property replaces the old one, so rapid taps glide on from where the thumb is
+        Util.Tween(thumb, 0.4, { Position = goal }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        Util.Tween(thumb, 0.14, { Size = thumbSize(stretch) }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+        task.delay(0.14 / math.max(speed, 0.05), function()
+            if mine ~= run or not thumb.Parent then return end
+            Util.Tween(thumb, 0.3, { Size = thumbSize(0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        end)
+    end
+    place(false)
+
     maid:Give(self.Changed:Connect(function()
-        for _, chip in chips do Theme.Refresh(chip.Button, 0.15) end
+        place(true)
+        -- label colours fade in step with the thumb
+        for _, chip in chips do Theme.Refresh(chip.Button, slide and 0.28 or 0.18) end
     end))
     return row.Frame
 end
@@ -10019,7 +10392,7 @@ function Slider.Track(parent, element, order)
     local line = Util.New("Frame", {
         Name = "Track",
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 16),
+        Size = UDim2.new(1, 0, 0, 22),
         LayoutOrder = order or 1,
         Parent = parent,
     })
@@ -10040,7 +10413,7 @@ function Slider.Track(parent, element, order)
     local rail = Util.New("Frame", {
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.fromScale(0, 0.5),
-        Size = UDim2.new(1, 0, 0, 4),
+        Size = UDim2.new(1, 0, 0, 6),
         Theme = { BackgroundColor3 = "Elevated", BackgroundTransparency = function(t) return math.min(t.ElevatedTransparency, 0.3) end },
         Parent = bar,
     })
@@ -10063,19 +10436,54 @@ function Slider.Track(parent, element, order)
     return parts
 end
 
+-- WindUI-style handle: a white squircle pill with a soft shadow and a thin border.
+-- It grows a little on hover and stretches sideways while pressed (iOS-style squish).
+-- returns knob, scale, fx. fx.State("idle" | "hover" | "press")
 function Slider.Knob(rail)
+    local width, height = 18, 14
     local knob = Util.New("Frame", {
+        Name = "Knob",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0, 0.5),
-        Size = UDim2.fromOffset(12, 12),
-        ZIndex = 2,
-        Theme = { BackgroundColor3 = "Text" },
+        Size = UDim2.fromOffset(width, height),
+        BackgroundTransparency = 1,
+        ZIndex = 3,
         Parent = rail,
     })
-    Util.Corner(UDim.new(1, 0), knob)
-    Util.Stroke(knob, "Accent", function() return 0 end, 2)
-    local scale = Util.New("UIScale", { Scale = 0.85, Parent = knob })
-    return knob, scale
+
+    -- two soft layers fake a blurred drop shadow
+    for index, layer in { { 6, 0.9 }, { 2, 0.78 } } do
+        local shadow = Util.New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, 0, 0.5, 1),
+            Size = UDim2.new(1, layer[1], 1, layer[1]),
+            BackgroundColor3 = Color3.new(0, 0, 0),
+            BackgroundTransparency = layer[2],
+            ZIndex = index,
+            Parent = knob,
+        })
+        Util.Corner(UDim.new(1, 0), shadow)
+    end
+
+    local body = Util.New("Frame", {
+        Name = "Body",
+        Size = UDim2.fromScale(1, 1),
+        ZIndex = 3,
+        Theme = { BackgroundColor3 = "Text" },
+        Parent = knob,
+    })
+    Util.Corner(UDim.new(1, 0), body)
+    Util.Stroke(body, "Stroke", function() return 0.55 end, 1)
+
+    local scale = Util.New("UIScale", { Scale = 1, Parent = knob })
+
+    local fx = {}
+    function fx.State(state)
+        local press, hover = state == "press", state == "hover"
+        Util.Tween(knob, press and 0.12 or 0.18, { Size = UDim2.fromOffset(press and width + 6 or width, height) }, press and Enum.EasingStyle.Quint or Enum.EasingStyle.Back)
+        Util.Tween(scale, 0.14, { Scale = (press or hover) and 1.08 or 1 })
+    end
+    return knob, scale, fx
 end
 
 function Slider.RangeLabels(parent, element, order)
@@ -10141,7 +10549,7 @@ function Slider:Render(parent, maid)
     local below = row.Below
     Util.List(below, 3)
     local track = Slider.Track(below, self, 1)
-    local knob, knobScale = Slider.Knob(track.Rail)
+    local knob, knobScale, knobFx = Slider.Knob(track.Rail)
     local paintRange = self.Def.ShowRange and Slider.RangeLabels(below, self, 2)
 
     local dragging = false
@@ -10184,17 +10592,20 @@ function Slider:Render(parent, maid)
         end
         if not Util.IsPress(input) then return end
         dragging = true
-        Util.Tween(knobScale, 0.1, { Scale = 1.15 })
+        knobFx.State("press")
         self:Set(fromPoint(Util.Pointer(input)), not live)
         Drag.Follow(input, function(point)
             self:Set(fromPoint(point), not live)
         end, function()
             dragging = false
-            Util.Tween(knobScale, 0.12, { Scale = 0.85 })
+            knobFx.State("idle")
             if not live then self:_notify() end
         end, track.Bar)
     end)
-    Util.Hover(track.Bar, function(on) if not dragging then Util.Tween(knobScale, 0.1, { Scale = on and 1 or 0.85 }) end end)
+    Util.Hover(track.Bar, function(on)
+        if dragging then return end
+        knobFx.State(on and "hover" or "idle")
+    end)
     if track.Minus then
         track.Minus.MouseButton1Click:Connect(function() if not self.Locked then self:Set(self.Value - self.Step) end end)
         track.Plus.MouseButton1Click:Connect(function() if not self.Locked then self:Set(self.Value + self.Step) end end)
@@ -10239,6 +10650,7 @@ end
 __modules["Elements/Toggle"] = function(...)
 local import = ...
 local Base = import("Elements/Base")
+local Util = import("Core/Util")
 local Row = import("Components/Row")
 local Widgets = import("Components/Widgets")
 local Binding = import("Core/Binding")
@@ -10334,8 +10746,12 @@ function Toggle:Render(parent, maid)
         local _, connection = Widgets.KeyPill(row.Right, self.Binding, { LayoutOrder = 2 })
         maid:Give(connection)
     end
-    local _, paint = (self.Style == "Checkbox" and Widgets.Checkbox or Widgets.Switch)(row.Right, { LayoutOrder = 3 })
+    local _, paint, press = (self.Style == "Checkbox" and Widgets.Checkbox or Widgets.Switch)(row.Right, { LayoutOrder = 3 })
     paint(self.Value, false)
+    Util.PressState(row.Button, function(down)
+        if down and self.Locked then return end
+        press(down)
+    end)
     maid:Give(self.Changed:Connect(function(value) paint(value, true) end))
     row.Button.MouseButton1Click:Connect(function()
         if not self.Locked then self:Set(not self.Value) end
