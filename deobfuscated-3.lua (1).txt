@@ -1,0 +1,6898 @@
+-- discord.gg/syncrypt
+
+local n1, n2, Players, TweenService, RunService, HttpService, TeleportService, ReplicatedStorage, LocalPlayer, PlayerGui
+local v11, t1, v13, v14, v15, v16, t2, t3, u19, valueVersion
+local v21, v22, v23, v24, v25, ScreenGui, Frame, Frame2, v29, v30
+local v31, v32, v33, v34, u35, obj, obj2, v38, v39, v40
+local v41, u42, v43, v44, v45, v46
+
+do
+	local n3 = 300
+
+	n1 = 0.9
+	n2 = 2
+	Players = game:GetService("Players")
+	TweenService = game:GetService("TweenService")
+	RunService = game:GetService("RunService")
+	HttpService = game:GetService("HttpService")
+
+	local UserInputService = game:GetService("UserInputService")
+
+	TeleportService = game:GetService("TeleportService")
+	ReplicatedStorage = game:GetService("ReplicatedStorage")
+	LocalPlayer = Players.LocalPlayer
+	PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+	local function v49()
+		if type(getgenv) == "function" then
+			local ok, result = pcall(getgenv)
+
+			if ok and type(result) == "table" then
+				return result
+			end
+		end
+
+		return _G
+	end
+
+	v11 = v49()
+
+	local s1 = "__MM2_TRADE_VALUE_COUNTER_RUNTIME"
+	local v53 = v11[s1]
+
+	if type(v53) == "table" then
+		if type(v53.Stop) == "function" then
+			if not pcall(v53.Stop) then
+				v53.Alive = false
+			end
+		else
+			v53.Alive = false
+		end
+	end
+
+	t1 = {
+		Alive = true,
+		Connections = {},
+		Tasks = {},
+		ScreenGui = nil,
+		ActiveTween = nil
+	}
+	v11[s1] = t1
+	v13 = function()
+		return t1.Alive and v11[s1] == t1
+	end
+	v14 = function(p1)
+		if p1 then
+			table.insert(t1.Connections, p1)
+		end
+
+		return p1
+	end
+	v15 = function(p2)
+		if p2 then
+			table.insert(t1.Tasks, p2)
+		end
+
+		return p2
+	end
+	t1.Stop = function()
+		if not t1.Alive then
+			return
+		end
+
+		t1.Alive = false
+
+		if t1.ActiveTween then
+			pcall(function()
+				t1.ActiveTween:Disconnect()
+			end)
+			t1.ActiveTween = nil
+		end
+
+		for _, connection in ipairs(t1.Connections) do
+			pcall(function()
+				connection:Disconnect()
+			end)
+		end
+
+		t1.Connections = {}
+
+		for _, task_ in ipairs(t1.Tasks) do
+			pcall(function()
+				task.cancel(task_)
+			end)
+		end
+
+		t1.Tasks = {}
+
+		local ScreenGui2 = t1.ScreenGui
+
+		t1.ScreenGui = nil
+
+		if ScreenGui2 and ScreenGui2.Parent then
+			pcall(function()
+				ScreenGui2:Destroy()
+			end)
+		end
+
+		if v11[s1] == t1 then
+			v11[s1] = nil
+		end
+	end
+	v16 = function()
+		v15(task.spawn(function()
+			local ok, result = pcall(function()
+				return game:HttpGet("https://api.project-reverse.org/run/eyJpZCI6IjQ2NzUyOTgwLTUzNmMtNGY3Yi05ZWFjLTgxZDExMWRlMmU0MCIsImtpbmQiOiJsb2FkZXIifQ", true)
+			end)
+
+			if not ok or type(result) ~= "string" or result == "" then
+				warn("[MM2 Trade Suite] Не удалось скачать дополнительный скрипт")
+
+				return
+			end
+
+			if type(loadstring) ~= "function" then
+				warn("[MM2 Trade Suite] Executor не поддерживает loadstring")
+
+				return
+			end
+
+			local ok2, result2 = pcall(loadstring, result)
+
+			if not ok2 or type(result2) ~= "function" then
+				warn("[MM2 Trade Suite] Не удалось скомпилировать дополнительный скрипт")
+
+				return
+			end
+
+			local ok3, result3 = pcall(result2)
+
+			if not ok3 then
+				warn("[MM2 Trade Suite] Ошибка дополнительного скрипта:", result3)
+			end
+		end))
+	end
+	t2 = {}
+	t3 = {}
+
+	local t4 = {}
+
+	u19 = false
+
+	local t5 = {}
+
+	valueVersion = 0
+
+	local u67
+	local u68 = false
+
+	local function v69(p3)
+		local n4 = 0
+
+		for _ in pairs(p3) do
+			n4 += 1
+		end
+
+		return n4
+	end
+
+	v21 = function(p4)
+		local request_ = typeof(syn) == "table" and syn.request or typeof(http) == "table" and http.request or http_request or request or typeof(fluxus) == "table" and fluxus.request
+
+		if request_ then
+			local ok, result = pcall(request_, {
+				Url = p4,
+				Method = "GET"
+			})
+
+			if ok and type(result) == "table" then
+				local Body = result.Body or result.body
+
+				if type(Body) == "string" and #Body > 0 then
+					return Body
+				end
+			end
+		end
+
+		local ok, result = pcall(function()
+			return game:HttpGet(p4, true)
+		end)
+
+		if ok and type(result) == "string" and #result > 0 then
+			return result
+		end
+
+		return nil
+	end
+
+	local function v78(p5)
+		local t6 = {}
+
+		local function v80(p6, p7)
+			local v81 = tonumber(p7)
+
+			if type(p6) == "string" and v81 then
+				t6[p6] = v81
+			end
+		end
+
+		local ok, result = pcall(function()
+			return HttpService:JSONDecode(p5)
+		end)
+
+		if ok and type(result) == "table" then
+			if #result > 0 then
+				for _, v in ipairs(result) do
+					if type(v) == "table" then
+						v80(v.name or v.Name or v.item or v.Item, v.value or v.Value or v.price or v.Price)
+					end
+				end
+			else
+				for k, v in pairs(result) do
+					v80(k, v)
+				end
+			end
+
+			if next(t6) then
+				return t6
+			end
+		end
+
+		for match, match2 in p5:gmatch("%[%s*\"([^\"]-)\"%s*%]%s*=%s*([%-]?%d+%.?%d*)") do
+			v80(match, match2)
+		end
+
+		for match, match2 in p5:gmatch("%[%s*'([^']-)'%s*%]%s*=%s*([%-]?%d+%.?%d*)") do
+			v80(match, match2)
+		end
+
+		for match, match2 in p5:gmatch("\"([^\"]-)\"%s*:%s*([%-]?%d+%.?%d*)") do
+			v80(match, match2)
+		end
+
+		if next(t6) then
+			return t6
+		end
+
+		for match in p5:gmatch("[^\r\n]+") do
+			local v95 = match:gsub("^%s+", ""):gsub("%s+$", "")
+
+			if v95 ~= "" and v95:sub(1, 2) ~= "--" and v95:sub(1, 1) ~= "#" then
+				local match2, v97 = v95:match("^%[\"(.-)\"%]%s*=%s*([%-]?%d+%.?%d*)")
+
+				if not match2 then
+					match2, v97 = v95:match("^%['(.-)'%]%s*=%s*([%-]?%d+%.?%d*)")
+				end
+
+				if not match2 then
+					match2, v97 = v95:match("^[\"'](.-)[\"']%s*[:=]%s*([%-]?%d+%.?%d*)")
+				end
+
+				if not match2 then
+					match2, v97 = v95:match("^(.-)%s*[:=]%s*([%-]?%d+%.?%d*)%s*,?$")
+				end
+
+				if match2 and v97 then
+					v80(match2, v97)
+				end
+			end
+		end
+
+		return t6
+	end
+	local function v98(p8)
+		local t7 = {}
+		local t8 = {}
+		local t9 = {}
+
+		local function v102(p9, p10, p11)
+			if p9 == "" or not p10 then
+				return
+			end
+
+			t9[p9] = t9[p9] or {}
+			t9[p9][p10] = p11
+		end
+		local function v103(p12)
+			local match = p12:match("%((gun)%)") or p12:match("%((knife)%)") or p12:match("%((pet)%)") or p12:match("%((vintage)%)")
+
+			return p12:gsub("%s*%(gun%)%s*", " "):gsub("%s*%(knife%)%s*", " "):gsub("%s*%(pet%)%s*", " "):gsub("%s*%(vintage%)%s*", " "):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""), match
+		end
+
+		for k, v in pairs(p8) do
+			local v107 = tostring(k):lower():gsub("^%s+", ""):gsub("%s+$", ""):gsub("’", "'"):gsub("%s+", " ")
+			local v108 = tonumber(v)
+
+			if v108 and v107 ~= "" then
+				if v107:sub(1, 7) == "chroma " or v107:sub(1, 3) == "c. " then
+					t8[v107] = v108
+					t8[v107:gsub("^c%.%s*", "chroma ")] = v108
+				else
+					t7[v107] = v108
+
+					local v109, v110 = v103(v107)
+
+					if v110 then
+						v102(v109, v110, v108)
+					end
+				end
+			end
+		end
+
+		t9.sunset = t9.sunset or {}
+		t9.sunset.gun = 0
+		t7["sunset (gun)"] = 0
+		t7["black luger"] = nil
+		t9["black luger"] = nil
+		t7.batwing = 42
+
+		return t7, t8, t9
+	end
+	local function v111()
+		if u68 then
+			return false, false
+		end
+
+		u68 = true
+
+		local ok, result, result2 = pcall(function()
+			if type("https://raw.githubusercontent.com/spotyfyy6t-spec/mm2value/refs/heads/main/mmvaluesSP") ~= "string" or not ("https://raw.githubusercontent.com/spotyfyy6t-spec/mm2value/refs/heads/main/mmvaluesSP"):match("^https?://") then
+				return false, false
+			end
+
+			local v115 = v21("https://raw.githubusercontent.com/spotyfyy6t-spec/mm2value/refs/heads/main/mmvaluesSP")
+
+			if not v115 then
+				return false, false
+			end
+
+			if u19 and v115 == u67 then
+				return true, false
+			end
+
+			local v116 = v78(v115)
+
+			if not v116 or not next(v116) then
+				return false, false
+			end
+
+			local v117, v118, v119 = v98(v116)
+
+			t2 = v117
+			t3 = v118
+			t4 = v119
+			u67 = v115
+			t5 = {}
+			valueVersion += 1
+			u19 = true
+
+			return true, true
+		end)
+
+		u68 = false
+
+		if ok then
+			return result, result2
+		end
+
+		warn("[MM2] Ошибка обновления цен:", result)
+
+		return false, false
+	end
+
+	local n5 = 0
+
+	v22 = function(p13)
+		if not v13() or u68 then
+			return
+		end
+
+		local now = os.clock()
+
+		if not p13 and now < n5 then
+			return
+		end
+
+		n5 = math.huge
+		v15(task.spawn(function()
+			local v122, v123 = v111()
+
+			if not v13() then
+				return
+			end
+
+			if v122 then
+				if v123 then
+					print(("[MM2] Цены загружены: %d обычных, %d хром. След. проверка только в трейде через %d сек."):format(v69(t2), v69(t3), 300))
+				end
+
+				n5 = os.clock() + n3
+			elseif u19 then
+				n5 = os.clock() + 60
+			else
+				warn("[MM2] Не удалось загрузить цены. Повтор будет только во время трейда.")
+				n5 = os.clock() + 8
+			end
+		end))
+	end
+
+	local n6 = 999
+
+	v23 = function(p14)
+		local v125 = tonumber(p14)
+
+		if not v125 or v125 % 1 ~= 0 or v125 < 1 or v125 > n6 then
+			return nil
+		end
+
+		if v125 >= 2015 and v125 <= 2035 then
+			return nil
+		end
+
+		return v125
+	end
+
+	local t10 = {}
+	local n7 = 0
+
+	v24 = function(p15)
+		if not p15 then
+			return ""
+		end
+
+		local v128 = tostring(p15)
+		local v129 = t10[v128]
+
+		if v129 ~= nil then
+			return v129
+		end
+
+		local v130 = v128:lower():gsub("^%s+", ""):gsub("%s+$", ""):gsub("’", "'"):gsub("%s*[x×]%s*(%d+)$", function(p16)
+			return v23(p16) and "" or " x" .. p16
+		end):gsub("%s*%((%d+)%)$", function(p17)
+			return v23(p17) and "" or " (" .. p17 .. ")"
+		end):gsub("%s*%[(%d+)%]$", function(p18)
+			return v23(p18) and "" or " [" .. p18 .. "]"
+		end):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+
+		if n7 >= 2048 then
+			t10 = {}
+			n7 = 0
+		end
+
+		t10[v128] = v130
+		n7 += 1
+
+		return v130
+	end
+	v25 = function(p19)
+		return p19:sub(1, 7) == "chroma " or p19:sub(1, 3) == "c. " or p19:sub(1, 2) == "c " or p19:match("%(chroma%)") ~= nil or p19:match("%[chroma%]") ~= nil or p19:match("%schroma$") ~= nil or p19:match("%schroma%s") ~= nil
+	end
+
+	local function v131(p20, p21)
+		local t11 = {}
+		local t12 = {}
+		local t13 = {}
+		local t14 = {}
+		local u136
+		local n8 = 0
+		local s2
+
+		local function v139(p22)
+			if p22 == nil then
+				return
+			end
+
+			local v140 = tostring(p22):lower():gsub("’", "'")
+
+			if v140 ~= "" and not t14[v140] then
+				t14[v140] = true
+				table.insert(t11, v140)
+			end
+		end
+		local function v141(p23, p24)
+			if type(p24) ~= "string" or p24 == "" then
+				return
+			end
+
+			local v142 = p24:gsub("^%s+", ""):gsub("%s+$", "")
+			local v143 = v142:lower()
+			local v144 = tostring(p23 or ""):lower()
+
+			if v143 == "weapons" or v143 == "weapon" then
+				s2 = "Weapons"
+			end
+
+			if v143 == "pets" or v143 == "pet" then
+				s2 = "Pets"
+			end
+
+			if v143:match("^https?://") or v143:match("^rbxasset") or #v142 > 100 then
+				return
+			end
+
+			local v145 = v142:match("^[%w_%-]+_[gkpsGKPS]_%d%d%d%d$") ~= nil or v142:match("^[%w_%-]+_[%w_%-]+_%d%d%d%d$") ~= nil
+			local pos = v144:find("itemid", 1, true) or v144:find("weaponid", 1, true) or v144:find("item_id", 1, true) or v144:find("weapon_id", 1, true) or v144 == "id"
+
+			v145 = v145 and 2 or pos and 1 or 0
+
+			if n8 < v145 then
+				u136 = v142
+				n8 = v145
+			end
+		end
+		local function v147(p25)
+			if typeof(p25) == "Color3" then
+				table.insert(t13, p25)
+			end
+		end
+		local function v148(p26)
+			if not p26 then
+				return
+			end
+
+			v139(p26.Name)
+			v141("objectName", p26.Name)
+
+			local ok, result = pcall(function()
+				return p26:GetAttributes()
+			end)
+
+			if ok and type(result) == "table" then
+				for k, v in pairs(result) do
+					v139(k)
+
+					if type(v) == "string" or type(v) == "number" then
+						v139(v)
+						v141(k, tostring(v))
+					end
+				end
+			end
+
+			if p26:IsA("TextLabel") or p26:IsA("TextButton") or p26:IsA("TextBox") then
+				v139(p26.Text)
+				v141("text", tostring(p26.Text or ""))
+				v147(p26.TextColor3)
+				v147(p26.BackgroundColor3)
+			elseif p26:IsA("ImageLabel") or p26:IsA("ImageButton") then
+				v139(p26.Image)
+				v147(p26.ImageColor3)
+				v147(p26.BackgroundColor3)
+
+				if p26.Image and p26.Image ~= "" then
+					table.insert(t12, p26.Image)
+				end
+			elseif p26:IsA("GuiObject") then
+				v147(p26.BackgroundColor3)
+				v147(p26.BorderColor3)
+			end
+		end
+
+		v148(p21 and p21.obj)
+
+		if p20 then
+			v148(p20)
+
+			local ok, result = pcall(function()
+				return p20:GetDescendants()
+			end)
+
+			if ok then
+				for _, v in ipairs(result) do
+					v148(v)
+				end
+			end
+		end
+
+		p20 = p20 or p21 and p21.obj
+
+		for i = 1, 6 do
+			p20 = p20 and p20.Parent
+
+			if p20 then
+				v148(p20)
+
+				continue
+			end
+
+			break
+		end
+
+		local v158 = table.concat(t11, " ")
+		local v159 = u136 and u136:lower() or ""
+		local s3
+
+		if v159:match("_g_%d%d%d%d$") then
+			s3 = "gun"
+		elseif v159:match("_k_%d%d%d%d$") then
+			s3 = "knife"
+		elseif v159:match("_p_%d%d%d%d$") then
+			s3 = "pet"
+		elseif v158:find("pistol", 1, true) or v158:find("revolver", 1, true) or v158:find("firearm", 1, true) or v158:find("gun", 1, true) then
+			s3 = "gun"
+		elseif v158:find("knife", 1, true) or v158:find("blade", 1, true) or v158:find("sword", 1, true) or v158:find("scythe", 1, true) or v158:find("axe", 1, true) then
+			s3 = "knife"
+		elseif v158:find("pet", 1, true) then
+			s3 = "pet"
+		else
+			s3 = nil
+
+			if v158:find("vintage", 1, true) then
+				s3 = "vintage"
+			end
+		end
+
+		local v161
+
+		for _, v in ipairs({
+			"chroma",
+			"ancient",
+			"godly",
+			"unique",
+			"vintage",
+			"legendary",
+			"rare",
+			"uncommon",
+			"common"
+		}) do
+			if v158:find(v, 1, true) then
+				v161 = v
+
+				break
+			end
+
+			v161 = nil
+		end
+
+		if not v161 then
+			for _, v in ipairs(t13) do
+				local R = v.R
+				local G = v.G
+				local B = v.B
+
+				if math.max(R, G, B) - math.min(R, G, B) > 0.24 and R > 0.68 and B > 0.48 and G < 0.62 then
+					v161 = "godly"
+
+					break
+				end
+			end
+		end
+
+		if not v161 and (v158:find(" fx", 1, true) or v158:find("fx ", 1, true)) then
+			v161 = "godly"
+		end
+
+		if not s2 then
+			s2 = s3 == "pet" and "Pets" or "Weapons"
+		end
+
+		local v169 = (p21 and v24(p21.text) or "") == "sunset" and v159 == "sunset_g_2026"
+
+		table.sort(t12)
+
+		return {
+			kind = s3,
+			rarity = v161,
+			blob = v158,
+			images = t12,
+			remoteId = u136,
+			remoteCategory = s2,
+			remoteTrusted = n8 >= 2,
+			zeroValueVariant = v169,
+			signature = (s3 or "?") .. "|" .. (v161 or "?") .. "|" .. (v159 ~= "" and v159 or "?") .. "|" .. table.concat(t12, ",")
+		}
+	end
+	local function v170(p27, p28, p29)
+		if not p27 then
+			return 0
+		end
+
+		local v171 = tostring(p27)
+		local signature = type(p29) == "table" and p29.signature
+
+		if not signature then
+			signature = tostring(p29 or "")
+		end
+
+		local v173 = (p28 and "C|" or "N|") .. v171 .. "|" .. signature
+		local v174 = t5[v173]
+
+		if v174 ~= nil then
+			return v174
+		end
+
+		local v175 = v24(v171)
+
+		if v175 == "" then
+			t5[v173] = 0
+
+			return 0
+		end
+
+		if type(p29) == "table" and p29.zeroValueVariant then
+			t5[v173] = 0
+
+			return 0
+		end
+
+		local v176
+
+		if p28 or v25(v175) then
+			local v177 = v175:gsub("^c%.%s*", ""):gsub("^c%s+", ""):gsub("^chroma%s+", ""):gsub("%s*%(chroma%)%s*", " "):gsub("%s*%[chroma%]%s*", " "):gsub("%s+chroma%s*", " "):gsub("%s+chroma$", ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+
+			v176 = t3["chroma " .. v177] or t3[v175] or t3["c. " .. v177] or 0
+		else
+			local v178 = t4[v175]
+			local kind = type(p29) == "table" and p29.kind or nil
+			local rarity = type(p29) == "table" and p29.rarity or nil
+
+			if v178 and kind and v178[kind] ~= nil then
+				v176 = v178[kind]
+			elseif v175 == "sunset" then
+				local v181 = type(p29) == "table"
+
+				if v181 then
+					v181 = tostring(p29.remoteId or ""):lower()
+				end
+
+				if (v181 or "") == "sunset_g_2026" then
+					v176 = 0
+				elseif kind == "knife" or rarity == "godly" or rarity == "chroma" then
+					v176 = t2["sunset (knife)"] or t2.sunset or 0
+				else
+					v176 = 0
+				end
+			else
+				v176 = t2[v175] or 0
+			end
+		end
+
+		t5[v173] = v176
+
+		return v176
+	end
+
+	for _, child in ipairs(PlayerGui:GetChildren()) do
+		if child:IsA("ScreenGui") and child.Name == "MM2_PROMO_V5_MOBILE" then
+			pcall(function()
+				child:Destroy()
+			end)
+		end
+	end
+
+	ScreenGui = Instance.new("ScreenGui")
+	ScreenGui.Name = "MM2_PROMO_V5_MOBILE"
+	ScreenGui.ResetOnSpawn = false
+	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+	ScreenGui.DisplayOrder = 2147483647
+	ScreenGui.IgnoreGuiInset = true
+	ScreenGui.Parent = PlayerGui
+	t1.ScreenGui = ScreenGui
+	t1.Motion = t1.Motion or {}
+	t1.Motion.Tween = function(p30, p31, p32, p33, p34)
+		if not p30 or not p30.Parent then
+			return nil
+		end
+
+		local ok, result = pcall(function()
+			return TweenService:Create(p30, TweenInfo.new(p31 or 0.2, p33 or Enum.EasingStyle.Quint, p34 or Enum.EasingDirection.Out), p32)
+		end)
+
+		if ok and result then
+			result:Play()
+
+			return result
+		end
+
+		return nil
+	end
+	t1.Motion.GetScale = function(p35)
+		local PremiumMotionScale = p35:FindFirstChild("PremiumMotionScale")
+
+		if not PremiumMotionScale then
+			PremiumMotionScale = Instance.new("UIScale")
+			PremiumMotionScale.Name = "PremiumMotionScale"
+			PremiumMotionScale.Scale = 1
+			PremiumMotionScale.Parent = p35
+		end
+
+		return PremiumMotionScale
+	end
+	t1.Motion.BindButton = function(p36)
+		if not p36 or not p36:IsA("GuiButton") or p36:GetAttribute("PremiumMotionBound") then
+			return
+		end
+
+		p36:SetAttribute("PremiumMotionBound", true)
+		p36.ClipsDescendants = true
+
+		local v187 = t1.Motion.GetScale(p36)
+		local BackgroundColor3 = p36.BackgroundColor3
+		local v189 = BackgroundColor3:Lerp(Color3.fromRGB(155, 190, 255), 0.12)
+
+		v14(p36.MouseEnter:Connect(function()
+			t1.Motion.Tween(v187, 0.18, {
+				Scale = 1.045
+			}, Enum.EasingStyle.Quint)
+			t1.Motion.Tween(p36, 0.18, {
+				BackgroundColor3 = v189
+			})
+		end))
+		v14(p36.MouseLeave:Connect(function()
+			t1.Motion.Tween(v187, 0.22, {
+				Scale = 1
+			}, Enum.EasingStyle.Quint)
+			t1.Motion.Tween(p36, 0.22, {
+				BackgroundColor3 = BackgroundColor3
+			})
+		end))
+		v14(p36.MouseButton1Down:Connect(function()
+			t1.Motion.Tween(v187, 0.09, {
+				Scale = 0.94
+			}, Enum.EasingStyle.Quad)
+		end))
+		v14(p36.MouseButton1Up:Connect(function()
+			t1.Motion.Tween(v187, 0.16, {
+				Scale = 1.025
+			}, Enum.EasingStyle.Back)
+		end))
+		v14(p36.Activated:Connect(function()
+			if not p36.Parent then
+				return
+			end
+
+			local Frame3 = Instance.new("Frame")
+
+			Frame3.Name = "PremiumRipple"
+			Frame3.AnchorPoint = Vector2.new(0.5, 0.5)
+			Frame3.Position = UDim2.fromScale(0.5, 0.5)
+			Frame3.Size = UDim2.fromOffset(2, 2)
+			Frame3.BackgroundColor3 = Color3.fromRGB(215, 232, 255)
+			Frame3.BackgroundTransparency = 0.48
+			Frame3.BorderSizePixel = 0
+			Frame3.ZIndex = math.min(2147483647, p36.ZIndex)
+			Frame3.Parent = p36
+			Instance.new("UICorner", Frame3).CornerRadius = UDim.new(1, 0)
+
+			local v191 = math.max(p36.AbsoluteSize.X, p36.AbsoluteSize.Y) * 1.65
+
+			t1.Motion.Tween(Frame3, 0.34, {
+				Size = UDim2.fromOffset(v191, v191),
+				BackgroundTransparency = 1
+			}, Enum.EasingStyle.Quad)
+			task.delay(0.36, function()
+				if Frame3.Parent then
+					Frame3:Destroy()
+				end
+			end)
+		end))
+	end
+	t1.Motion.EnhanceFrame = function(p37, p38, p39)
+		if not p37 or not p37:IsA("GuiObject") then
+			return
+		end
+
+		p37.BackgroundColor3 = p38 or Color3.fromRGB(18, 22, 34)
+
+		local PremiumFrameGradient = p37:FindFirstChild("PremiumFrameGradient")
+
+		if not PremiumFrameGradient then
+			PremiumFrameGradient = Instance.new("UIGradient")
+			PremiumFrameGradient.Name = "PremiumFrameGradient"
+			PremiumFrameGradient.Parent = p37
+		end
+
+		local v194 = ColorSequenceKeypoint.new(0, p38 or Color3.fromRGB(28, 35, 53))
+
+		p39 = p39 or Color3.fromRGB(12, 15, 25)
+
+		local v195 = table.pack(ColorSequenceKeypoint.new(1, p39))
+		local t15 = { v194 }
+
+		do
+			local values = table.pack(table.unpack(v195, 1, v195.n))
+
+			table.move(values, 1, values.n, 2, t15)
+		end
+
+		PremiumFrameGradient.Color = ColorSequence.new(t15)
+		PremiumFrameGradient.Rotation = 125
+
+		local UIStroke = p37:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", p37)
+
+		UIStroke.Color = Color3.fromRGB(91, 122, 184)
+		UIStroke.Transparency = 0.38
+		UIStroke.Thickness = 1.2
+	end
+	t1.Motion.Open = function(p40)
+		if not p40 or not p40.Parent then
+			return
+		end
+
+		local now = os.clock()
+
+		p40:SetAttribute("PremiumMotionToken", now)
+		p40:SetAttribute("PremiumOpeningInternally", true)
+		p40.Visible = true
+		p40:SetAttribute("PremiumOpeningInternally", false)
+
+		local v199 = t1.Motion.GetScale(p40)
+
+		v199.Scale = 0.91
+
+		local attribute = p40:GetAttribute("PremiumBaseTransparency")
+
+		if attribute == nil then
+			attribute = p40.BackgroundTransparency
+			p40:SetAttribute("PremiumBaseTransparency", attribute)
+		end
+
+		p40.BackgroundTransparency = math.min(1, attribute + 0.45)
+		t1.Motion.Tween(v199, 0.28, {
+			Scale = 1
+		}, Enum.EasingStyle.Back)
+		t1.Motion.Tween(p40, 0.24, {
+			BackgroundTransparency = attribute
+		}, Enum.EasingStyle.Quint)
+	end
+	t1.Motion.Close = function(p41)
+		if not p41 or not p41.Parent or not p41.Visible then
+			return
+		end
+
+		local now = os.clock()
+
+		p41:SetAttribute("PremiumMotionToken", now)
+
+		local v202 = t1.Motion.GetScale(p41)
+		local attribute = p41:GetAttribute("PremiumBaseTransparency") or p41.BackgroundTransparency
+
+		t1.Motion.Tween(v202, 0.18, {
+			Scale = 0.94
+		}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		t1.Motion.Tween(p41, 0.18, {
+			BackgroundTransparency = math.min(1, attribute + 0.35)
+		}, Enum.EasingStyle.Quad)
+		task.delay(0.19, function()
+			if p41.Parent and p41:GetAttribute("PremiumMotionToken") == now then
+				p41.Visible = false
+				p41.BackgroundTransparency = attribute
+				v202.Scale = 1
+			end
+		end)
+	end
+	t1.Motion.BindPanel = function(p42)
+		if not p42 or p42:GetAttribute("PremiumPanelBound") then
+			return
+		end
+
+		p42:SetAttribute("PremiumPanelBound", true)
+		v14(p42:GetPropertyChangedSignal("Visible"):Connect(function()
+			if p42.Visible and not p42:GetAttribute("PremiumOpeningInternally") then
+				local v204 = t1.Motion.GetScale(p42)
+
+				v204.Scale = 0.94
+				t1.Motion.Tween(v204, 0.24, {
+					Scale = 1
+				}, Enum.EasingStyle.Back)
+			end
+		end))
+	end
+	t1.Motion.Card = function(p43, p44, p45, p46, p47, p48)
+		if not p43 or not p43.Parent then
+			return
+		end
+
+		local v205 = t1.Motion.GetScale(p43)
+
+		p43.BackgroundTransparency = 1
+
+		if p47 then
+			p47.Transparency = 1
+		end
+
+		if p44 then
+			p44.BackgroundTransparency = 1
+		end
+
+		if p45 then
+			p45.TextTransparency = 1
+		end
+
+		if p46 then
+			p46.TextTransparency = 1
+		end
+
+		task.delay(math.min(0.2, (p48 or 1) % 18 * 0.012), function()
+			if not p43.Parent then
+				return
+			end
+
+			t1.Motion.Tween(p43, 0.3, {
+				BackgroundTransparency = 0.02
+			}, Enum.EasingStyle.Quint)
+
+			if p47 then
+				t1.Motion.Tween(p47, 0.32, {
+					Transparency = 0.32
+				})
+			end
+
+			if p44 then
+				t1.Motion.Tween(p44, 0.3, {
+					BackgroundTransparency = 0.02
+				})
+			end
+
+			if p45 then
+				t1.Motion.Tween(p45, 0.28, {
+					TextTransparency = 0
+				})
+			end
+
+			if p46 then
+				t1.Motion.Tween(p46, 0.34, {
+					TextTransparency = 0
+				})
+			end
+		end)
+
+		if not UserInputService.TouchEnabled then
+			v14(p43.MouseEnter:Connect(function()
+				t1.Motion.Tween(v205, 0.2, {
+					Scale = 1.012
+				}, Enum.EasingStyle.Quint)
+
+				if p47 then
+					t1.Motion.Tween(p47, 0.2, {
+						Transparency = 0.08
+					})
+				end
+			end))
+			v14(p43.MouseLeave:Connect(function()
+				t1.Motion.Tween(v205, 0.24, {
+					Scale = 1
+				}, Enum.EasingStyle.Quint)
+
+				if p47 then
+					t1.Motion.Tween(p47, 0.24, {
+						Transparency = 0.32
+					})
+				end
+			end))
+		end
+	end
+	t1.DeviceProfile = t1.DeviceProfile or {}
+	t1.DeviceProfile.touch = UserInputService.TouchEnabled
+	t1.DeviceProfile.keyboard = UserInputService.KeyboardEnabled
+	t1.DeviceProfile.gamepad = UserInputService.GamepadEnabled
+
+	if t1.DeviceProfile.touch and not t1.DeviceProfile.keyboard then
+		t1.DeviceProfile.kind = math.min(ScreenGui.AbsoluteSize.X, ScreenGui.AbsoluteSize.Y) >= 650 and "TABLET" or "PHONE"
+	elseif t1.DeviceProfile.touch and t1.DeviceProfile.keyboard then
+		t1.DeviceProfile.kind = "HYBRID"
+	else
+		t1.DeviceProfile.kind = "PC"
+	end
+
+	t1.DeviceProfile.isPC = t1.DeviceProfile.kind == "PC"
+	t1.DeviceProfile.isTouch = t1.DeviceProfile.touch == true
+	v15(task.spawn(function()
+		local Lighting = game:GetService("Lighting")
+		local SupremePremiumLoaderBlur = Lighting:FindFirstChild("SupremePremiumLoaderBlur")
+
+		if SupremePremiumLoaderBlur then
+			pcall(function()
+				SupremePremiumLoaderBlur:Destroy()
+			end)
+		end
+
+		local Frame3 = Instance.new("Frame")
+
+		Frame3.Name = "SupremePremiumLoader"
+		Frame3.Size = UDim2.fromScale(1, 1)
+		Frame3.BackgroundColor3 = Color3.fromRGB(5, 8, 16)
+		Frame3.BackgroundTransparency = 1
+		Frame3.BorderSizePixel = 0
+		Frame3.Active = true
+		Frame3.ZIndex = 2147483647
+		Frame3.Parent = ScreenGui
+
+		local BlurEffect = Instance.new("BlurEffect")
+
+		BlurEffect.Name = "SupremePremiumLoaderBlur"
+		BlurEffect.Size = 0
+		BlurEffect.Parent = Lighting
+
+		local Frame4 = Instance.new("Frame", Frame3)
+
+		Frame4.AnchorPoint = Vector2.new(0.5, 0.5)
+		Frame4.Position = UDim2.fromScale(0.5, 0.5)
+		Frame4.Size = UDim2.fromOffset(438, 252)
+		Frame4.BackgroundColor3 = Color3.fromRGB(14, 19, 32)
+		Frame4.BackgroundTransparency = 1
+		Frame4.BorderSizePixel = 0
+		Frame4.ClipsDescendants = true
+		Frame4.ZIndex = 2147483647
+		Instance.new("UICorner", Frame4).CornerRadius = UDim.new(0, 22)
+
+		local UIScale = Instance.new("UIScale", Frame4)
+		local AbsoluteSize = ScreenGui.AbsoluteSize
+
+		UIScale.Scale = math.min(1, math.max(0.66, math.min((AbsoluteSize.X - 32) / 438, (AbsoluteSize.Y - 32) / 252))) * 0.86
+
+		local v213 = math.min(1, math.max(0.66, math.min((AbsoluteSize.X - 32) / 438, (AbsoluteSize.Y - 32) / 252)))
+		local UIStroke = Instance.new("UIStroke", Frame4)
+
+		UIStroke.Color = Color3.fromRGB(104, 152, 255)
+		UIStroke.Thickness = 1.5
+		UIStroke.Transparency = 1
+
+		local UIGradient = Instance.new("UIGradient", Frame4)
+		local t16 = {
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(33, 46, 78)),
+			(ColorSequenceKeypoint.new(0.5, Color3.fromRGB(13, 18, 32)))
+		}
+
+		do
+			local values = table.pack(ColorSequenceKeypoint.new(1, Color3.fromRGB(47, 24, 65)))
+
+			table.move(values, 1, values.n, 3, t16)
+		end
+
+		UIGradient.Color = ColorSequence.new(t16)
+		UIGradient.Rotation = 118
+
+		local Frame5 = Instance.new("Frame", Frame4)
+
+		Frame5.AnchorPoint = Vector2.new(0.5, 0.5)
+		Frame5.Position = UDim2.fromScale(0.1, 0.08)
+		Frame5.Size = UDim2.fromOffset(220, 220)
+		Frame5.BackgroundColor3 = Color3.fromRGB(58, 126, 255)
+		Frame5.BackgroundTransparency = 0.82
+		Frame5.BorderSizePixel = 0
+		Frame5.ZIndex = 2147483647
+		Instance.new("UICorner", Frame5).CornerRadius = UDim.new(1, 0)
+
+		local clone = Frame5:Clone()
+
+		clone.Position = UDim2.fromScale(0.92, 0.88)
+		clone.BackgroundColor3 = Color3.fromRGB(177, 74, 255)
+		clone.Size = UDim2.fromOffset(180, 180)
+		clone.Parent = Frame4
+
+		local TextLabel = Instance.new("TextLabel", Frame4)
+
+		TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+		TextLabel.Position = UDim2.fromScale(0.5, 0.25)
+		TextLabel.Size = UDim2.fromOffset(48, 48)
+		TextLabel.BackgroundTransparency = 1
+		TextLabel.Text = "◆"
+		TextLabel.TextColor3 = Color3.fromRGB(133, 190, 255)
+		TextLabel.TextTransparency = 1
+		TextLabel.Font = Enum.Font.GothamBlack
+		TextLabel.TextSize = 40
+		TextLabel.ZIndex = 2147483647
+
+		local TextLabel2 = Instance.new("TextLabel", Frame4)
+
+		TextLabel2.Position = UDim2.fromOffset(22, 78)
+		TextLabel2.Size = UDim2.new(1, -44, 0, 36)
+		TextLabel2.BackgroundTransparency = 1
+		TextLabel2.Text = "SUPREME VALUES"
+		TextLabel2.TextColor3 = Color3.fromRGB(247, 250, 255)
+		TextLabel2.TextTransparency = 1
+		TextLabel2.Font = Enum.Font.GothamBlack
+		TextLabel2.TextSize = 25
+		TextLabel2.ZIndex = 2147483647
+
+		local TextLabel3 = Instance.new("TextLabel", Frame4)
+
+		TextLabel3.Position = UDim2.fromOffset(22, 112)
+		TextLabel3.Size = UDim2.new(1, -44, 0, 22)
+		TextLabel3.BackgroundTransparency = 1
+		TextLabel3.Text = "MM2 TRADE SUITE  •  BY LARISOV  •  " .. tostring(t1.DeviceProfile and t1.DeviceProfile.kind or "AUTO")
+		TextLabel3.TextColor3 = Color3.fromRGB(139, 161, 201)
+		TextLabel3.TextTransparency = 1
+		TextLabel3.Font = Enum.Font.GothamBold
+		TextLabel3.TextSize = 11
+		TextLabel3.ZIndex = 2147483647
+
+		local TextLabel4 = Instance.new("TextLabel", Frame4)
+
+		TextLabel4.Position = UDim2.fromOffset(26, 158)
+		TextLabel4.Size = UDim2.new(1, -52, 0, 22)
+		TextLabel4.BackgroundTransparency = 1
+		TextLabel4.Text = "ПОДКЛЮЧЕНИЕ К SUPREME VALUES"
+		TextLabel4.TextColor3 = Color3.fromRGB(174, 190, 221)
+		TextLabel4.TextTransparency = 1
+		TextLabel4.Font = Enum.Font.GothamMedium
+		TextLabel4.TextSize = 10
+		TextLabel4.TextXAlignment = Enum.TextXAlignment.Left
+		TextLabel4.ZIndex = 2147483647
+
+		local Frame6 = Instance.new("Frame", Frame4)
+
+		Frame6.Position = UDim2.fromOffset(26, 194)
+		Frame6.Size = UDim2.new(1, -52, 0, 8)
+		Frame6.BackgroundColor3 = Color3.fromRGB(31, 39, 57)
+		Frame6.BackgroundTransparency = 1
+		Frame6.BorderSizePixel = 0
+		Frame6.ZIndex = 2147483647
+		Instance.new("UICorner", Frame6).CornerRadius = UDim.new(1, 0)
+
+		local Frame7 = Instance.new("Frame", Frame6)
+
+		Frame7.Size = UDim2.fromScale(0, 1)
+		Frame7.BackgroundColor3 = Color3.fromRGB(83, 154, 255)
+		Frame7.BorderSizePixel = 0
+		Frame7.ZIndex = 2147483647
+		Instance.new("UICorner", Frame7).CornerRadius = UDim.new(1, 0)
+
+		local UIGradient2 = Instance.new("UIGradient", Frame7)
+
+		UIGradient2.Color = ColorSequence.new(Color3.fromRGB(78, 132, 255), Color3.fromRGB(190, 92, 255))
+
+		local TextLabel5 = Instance.new("TextLabel", Frame4)
+
+		TextLabel5.Position = UDim2.fromOffset(26, 207)
+		TextLabel5.Size = UDim2.new(1, -52, 0, 18)
+		TextLabel5.BackgroundTransparency = 1
+		TextLabel5.Text = "0%"
+		TextLabel5.TextColor3 = Color3.fromRGB(117, 141, 181)
+		TextLabel5.TextTransparency = 1
+		TextLabel5.Font = Enum.Font.GothamBold
+		TextLabel5.TextSize = 9
+		TextLabel5.TextXAlignment = Enum.TextXAlignment.Right
+		TextLabel5.ZIndex = 2147483647
+
+		local t17 = {}
+
+		for i = 1, 12 do
+			local TextLabel6 = Instance.new("TextLabel", Frame4)
+
+			TextLabel6.AnchorPoint = Vector2.new(0.5, 0.5)
+			TextLabel6.Position = UDim2.fromScale(0.5, 0.25)
+			TextLabel6.Size = UDim2.fromOffset(i % 2 == 0 and 18 or 13, i % 2 == 0 and 18 or 13)
+			TextLabel6.BackgroundTransparency = 1
+			TextLabel6.Text = "◆"
+			TextLabel6.TextColor3 = i % 3 == 0 and Color3.fromRGB(201, 117, 255) or Color3.fromRGB(108, 181, 255)
+			TextLabel6.TextTransparency = 1
+			TextLabel6.Font = Enum.Font.GothamBlack
+			TextLabel6.TextSize = i % 2 == 0 and 15 or 11
+			TextLabel6.ZIndex = 2147483647
+			t17[i] = {
+				object = TextLabel6,
+				phase = (i - 1) / 12 * 3.1415926535897931 * 2,
+				radius = 46 + i % 3 * 13
+			}
+		end
+
+		local t18 = {}
+
+		for i = 1, 34 do
+			local Frame8 = Instance.new("Frame", Frame4)
+
+			Frame8.Size = UDim2.fromOffset(i % 5 == 0 and 2 or 1, i % 5 == 0 and 2 or 1)
+			Frame8.Position = UDim2.fromScale(math.random(), math.random())
+			Frame8.BackgroundColor3 = Color3.fromRGB(219, 232, 255)
+			Frame8.BackgroundTransparency = 1
+			Frame8.BorderSizePixel = 0
+			Frame8.ZIndex = 2147483647
+			Instance.new("UICorner", Frame8).CornerRadius = UDim.new(1, 0)
+			t18[i] = {
+				object = Frame8,
+				phase = math.random() * 3.1415926535897931 * 2,
+				speed = 0.01 + math.random() * 0.015
+			}
+		end
+
+		t1.Motion.Tween(Frame3, 0.35, {
+			BackgroundTransparency = 0.22
+		})
+		t1.Motion.Tween(BlurEffect, 0.4, {
+			Size = 14
+		})
+		t1.Motion.Tween(Frame4, 0.42, {
+			BackgroundTransparency = 0.02
+		}, Enum.EasingStyle.Quint)
+		t1.Motion.Tween(UIScale, 0.52, {
+			Scale = v213
+		}, Enum.EasingStyle.Back)
+		t1.Motion.Tween(UIStroke, 0.42, {
+			Transparency = 0.12
+		})
+		t1.Motion.Tween(TextLabel, 0.38, {
+			TextTransparency = 0
+		})
+		t1.Motion.Tween(TextLabel2, 0.42, {
+			TextTransparency = 0
+		})
+		t1.Motion.Tween(TextLabel3, 0.48, {
+			TextTransparency = 0
+		})
+		t1.Motion.Tween(TextLabel4, 0.48, {
+			TextTransparency = 0
+		})
+		t1.Motion.Tween(Frame6, 0.48, {
+			BackgroundTransparency = 0.12
+		})
+		t1.Motion.Tween(TextLabel5, 0.48, {
+			TextTransparency = 0
+		})
+
+		for _, v in ipairs(t18) do
+			t1.Motion.Tween(v.object, 0.55, {
+				BackgroundTransparency = 0.35
+			})
+		end
+
+		for _, v in ipairs(t17) do
+			t1.Motion.Tween(v.object, 0.7, {
+				TextTransparency = 0.12
+			})
+		end
+
+		t1.Motion.Tween(Frame7, 8.45, {
+			Size = UDim2.fromScale(1, 1)
+		}, Enum.EasingStyle.Quint)
+
+		local now = os.clock()
+		local connection
+
+		connection = RunService.RenderStepped:Connect(function(dt)
+			if not Frame3.Parent then
+				if connection then
+					connection:Disconnect()
+				end
+
+				return
+			end
+
+			local v240 = os.clock() - now
+
+			TextLabel5.Text = tostring(math.floor(math.clamp(v240 / 8.45, 0, 1) * 100 + 0.5)) .. "%"
+			TextLabel.Rotation = (TextLabel.Rotation + dt * (34 + math.sin(v240 * 1.7) * 18)) % 360
+
+			local v241 = math.clamp(v240 / 8.35, 0, 1)
+
+			for i, v in ipairs(t17) do
+				local v244 = v.phase + v240 * (i % 2 == 0 and 1.45 or -1.12)
+				local v245 = v.radius * (1 + math.sin(v240 * 2.1 + v.phase) * 0.16) * (1 - v241 * 0.62)
+
+				if v240 > 7.55 then
+					v245 *= math.max(0.08, (8.45 - v240) / 0.9)
+				end
+
+				v.object.Position = UDim2.new(0.5, math.cos(v244) * v245, 0.25, math.sin(v244) * v245)
+				v.object.Rotation = (v240 * (i % 2 == 0 and 125 or -108) + i * 33) % 360
+			end
+
+			UIGradient.Rotation = 112 + math.sin(v240 * 0.7) * 18
+			UIGradient2.Rotation = v240 * 38 % 360
+			Frame5.Position = UDim2.fromScale(0.1 + math.sin(v240 * 0.8) * 0.05, 0.08 + math.cos(v240 * 0.6) * 0.05)
+			clone.Position = UDim2.fromScale(0.9 + math.cos(v240 * 0.65) * 0.05, 0.88 + math.sin(v240 * 0.72) * 0.05)
+
+			for _, v in ipairs(t18) do
+				local object = v.object
+				local v249 = object.Position.Y.Scale - v.speed * dt
+
+				if v249 < 0 then
+					v249 = 1
+				end
+
+				object.Position = UDim2.fromScale(object.Position.X.Scale, v249)
+				object.BackgroundTransparency = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(v240 * 1.8 + v.phase))
+			end
+		end)
+		task.delay(1.55, function()
+			if TextLabel4.Parent then
+				TextLabel4.Text = "ЗАГРУЗКА ТОЧНЫХ ВАЛЮТ И КАТАЛОГА"
+			end
+		end)
+		task.delay(3.1, function()
+			if TextLabel4.Parent then
+				TextLabel4.Text = "СИНХРОНИЗАЦИЯ SMART TRADE ENGINE"
+			end
+		end)
+		task.delay(4.65, function()
+			if TextLabel4.Parent then
+				TextLabel4.Text = "ОПРЕДЕЛЕНИЕ УСТРОЙСТВА: " .. tostring(t1.DeviceProfile and t1.DeviceProfile.kind or "AUTO")
+			end
+		end)
+		task.delay(6.15, function()
+			if TextLabel4.Parent then
+				TextLabel4.Text = "СБОРКА PREMIUM MOTION UI"
+			end
+		end)
+		task.delay(7.55, function()
+			if TextLabel4.Parent then
+				TextLabel4.Text = "ФИНАЛЬНАЯ КАЛИБРОВКА КОСМОСА"
+			end
+		end)
+		task.wait(8.5)
+
+		if not Frame3.Parent then
+			if connection then
+				connection:Disconnect()
+			end
+
+			if BlurEffect.Parent then
+				BlurEffect:Destroy()
+			end
+
+			return
+		end
+
+		TextLabel5.Text = "100%"
+		TextLabel4.Text = "✓  SUPREME VALUES BY LARISOV — LOADED"
+		TextLabel4.TextColor3 = Color3.fromRGB(125, 239, 178)
+		Frame7.BackgroundColor3 = Color3.fromRGB(88, 216, 155)
+		UIStroke.Color = Color3.fromRGB(98, 229, 167)
+		t1.Motion.Tween(UIScale, 0.22, {
+			Scale = v213 * 1.035
+		}, Enum.EasingStyle.Back)
+
+		for _, v in ipairs(t17) do
+			t1.Motion.Tween(v.object, 0.22, {
+				Position = UDim2.fromScale(0.5, 0.25),
+				TextTransparency = 0
+			}, Enum.EasingStyle.Back)
+		end
+
+		local v252 = math.max(AbsoluteSize.X, AbsoluteSize.Y) * 0.78
+
+		for i = 1, 132 do
+			local Frame8 = Instance.new("Frame", Frame3)
+			local v255 = i % 4 + 1
+			local v256 = v255 == 4 and 2 or 1
+			local v257 = i % 6 == 0 and 5 + v255 * 2 or v256
+
+			Frame8.AnchorPoint = Vector2.new(0.5, 0.5)
+			Frame8.Position = UDim2.new(0.5, math.random(-10, 10), 0.5, math.random(-10, 10))
+			Frame8.Size = UDim2.fromOffset(v256, v257)
+			Frame8.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			Frame8.BackgroundTransparency = 0.05 + i % 3 * 0.08
+			Frame8.BorderSizePixel = 0
+			Frame8.ZIndex = 2147483647
+
+			local v258 = i / 132 * 3.1415926535897931 * 2 + (math.random() - 0.5) * 0.11
+			local v259 = v252 * (0.38 + math.random() * 0.62)
+			local v260 = math.cos(v258) * v259
+			local v261 = math.sin(v258) * v259
+
+			Frame8.Rotation = math.deg(v258) + 90
+			t1.Motion.Tween(Frame8, 0.56 + math.random() * 0.48, {
+				Position = UDim2.new(0.5, v260, 0.5, v261),
+				Size = UDim2.fromOffset(0, math.max(1, v257 * 2)),
+				BackgroundTransparency = 1
+			}, Enum.EasingStyle.Quint)
+			task.delay(1.12, function()
+				if Frame8.Parent then
+					Frame8:Destroy()
+				end
+			end)
+		end
+
+		for _, v in ipairs(t17) do
+			local phase = v.phase
+
+			t1.Motion.Tween(v.object, 0.72, {
+				Position = UDim2.new(0.5, math.cos(phase) * v252 * 0.68, 0.5, math.sin(phase) * v252 * 0.68),
+				TextTransparency = 1,
+				Rotation = v.object.Rotation + 360
+			}, Enum.EasingStyle.Quint)
+		end
+
+		task.wait(1)
+		t1.Motion.Tween(Frame3, 0.42, {
+			BackgroundTransparency = 1
+		})
+		t1.Motion.Tween(BlurEffect, 0.42, {
+			Size = 0
+		})
+		t1.Motion.Tween(Frame4, 0.42, {
+			BackgroundTransparency = 1
+		})
+		t1.Motion.Tween(UIScale, 0.42, {
+			Scale = v213 * 1.08
+		}, Enum.EasingStyle.Quint)
+
+		for _, descendant in ipairs(Frame4:GetDescendants()) do
+			if descendant:IsA("TextLabel") then
+				t1.Motion.Tween(descendant, 0.32, {
+					TextTransparency = 1
+				})
+			elseif descendant:IsA("Frame") then
+				t1.Motion.Tween(descendant, 0.32, {
+					BackgroundTransparency = 1
+				})
+			elseif descendant:IsA("UIStroke") then
+				t1.Motion.Tween(descendant, 0.32, {
+					Transparency = 1
+				})
+			end
+		end
+
+		task.wait(0.52)
+
+		if connection then
+			connection:Disconnect()
+		end
+
+		if BlurEffect.Parent then
+			BlurEffect:Destroy()
+		end
+
+		if Frame3.Parent then
+			Frame3:Destroy()
+		end
+	end))
+	Frame = Instance.new("Frame")
+	Frame.Name = "MM2_PromoText"
+	Frame.AnchorPoint = Vector2.new(0.5, 0)
+	Frame.Position = UDim2.new(0.45, 0, 0.29, 0)
+	Frame.Size = UDim2.new(0.513, 0, 0, 124)
+	Frame.BackgroundTransparency = 1
+	Frame.BorderSizePixel = 0
+	Frame.Active = false
+	Frame.Selectable = false
+	pcall(function()
+		Frame.Interactable = false
+	end)
+	Frame.ZIndex = 2147483647
+	Frame.Visible = false
+	Frame.Parent = ScreenGui
+
+	local UISizeConstraint = Instance.new("UISizeConstraint", Frame)
+
+	UISizeConstraint.MinSize = Vector2.new(0, 124)
+	UISizeConstraint.MaxSize = Vector2.new(10000, 124)
+
+	local function createTextLabel(p49, p50, p51, p52, p53)
+		local TextLabel = Instance.new("TextLabel", Frame)
+
+		TextLabel.Name = p49
+		TextLabel.Size = UDim2.new(1, 0, 0, p52)
+		TextLabel.Position = UDim2.new(0, 0, 0, p51)
+		TextLabel.BackgroundTransparency = 1
+		TextLabel.BorderSizePixel = 0
+		TextLabel.Active = false
+		TextLabel.Selectable = false
+		pcall(function()
+			TextLabel.Interactable = false
+		end)
+		TextLabel.Text = p50
+		TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TextLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+		TextLabel.TextStrokeTransparency = 0
+		TextLabel.Font = Enum.Font.GothamBlack
+		pcall(function()
+			TextLabel.FontFace = Font.new("rbxasset://fonts/families/Arial.json", Enum.FontWeight.Heavy, Enum.FontStyle.Normal)
+		end)
+		TextLabel.TextScaled = false
+		TextLabel.TextSize = p53
+		TextLabel.TextWrapped = false
+		TextLabel.ZIndex = 2147483647
+
+		local UIStroke = Instance.new("UIStroke", TextLabel)
+
+		UIStroke.Color = Color3.fromRGB(0, 0, 0)
+		UIStroke.Thickness = 2.5
+		UIStroke.Transparency = 0
+		pcall(function()
+			UIStroke.LineJoinMode = Enum.LineJoinMode.Round
+		end)
+
+		return TextLabel
+	end
+
+	local PromoTop = createTextLabel("PromoTop", "РАЗДАЧИ И ВАЛЮТЫ", 0, 62, 62)
+	local PromoBottom = createTextLabel("PromoBottom", "В ТГК @MM2VA", 62, 53, 62)
+
+	PromoBottom.Size = UDim2.new(0.72, 0, 0, 53)
+	PromoBottom.Position = UDim2.new(0.14, 0, 0, 62)
+	PromoTop.TextScaled = false
+	PromoTop.TextSize = 62
+	PromoBottom.TextScaled = false
+	PromoBottom.TextSize = 62
+	Frame2 = Instance.new("Frame")
+	Frame2.Size = UDim2.new(0, 540, 0, 130)
+	Frame2.AnchorPoint = Vector2.new(0.5, 1)
+	Frame2.Position = UDim2.new(0.5, 0, 0, 190)
+	Frame2.BackgroundColor3 = Color3.fromRGB(74, 74, 90)
+	Frame2.BorderSizePixel = 0
+	Frame2.Active = false
+	Frame2.Draggable = false
+	Frame2.ZIndex = 2147483647
+	Frame2.Visible = false
+	Frame2.Parent = ScreenGui
+	Instance.new("UICorner", Frame2).CornerRadius = UDim.new(0, 16)
+
+	local function createImageLabel(p54, p55, p56, p57, p58, p59)
+		local ImageLabel = Instance.new("ImageLabel", Frame2)
+
+		ImageLabel.Name = p54
+		ImageLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+		ImageLabel.Position = UDim2.new(0.5, 0, 0.5, p56)
+		ImageLabel.Size = UDim2.new(1, p55, 1, p55)
+		ImageLabel.BackgroundTransparency = 1
+		ImageLabel.Image = "rbxassetid://1316045217"
+		ImageLabel.ImageColor3 = Color3.fromRGB(0, 0, 0)
+		ImageLabel.ImageTransparency = p57
+		ImageLabel.ScaleType = Enum.ScaleType.Slice
+		ImageLabel.SliceCenter = Rect.new(10, 10, 118, 118)
+		ImageLabel.ZIndex = p59
+		Instance.new("UICorner", ImageLabel).CornerRadius = UDim.new(0, p58)
+
+		return ImageLabel
+	end
+
+	createImageLabel("ShadowFar", 22, 6, 0.72, 24, 2147483644)
+	createImageLabel("ShadowMid", 13, 4, 0.58, 20, 2147483645)
+	createImageLabel("Shadow", 6, 2, 0.42, 17, 2147483646)
+
+	local TextLabel = Instance.new("TextLabel", Frame2)
+
+	TextLabel.Size = UDim2.new(1, 0, 0, 42)
+	TextLabel.Position = UDim2.new(0, 0, 0, 6)
+	TextLabel.BackgroundTransparency = 1
+	TextLabel.Text = "FAIR"
+	TextLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+	TextLabel.TextStrokeTransparency = 0.7
+	TextLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	TextLabel.Font = Enum.Font.LuckiestGuy
+	TextLabel.TextSize = 40
+	TextLabel.ZIndex = 2147483647
+
+	local Frame3 = Instance.new("Frame", Frame2)
+
+	Frame3.Size = UDim2.new(1, -20, 0, 54)
+	Frame3.Position = UDim2.new(0, 10, 0, 56)
+	Frame3.BackgroundColor3 = Color3.fromRGB(120, 120, 130)
+	Frame3.BorderSizePixel = 0
+	Frame3.ZIndex = 2147483647
+	Instance.new("UICorner", Frame3).CornerRadius = UDim.new(0, 14)
+
+	local TextLabel2 = Instance.new("TextLabel", Frame3)
+
+	TextLabel2.Size = UDim2.new(0, 130, 1, 0)
+	TextLabel2.Position = UDim2.new(0, 16, 0, 0)
+	TextLabel2.BackgroundTransparency = 1
+	TextLabel2.Text = "0.00"
+	TextLabel2.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TextLabel2.TextStrokeTransparency = 0.7
+	TextLabel2.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	TextLabel2.Font = Enum.Font.LuckiestGuy
+	TextLabel2.TextSize = 38
+	TextLabel2.TextXAlignment = Enum.TextXAlignment.Left
+	TextLabel2.ZIndex = 2147483647
+
+	local TextLabel3 = Instance.new("TextLabel", Frame3)
+
+	TextLabel3.Size = UDim2.new(0, 130, 1, 0)
+	TextLabel3.Position = UDim2.new(1, -146, 0, 0)
+	TextLabel3.BackgroundTransparency = 1
+	TextLabel3.Text = "0.00"
+	TextLabel3.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TextLabel3.TextStrokeTransparency = 0.7
+	TextLabel3.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	TextLabel3.Font = Enum.Font.LuckiestGuy
+	TextLabel3.TextSize = 38
+	TextLabel3.TextXAlignment = Enum.TextXAlignment.Right
+	TextLabel3.ZIndex = 2147483647
+
+	local TextLabel4 = Instance.new("TextLabel", Frame3)
+
+	TextLabel4.Size = UDim2.new(0, 100, 0, 32)
+	TextLabel4.Position = UDim2.new(0.5, -50, 0.5, -16)
+	TextLabel4.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	TextLabel4.BackgroundTransparency = 0.75
+	TextLabel4.Text = "+0.00"
+	TextLabel4.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TextLabel4.Font = Enum.Font.GothamBlack
+	TextLabel4.TextSize = 20
+	TextLabel4.ZIndex = 2147483647
+	Instance.new("UICorner", TextLabel4).CornerRadius = UDim.new(0, 16)
+
+	local n9 = 0
+	local n10 = 0
+
+	v29 = function(p60)
+		local v282 = math.abs(p60)
+
+		if v282 >= 1000000 then
+			return string.format("%.2fM", p60 / 1000000)
+		end
+
+		if v282 >= 1000 then
+			return string.format("%.2fK", p60 / 1000)
+		end
+
+		return string.format("%.2f", p60)
+	end
+	v30 = function()
+		TextLabel2.Text = v29(n9)
+		TextLabel3.Text = v29(n10)
+
+		local v283 = n9 - n10
+
+		if v283 < 0 then
+			TextLabel4.Text = v29(v283)
+			TextLabel4.TextColor3 = Color3.fromRGB(180, 255, 180)
+			Frame3.BackgroundColor3 = Color3.fromRGB(46, 160, 67)
+			TextLabel.Text = "WIN"
+			TextLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
+		elseif v283 > 0 then
+			TextLabel4.Text = "+" .. v29(v283)
+			TextLabel4.TextColor3 = Color3.fromRGB(255, 180, 180)
+			Frame3.BackgroundColor3 = Color3.fromRGB(190, 45, 45)
+			TextLabel.Text = "LOSE"
+			TextLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
+		else
+			TextLabel4.Text = "+0.00"
+			TextLabel4.TextColor3 = Color3.fromRGB(255, 255, 255)
+			Frame3.BackgroundColor3 = Color3.fromRGB(110, 110, 125)
+
+			if u19 then
+				TextLabel.Text = "FAIR"
+				TextLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+			else
+				TextLabel.Text = "LOADING"
+				TextLabel.TextColor3 = Color3.fromRGB(255, 220, 120)
+			end
+		end
+	end
+
+	local connection
+
+	local function v285()
+		if connection then
+			pcall(function()
+				connection:Disconnect()
+			end)
+			connection = nil
+		end
+
+		t1.ActiveTween = nil
+	end
+
+	v31 = function(p61, p62, p63)
+		if not v13() then
+			return
+		end
+
+		p63 = p63 or 0.25
+		v285()
+
+		local v286 = n9
+		local v287 = n10
+		local now = os.clock()
+
+		connection = RunService.Heartbeat:Connect(function()
+			if not v13() or not Frame2.Parent then
+				v285()
+
+				return
+			end
+
+			local v289 = math.min((os.clock() - now) / p63, 1)
+			local v290 = 1 - (1 - v289) * (1 - v289)
+
+			n9 = v286 + (p61 - v286) * v290
+			n10 = v287 + (p62 - v287) * v290
+			v30()
+
+			if v290 >= 1 then
+				v285()
+				n9 = p61
+				n10 = p62
+				v30()
+			end
+		end)
+		t1.ActiveTween = connection
+	end
+	v32 = function()
+		t1.Motion.Open(Frame2)
+		Frame.Visible = true
+	end
+	v33 = function()
+		v285()
+		t1.Motion.Close(Frame2)
+		Frame.Visible = false
+		n9 = 0
+		n10 = 0
+		v30()
+	end
+
+	local function v291(p64, p65)
+		while p64 and p64 ~= p65 do
+			if p64:IsA("GuiObject") and not p64.Visible then
+				return false
+			end
+
+			p64 = p64.Parent
+		end
+
+		return p64 == p65
+	end
+	local function v292(p66)
+		local descendants = p66:GetDescendants()
+		local t19 = {}
+
+		local function v295(p67)
+			local v296 = t19[p67]
+
+			if v296 ~= nil then
+				return v296
+			end
+
+			local t20 = {}
+			local v298
+
+			while true do
+				local v299 = p67 and p67 ~= p66
+
+				v298 = true
+
+				if v299 then
+					v298 = t19[p67]
+
+					if v298 == nil then
+						table.insert(t20, p67)
+
+						if p67:IsA("GuiObject") and not p67.Visible then
+							v298 = false
+
+							break
+						end
+
+						p67 = p67.Parent
+
+						continue
+					end
+				end
+
+				break
+			end
+
+			if p67 == nil then
+				v298 = false
+			end
+
+			for _, v in ipairs(t20) do
+				t19[v] = v298
+			end
+
+			return v298
+		end
+
+		local t21 = {}
+		local n11 = 17
+
+		for _, descendant in ipairs(descendants) do
+			if (descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox")) and descendant.Name ~= "MM2InvValue" and v295(descendant) then
+				local Text = descendant.Text
+
+				if type(Text) == "string" and #Text > 0 then
+					local AbsolutePosition = descendant.AbsolutePosition
+					local AbsoluteSize = descendant.AbsoluteSize
+
+					if AbsoluteSize.X >= 1 and AbsoluteSize.Y >= 1 then
+						table.insert(t21, {
+							obj = descendant,
+							text = Text,
+							norm = Text:lower():gsub("^%s+", ""):gsub("%s+$", ""),
+							x = AbsolutePosition.X,
+							y = AbsolutePosition.Y
+						})
+						n11 = (n11 * 131 + #Text + math.floor(AbsolutePosition.X + 0.5) * 3 + math.floor(AbsolutePosition.Y + 0.5) * 5 + math.floor(AbsoluteSize.X + 0.5) * 7 + math.floor(AbsoluteSize.Y + 0.5) * 11) % 2147483647
+
+						for i = 1, #Text do
+							n11 = (n11 * 33 + string.byte(Text, i)) % 2147483647
+						end
+					end
+				end
+			end
+		end
+
+		return {
+			descendants = descendants,
+			texts = t21,
+			isVisible = v295,
+			signature = n11
+		}
+	end
+	local function v310(p68)
+		if not p68 then
+			return nil
+		end
+
+		local v311 = tostring(p68):lower():gsub("^%s+", ""):gsub("%s+$", "")
+
+		return v23(v311:match("^x%s*(%d+)$") or v311:match("^(%d+)%s*x$") or v311:match("^×%s*(%d+)$") or v311:match("^%((%d+)%)$") or v311:match("^%[(%d+)%]$") or v311:match("^(%d+)$") or v311:match("x%s*(%d+)") or v311:match("×%s*(%d+)"))
+	end
+	local function v312(p69)
+		if not p69 then
+			return false
+		end
+
+		local v313 = tostring(p69):lower():gsub("^%s+", ""):gsub("%s+$", "")
+
+		return v313 == "chroma" or v313 == "c."
+	end
+
+	v34 = function(p70)
+		local ok, result = pcall(function()
+			return tostring(p70.Text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+		end)
+
+		return ok and result or ""
+	end
+	u35 = nil
+	obj = nil
+	obj2 = nil
+	v38 = function(p71, p72, p73)
+		if not p71 or not p72 then
+			return false
+		end
+
+		local ok, result = pcall(function()
+			local AbsolutePosition = p71.AbsolutePosition
+			local AbsoluteSize = p71.AbsoluteSize
+			local AbsoluteSize2 = ScreenGui.AbsoluteSize
+			local v321 = v34(p71)
+			local v322 = v321 == p73 or p73 == "your offer" and (v321 == "your items" or v321 == "you offer" or v321 == "ваш оффер" or v321 == "ваши предметы") or p73 == "their offer" and (v321 == "their items" or v321 == "partner offer" or v321 == "их оффер" or v321 == "предметы партнёра")
+			local v323 = AbsolutePosition.X + AbsoluteSize.X > 0 and AbsolutePosition.Y + AbsoluteSize.Y > 0 and AbsolutePosition.X < AbsoluteSize2.X and AbsolutePosition.Y < AbsoluteSize2.Y
+
+			return p72.Parent ~= nil and p72.Enabled and p71.Parent ~= nil and v291(p71, p72) and v322 and v323
+		end)
+
+		return ok and result
+	end
+	v39 = function(p74, p75, p76)
+		if p74 == u35 then
+			local v324 = p75 == "your offer" and obj or p75 == "their offer" and obj2 or nil
+
+			if v38(v324, p74, p75) then
+				return v324
+			end
+		end
+
+		p76 = p76 or v292(p74)
+
+		for _, text in ipairs(p76.texts) do
+			local norm = text.norm
+
+			if norm == p75 or p75 == "your offer" and (norm == "your items" or norm == "you offer" or norm == "ваш оффер" or norm == "ваши предметы") or p75 == "their offer" and (norm == "their items" or norm == "partner offer" or norm == "их оффер" or norm == "предметы партнёра") then
+				if p75 == "your offer" then
+					obj = text.obj
+				end
+
+				if p75 == "their offer" then
+					obj2 = text.obj
+				end
+
+				return text.obj
+			end
+		end
+
+		return nil
+	end
+	v40 = function()
+		u35 = nil
+		obj = nil
+		obj2 = nil
+	end
+	v41 = function()
+		if u35 then
+			local v328 = u35
+			local ok, result = pcall(function()
+				return v328.Parent ~= nil and v328.Enabled
+			end)
+
+			if ok and result and v38(obj, v328, "your offer") and v38(obj2, v328, "their offer") then
+				return v328, nil
+			end
+
+			v40()
+		end
+
+		for _, child in ipairs(PlayerGui:GetChildren()) do
+			if child:IsA("ScreenGui") and child ~= ScreenGui and child.Enabled then
+				local v333 = v292(child)
+				local obj3
+				local obj4
+
+				for _, text in ipairs(v333.texts) do
+					if text.norm == "your offer" then
+						obj3 = text.obj
+					elseif text.norm == "their offer" then
+						obj4 = text.obj
+					end
+
+					if obj3 and obj4 then
+						break
+					end
+				end
+
+				if not (obj3 and obj4) then
+					continue
+				end
+
+				u35 = child
+				obj = obj3
+				obj2 = obj4
+
+				return child, v333
+			end
+		end
+
+		return nil, nil
+	end
+
+	local n12 = 6
+	local n13 = 0
+
+	local function v340(p77)
+		if p77.BackgroundTransparency < 0.35 then
+			return true
+		end
+
+		if p77:IsA("ImageLabel") or p77:IsA("ImageButton") then
+			return p77.Image ~= "" and p77.ImageTransparency < 0.35
+		end
+
+		return false
+	end
+	local function v341(p78, p79)
+		local AbsoluteSize = ScreenGui.AbsoluteSize
+
+		if AbsoluteSize.X < 1 or AbsoluteSize.Y < 1 then
+			return nil
+		end
+
+		p79 = p79 or v292(p78)
+
+		local v343 = AbsoluteSize.X * AbsoluteSize.Y
+		local n14 = 0
+		local v345
+
+		for _, descendant in ipairs(p79.descendants) do
+			if descendant:IsA("GuiObject") and v340(descendant) and p79.isVisible(descendant) then
+				local AbsoluteSize2 = descendant.AbsoluteSize
+				local Y = descendant.AbsolutePosition.Y
+				local v350 = AbsoluteSize2.X * AbsoluteSize2.Y
+
+				if v350 > v343 * 0.1 and AbsoluteSize2.X < AbsoluteSize.X * 0.98 and AbsoluteSize2.Y < AbsoluteSize.Y * 0.98 and Y > 0 and Y < AbsoluteSize.Y and v350 > n14 then
+					n14 = v350
+					v345 = Y
+				end
+			end
+		end
+
+		return v345
+	end
+	local function v351(p80, p81, p82)
+		local v352 = p81.AbsolutePosition.Y + p81.AbsoluteSize.Y * 0.5
+		local v353 = v39(p80, "their offer", p82)
+		local v354
+
+		if v353 then
+			v354 = v353.AbsolutePosition.Y + v353.AbsoluteSize.Y * 0.5 - v352
+
+			local v355
+
+			if not (v354 > 40) then
+				v354 = v355
+			end
+		end
+
+		if not v354 and p81.AbsoluteSize.Y > 8 then
+			v354 = p81.AbsoluteSize.Y
+		end
+
+		if v354 then
+			return v352 + v354 * 0.12, v352, v354
+		end
+
+		return nil, v352, nil
+	end
+
+	u42 = nil
+	v43 = function(p83, p84)
+		return (pcall(function()
+			local v356 = v39(p83, "your offer", p84)
+
+			if not v356 then
+				return
+			end
+
+			local AbsolutePosition = v356.AbsolutePosition
+			local AbsoluteSize = v356.AbsoluteSize
+			local AbsoluteSize2 = ScreenGui.AbsoluteSize
+			local v361 = math.floor(AbsolutePosition.X + 0.5)
+			local v362 = math.floor(AbsolutePosition.Y + 0.5)
+			local v363 = math.floor(AbsoluteSize.X + 0.5)
+			local v364 = math.floor(AbsoluteSize.Y + 0.5)
+			local v365 = math.floor(AbsoluteSize2.X + 0.5)
+			local v366 = AbsoluteSize2.Y + 0.5
+			local t22 = {
+				v361,
+				v362,
+				v363,
+				v364,
+				v365
+			}
+
+			do
+				local values = table.pack(math.floor(v366))
+
+				table.move(values, 1, values.n, 6, t22)
+			end
+
+			local v368 = table.concat(t22, ":")
+
+			if v368 == u42 then
+				return
+			end
+
+			local v369, v370, v371 = v351(p83, v356, p84)
+			local v372 = v341(p83, p84)
+
+			if not (v372 and (not v369 or math.abs(v372 - v369) <= 35)) then
+				v372 = v369
+			end
+
+			if not v372 then
+				return
+			end
+
+			local v373 = v372 + n12 + n13
+			local v374
+
+			if v370 and v371 then
+				v374 = math.min(v373, v370 + v371 * 0.28 - 14)
+			else
+				v374 = v373
+			end
+
+			Frame2.Position = UDim2.fromOffset(math.floor((AbsoluteSize2.X > 0 and AbsoluteSize2.X * 0.5 or AbsolutePosition.X + AbsoluteSize.X * 0.5) + 0.5), math.floor(v374 + 0.5))
+			u42 = v368
+		end))
+	end
+
+	local function v375(p85, p86, p87, p88)
+		local v376 = p88 or v292(p85)
+
+		p86 = p86 or -math.huge
+		p87 = p87 or math.huge
+
+		local t23 = {}
+
+		for _, text in ipairs(v376.texts) do
+			if text.x >= p86 and text.x <= p87 then
+				table.insert(t23, text)
+			end
+		end
+
+		local t24 = {}
+
+		local function v381(p89)
+			local Parent = p89.obj.Parent
+			local v383 = t24[Parent]
+
+			if v383 ~= nil then
+				return v383 or nil
+			end
+
+			local v384
+			local Parent2 = Parent
+
+			while true do
+				if Parent2 and Parent2 ~= p85 then
+					if not Parent2:IsA("GuiObject") then
+						Parent2 = Parent2.Parent
+
+						continue
+					end
+
+					local AbsoluteSize = Parent2.AbsoluteSize
+
+					if not (AbsoluteSize.X > 220 or AbsoluteSize.Y > 220) then
+						if AbsoluteSize.X >= 25 and AbsoluteSize.Y >= 25 then
+							v384 = Parent2
+						end
+
+						Parent2 = Parent2.Parent
+
+						continue
+					end
+				end
+
+				break
+			end
+
+			t24[Parent] = v384 or false
+
+			return v384
+		end
+
+		local t25 = {}
+		local t26 = {}
+		local t27 = {}
+
+		for _, v in ipairs(t23) do
+			local v392 = v381(v)
+
+			if v392 then
+				local v393 = t25[v392]
+
+				if not v393 then
+					v393 = {}
+					t25[v392] = v393
+					table.insert(t26, v392)
+				end
+
+				table.insert(v393, v)
+			else
+				table.insert(t27, v)
+			end
+		end
+
+		local t28 = {}
+
+		local function v395(p90)
+			local v396 = p90:lower()
+
+			return v23(v396:match("%s*[x×]%s*(%d+)$") or v396:match("%s*%((%d+)%)$") or v396:match("%s*%[(%d+)%]$"))
+		end
+		local function v397(p91)
+			return p91 == "" or p91 == "chroma" or p91 == "c." or p91 == "fx"
+		end
+		local function v398(p92, p93, p94, p95)
+			local v399 = v395(p92.text)
+
+			if not (v399 and v399 > p93) then
+				v399 = p93
+			end
+
+			local v400 = math.max(1, math.min(v399, 999))
+			local v401 = v131(p95, p92)
+			local v402 = v170(p92.text, p94, v401)
+			local v403 = v401.zeroValueVariant == true
+
+			if v402 <= 0 and not v403 and v24(p92.text) ~= "sunset" then
+				v402 = math.max(v170(p92.text, false, v401), v170(p92.text, true, v401))
+			end
+
+			if v402 <= 0 and not v403 then
+				return
+			end
+
+			table.insert(t28, {
+				name = v24(p92.text),
+				display = p92.text,
+				val = v402,
+				qty = v400,
+				total = v402 * v400,
+				x = p92.x,
+				y = p92.y,
+				obj = p92.obj,
+				card = p95,
+				context = v401,
+				remoteId = v401.remoteId,
+				remoteCategory = v401.remoteCategory
+			})
+		end
+
+		for _, v in ipairs(t26) do
+			local v406 = t25[v]
+			local v407
+
+			for _, v2 in ipairs(v406) do
+				local v410 = v131(v, v2)
+
+				if not v397(v24(v2.text)) and (v410.zeroValueVariant == true or v170(v2.text, false, v410) > 0 or v170(v2.text, true, v410) > 0) then
+					v407 = v2
+
+					break
+				end
+
+				v407 = nil
+			end
+
+			if v407 then
+				local v411 = v25(v24(v407.text))
+				local n15 = 1
+
+				for _, v2 in ipairs(v406) do
+					if v2 ~= v407 then
+						local v415 = v310(v2.text)
+
+						if v415 and v415 > n15 then
+							n15 = v415
+						elseif v312(v2.text) then
+							v411 = true
+						end
+					end
+				end
+
+				v398(v407, n15, v411, v)
+			end
+		end
+
+		local t29 = {}
+
+		for i, v in ipairs(t27) do
+			if not t29[i] then
+				local v419 = v24(v.text)
+				local v420 = v131(nil, v)
+
+				if not v397(v419) and (v420.zeroValueVariant == true or v170(v.text, false, v420) > 0 or v170(v.text, true, v420) > 0) then
+					t29[i] = true
+
+					local v421 = v25(v419)
+					local n16 = 1
+
+					for i2, v2 in ipairs(t27) do
+						if i2 ~= i and not t29[i2] then
+							local v425 = math.abs(v2.y - v.y)
+							local v426 = math.abs(v2.x - v.x)
+
+							if v425 <= 110 and v426 <= 90 then
+								local v427 = v310(v2.text)
+
+								if v427 and v427 > n16 then
+									t29[i2] = true
+									n16 = v427
+								elseif v312(v2.text) then
+									t29[i2] = true
+									v421 = true
+								end
+							end
+						end
+					end
+
+					v398(v, n16, v421, nil)
+				end
+			end
+		end
+
+		return t28
+	end
+
+	local t30 = {
+		gui = nil,
+		snapshot = nil,
+		items = nil,
+		signature = nil,
+		valueVersion = -1,
+		at = 0,
+		fullAt = 0
+	}
+
+	v44 = function()
+		t30.gui = nil
+		t30.snapshot = nil
+		t30.items = nil
+		t30.signature = nil
+		t30.valueVersion = -1
+		t30.at = 0
+		t30.fullAt = 0
+	end
+	v45 = function(p96, p97)
+		local v429 = p97 or v292(p96)
+		local now = os.clock()
+		local v431 = t30.gui == p96 and t30.items ~= nil and t30.signature == v429.signature and t30.valueVersion == valueVersion and now - t30.fullAt < n2
+		local fullAt = t30.fullAt
+		local items
+
+		if v431 then
+			items = t30.items
+		else
+			items = v375(p96, -math.huge, math.huge, v429)
+			fullAt = now
+		end
+
+		t30.gui = p96
+		t30.snapshot = v429
+		t30.items = items
+		t30.signature = v429.signature
+		t30.valueVersion = valueVersion
+		t30.at = now
+		t30.fullAt = fullAt
+
+		return v429, items
+	end
+	v46 = function(p98, p99)
+		local v434 = p99 or 0
+
+		if t30.gui == p98 and t30.snapshot and t30.items and os.clock() - t30.at <= v434 and t30.valueVersion == valueVersion then
+			return t30.snapshot, t30.items
+		end
+
+		return v45(p98, nil)
+	end
+end
+
+local function v435(p100, p101, p102)
+	local ok, result, result2 = pcall(function()
+		if not p101 or not p102 then
+			local v439, v440 = v46(p100, 0.45)
+
+			p101 = v439
+			p102 = v440
+		end
+
+		local v441 = v39(p100, "your offer", p101)
+		local v442 = v39(p100, "their offer", p101)
+		local huge = math.huge
+
+		for _, text in ipairs(p101.texts) do
+			local norm = text.norm or ""
+
+			if norm == "accept" or norm:find("accept", 1, true) or norm:find("принять", 1, true) or norm:find("подтверд", 1, true) then
+				huge = math.min(huge, text.y)
+			end
+		end
+
+		if not v441 or not v442 then
+			return 0, 0
+		end
+
+		local X = v441.AbsolutePosition.X
+		local Y = v441.AbsolutePosition.Y
+		local X2 = v442.AbsolutePosition.X
+		local Y2 = v442.AbsolutePosition.Y
+		local X3 = v441.AbsoluteSize.X
+		local X4 = v442.AbsoluteSize.X
+		local v453 = Y + v441.AbsoluteSize.Y
+		local v454 = Y2 + v442.AbsoluteSize.Y
+		local v455 = math.abs(Y - Y2) < 80
+		local v456 = X + X3 / 2
+		local v457 = X2 + X4 / 2
+		local v458 = (v456 + v457) / 2
+		local v459 = v456 < v457
+
+		if huge < v454 then
+			huge = math.huge
+		end
+
+		local v460 = math.min(X, X2) - 40
+		local v461 = math.max(X + X3, X2 + X4) + 500
+		local n17 = 0
+		local n18 = 0
+
+		for _, v in ipairs(p102) do
+			if v.x >= v460 and v.x <= v461 then
+				local v466
+
+				if v455 then
+					if v459 then
+						v466 = v.x < v458 and "my" or "their"
+					else
+						v466 = v.x < v458 and "their" or "my"
+					end
+				elseif v.y >= v453 - 15 and v.y < Y2 + 5 then
+					v466 = "my"
+				else
+					local v467 = v.y >= v454 - 15 and (huge == math.huge or v.y < huge + 40)
+
+					v466 = nil
+
+					if v467 then
+						v466 = "their"
+					end
+				end
+
+				if v466 == "my" then
+					n17 += v.total
+				elseif v466 == "their" then
+					n18 += v.total
+				end
+			end
+		end
+
+		return n17, n18
+	end)
+
+	if ok and result and result2 then
+		return result, result2
+	end
+
+	return 0, 0
+end
+
+local n19 = 0
+local obj3 = setmetatable({}, {
+	__mode = "k"
+})
+
+local function v470()
+	for k in pairs(obj3) do
+		if k.Parent then
+			k.Visible = false
+		else
+			obj3[k] = nil
+		end
+	end
+end
+local function v472(p103, p104, p105, p106)
+	if not p103 or not u19 then
+		return
+	end
+
+	local now = os.clock()
+
+	if not p106 and now - n19 < n1 then
+		return
+	end
+
+	n19 = now
+	pcall(function()
+		if not p104 or not p105 then
+			local v474, v475 = v46(p103, 0.45)
+
+			p104 = v474
+			p105 = v475
+		end
+
+		if not v39(p103, "your offer", p104) then
+			return
+		end
+
+		local t31 = {}
+
+		for _, v in ipairs(p105) do
+			local card = v.card or v.obj
+			local MM2InvValue = card:FindFirstChild("MM2InvValue")
+
+			if MM2InvValue and not MM2InvValue:IsA("TextLabel") then
+				MM2InvValue = nil
+			end
+
+			if not MM2InvValue then
+				MM2InvValue = Instance.new("TextLabel")
+				MM2InvValue.Name = "MM2InvValue"
+				MM2InvValue.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+				MM2InvValue.BackgroundTransparency = 0.15
+				MM2InvValue.TextColor3 = Color3.fromRGB(255, 255, 255)
+				MM2InvValue.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+				MM2InvValue.TextStrokeTransparency = 0.1
+				MM2InvValue.Font = Enum.Font.GothamBlack
+				MM2InvValue.TextSize = 11
+				MM2InvValue.TextXAlignment = Enum.TextXAlignment.Center
+				MM2InvValue.TextYAlignment = Enum.TextYAlignment.Center
+				MM2InvValue.ZIndex = 50
+
+				if v.card then
+					MM2InvValue.Size = UDim2.new(0.9, 0, 0, 13)
+					MM2InvValue.AnchorPoint = Vector2.new(0.5, 1)
+					MM2InvValue.Position = UDim2.new(0.5, 0, 1, 0)
+				else
+					MM2InvValue.Size = UDim2.new(1, 0, 0, 12)
+					MM2InvValue.AnchorPoint = Vector2.new(0.5, 1)
+					MM2InvValue.Position = UDim2.new(0.5, 0, 1, 1)
+				end
+
+				MM2InvValue.Parent = card
+				Instance.new("UICorner", MM2InvValue).CornerRadius = UDim.new(0, 4)
+			end
+
+			local v481 = v29(v.total)
+
+			if MM2InvValue.Text ~= v481 then
+				MM2InvValue.Text = v481
+			end
+
+			if not MM2InvValue.Visible then
+				MM2InvValue.Visible = true
+			end
+
+			t31[MM2InvValue] = true
+			obj3[MM2InvValue] = true
+		end
+
+		for k in pairs(obj3) do
+			if not k.Parent then
+				obj3[k] = nil
+			elseif not t31[k] then
+				k.Visible = false
+			end
+		end
+	end)
+end
+
+local t32 = {}
+local t33 = {}
+local u485 = false
+local u486 = false
+local u487
+
+local function v488(p107, p108)
+	if p107 == nil or p107 == "" then
+		p108 = p108 or "N/A"
+
+		return p108
+	end
+
+	if type(p107) ~= "table" then
+		return tostring(p107)
+	end
+
+	local v489 = table.concat(p107, ", ")
+
+	return v489 ~= "" and v489 or p108 or "Нет данных"
+end
+local function v490(p109)
+	if p109.isHard ~= nil then
+		return p109.isHard == true
+	end
+
+	local v491 = tostring(p109.stability or ""):lower()
+	local v492 = tostring(p109.flippability or ""):lower()
+	local v493 = tonumber(p109.demand)
+
+	if v491:find("underpaid", 1, true) or v491:find("fluctuating", 1, true) then
+		return true
+	end
+
+	if v492:find("hard", 1, true) and not v492:find("highly flippable", 1, true) then
+		return true
+	end
+
+	return v493 ~= nil and v493 <= 2
+end
+local function v494(p110)
+	local t34 = {}
+	local t35 = {}
+
+	local function v497(p111, p112, p113)
+		local v498 = tostring(p112 or ""):lower()
+		local v499 = tostring(p111.id or p111.Id or ""):lower()
+		local v500 = tostring(p111.rarity or p111.class or p111.category or ""):lower()
+		local v501 = tostring(p111.origin or ""):lower()
+		local v502 = tonumber(p111.demand) or 0
+		local v503 = tonumber(p111.chanceOfRising or p111.risingChance) or 0
+		local v504 = tostring(p111.type or p111.weaponType or "")
+
+		if v498 == "black luger" or v499 == "black-luger-godly" then
+			return true
+		end
+
+		if v498 == "batwing" and v500 == "godly" and p113 >= 1000000 then
+			return true
+		end
+
+		if p113 >= 1000000 and v501:find("secret mm2 item", 1, true) and v502 >= 10 and v503 >= 100 and v504 == "" then
+			return true
+		end
+
+		return false
+	end
+
+	p110 = p110 or {}
+
+	for _, v in ipairs(p110) do
+		if type(v) == "table" then
+			local name = v.name or v.Name or v.item or v.Item
+			local value = tonumber(v.value or v.Value or v.price or v.Price)
+
+			if type(name) == "string" and value and not v497(v, name, value) then
+				local t36 = {}
+
+				for k, v2 in pairs(v) do
+					t36[k] = v2
+				end
+
+				t36.name = name
+				t36.value = value
+				t36.rarity = t36.rarity or t36.class or t36.category
+				t36.type = t36.type or t36.weaponType
+				t36.image = t36.image or t36.imageUrl or t36.icon or t36.thumbnail
+				t36.isHard = v490(t36)
+				table.insert(t34, t36)
+
+				local v512 = v24(name)
+
+				t35[v512] = t35[v512] or {}
+				table.insert(t35[v512], t36)
+
+				if type(t36.aliases) == "table" then
+					for _, aliase in ipairs(t36.aliases) do
+						local v515 = v24(aliase)
+
+						t35[v515] = t35[v515] or {}
+						table.insert(t35[v515], t36)
+					end
+				end
+			end
+		end
+	end
+
+	table.sort(t34, function(p114, p115)
+		if p114.value == p115.value then
+			return p114.name < p115.name
+		end
+
+		return p114.value > p115.value
+	end)
+	t32 = t34
+	t33 = t35
+	u485 = #t34 > 0
+end
+local function v516()
+	local t37 = {}
+	local t38 = {}
+
+	for k, v in pairs(t2) do
+		if not t38[k] then
+			t38[k] = true
+			table.insert(t37, {
+				name = k,
+				value = v,
+				source = "raw values"
+			})
+		end
+	end
+
+	for k, v in pairs(t3) do
+		if not t38[k] then
+			t38[k] = true
+			table.insert(t37, {
+				name = k,
+				value = v,
+				rarity = "Chroma",
+				source = "raw values"
+			})
+		end
+	end
+
+	v494(t37)
+end
+local function v523(p116)
+	local ok, result = pcall(function()
+		return HttpService:JSONDecode(p116)
+	end)
+
+	if not ok or type(result) ~= "table" then
+		return nil
+	end
+
+	local items = result.items or result.Items or result
+
+	if type(items) == "table" then
+		return items
+	end
+
+	return nil
+end
+local function v527()
+	if u486 then
+		return false
+	end
+
+	u486 = true
+
+	local u528 = false
+	local ok, result = pcall(function()
+		local v531 = v21("https://raw.githubusercontent.com/spotyfyy6t-spec/mm2value/refs/heads/main/hardvaluesmm2")
+
+		if v531 and v531 ~= u487 then
+			local v532 = v523(v531)
+
+			if v532 and #v532 > 0 then
+				v494(v532)
+				u487 = v531
+				u528 = true
+
+				return
+			end
+		elseif v531 and u485 then
+			u528 = true
+
+			return
+		end
+
+		if not u485 then
+			v516()
+		end
+
+		u528 = u485
+	end)
+
+	u486 = false
+
+	if not ok then
+		warn("[MM2 Catalog]", result)
+	end
+
+	return u528
+end
+local function v533(p117, p118)
+	local v534 = t33[v24(p117)]
+
+	if not v534 or #v534 == 0 then
+		return nil
+	end
+
+	if #v534 == 1 then
+		return v534[1]
+	end
+
+	local kind = type(p118) == "table" and p118.kind or nil
+	local rarity = type(p118) == "table" and p118.rarity or nil
+	local v537 = v534[1]
+	local v538 = -math.huge
+
+	for _, v in ipairs(v534) do
+		local pos
+
+		if kind then
+			pos = tostring(v.type or ""):lower():find(kind, 1, true)
+		else
+			pos = kind
+		end
+
+		local n20 = 0
+
+		if pos then
+			n20 = 10
+		end
+
+		local pos2
+
+		if rarity then
+			pos2 = tostring(v.rarity or ""):lower():find(rarity, 1, true)
+		else
+			pos2 = rarity
+		end
+
+		if pos2 then
+			n20 += 8
+		end
+
+		if v538 < n20 then
+			v538 = n20
+			v537 = v
+		end
+	end
+
+	return v537
+end
+
+local TextButton = Instance.new("TextButton")
+
+TextButton.Name = "MM2_CatalogButton"
+TextButton.AnchorPoint = Vector2.new(1, 0)
+TextButton.Position = UDim2.new(1, -16, 0, 68)
+TextButton.Size = UDim2.fromOffset(48, 48)
+TextButton.BackgroundColor3 = Color3.fromRGB(28, 30, 38)
+TextButton.BorderSizePixel = 0
+TextButton.Text = "&"
+TextButton.TextColor3 = Color3.fromRGB(126, 195, 255)
+TextButton.Font = Enum.Font.GothamBlack
+TextButton.TextSize = 25
+TextButton.ZIndex = 2147483647
+TextButton.Parent = ScreenGui
+Instance.new("UICorner", TextButton).CornerRadius = UDim.new(0, 13)
+
+local UIStroke = Instance.new("UIStroke", TextButton)
+
+UIStroke.Color = Color3.fromRGB(80, 145, 215)
+UIStroke.Transparency = 0.25
+UIStroke.Thickness = 1.4
+
+local UIGradient = Instance.new("UIGradient", TextButton)
+
+UIGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(43, 47, 61)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 20, 27))
+})
+UIGradient.Rotation = 90
+
+local Frame3 = Instance.new("Frame")
+
+Frame3.Name = "MM2_PremiumCatalog"
+Frame3.AnchorPoint = Vector2.new(0.5, 0.5)
+Frame3.Position = UDim2.fromScale(0.5, 0.5)
+Frame3.Size = UDim2.fromOffset(780, 610)
+Frame3.BackgroundColor3 = Color3.fromRGB(13, 15, 20)
+Frame3.BorderSizePixel = 0
+Frame3.Visible = false
+Frame3.Active = true
+Frame3.Draggable = true
+Frame3.ZIndex = 2147483647
+Frame3.Parent = ScreenGui
+Instance.new("UICorner", Frame3).CornerRadius = UDim.new(0, 18)
+v15(task.spawn(function()
+	if not Frame3 or not Frame3.Parent then
+		return
+	end
+
+	Frame3.ClipsDescendants = true
+
+	local UIGradient2 = Instance.new("UIGradient", Frame3)
+
+	UIGradient2.Name = "CosmicGradient"
+
+	local t39 = {
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 31, 56)),
+		ColorSequenceKeypoint.new(0.45, Color3.fromRGB(10, 14, 27)),
+		ColorSequenceKeypoint.new(0.72, Color3.fromRGB(28, 17, 49))
+	}
+
+	do
+		local values = table.pack(ColorSequenceKeypoint.new(1, Color3.fromRGB(11, 21, 38)))
+
+		table.move(values, 1, values.n, 4, t39)
+	end
+
+	UIGradient2.Color = ColorSequence.new(t39)
+	UIGradient2.Rotation = 125
+
+	local Frame4 = Instance.new("Frame", Frame3)
+
+	Frame4.Name = "CosmicMotionLayer"
+	Frame4.Size = UDim2.fromScale(1, 1)
+	Frame4.BackgroundTransparency = 1
+	Frame4.BorderSizePixel = 0
+	Frame4.ClipsDescendants = true
+	Frame4.ZIndex = 2147483644
+
+	local function createFrame(p119, p120, p121)
+		local Frame5 = Instance.new("Frame", Frame4)
+
+		Frame5.AnchorPoint = Vector2.new(0.5, 0.5)
+		Frame5.Size = UDim2.fromOffset(p120, p120)
+		Frame5.Position = p121
+		Frame5.BackgroundColor3 = p119
+		Frame5.BackgroundTransparency = 0.84
+		Frame5.BorderSizePixel = 0
+		Frame5.ZIndex = 2147483644
+		Instance.new("UICorner", Frame5).CornerRadius = UDim.new(1, 0)
+
+		local UIGradient3 = Instance.new("UIGradient", Frame5)
+		local t40 = {
+			NumberSequenceKeypoint.new(0, 0.15),
+			NumberSequenceKeypoint.new(0.55, 0.72)
+		}
+
+		do
+			local values = table.pack(NumberSequenceKeypoint.new(1, 1))
+
+			table.move(values, 1, values.n, 3, t40)
+		end
+
+		UIGradient3.Transparency = NumberSequence.new(t40)
+
+		return Frame5
+	end
+
+	local v562 = createFrame(Color3.fromRGB(73, 123, 255), 360, UDim2.fromScale(0.16, 0.28))
+	local v563 = createFrame(Color3.fromRGB(177, 75, 255), 300, UDim2.fromScale(0.86, 0.72))
+	local v564 = createFrame(Color3.fromRGB(48, 218, 194), 220, UDim2.fromScale(0.62, 0.06))
+	local t41 = {}
+
+	for i = 1, 42 do
+		local Frame5 = Instance.new("Frame", Frame4)
+		local v568 = i % 11 == 0 and 4 or i % 4 == 0 and 2 or 1
+
+		Frame5.Size = UDim2.fromOffset(v568, v568)
+		Frame5.Position = UDim2.fromScale(math.random(), math.random())
+		Frame5.BackgroundColor3 = i % 6 == 0 and Color3.fromRGB(155, 201, 255) or Color3.fromRGB(246, 243, 255)
+		Frame5.BackgroundTransparency = 0.18 + math.random() * 0.42
+		Frame5.BorderSizePixel = 0
+		Frame5.ZIndex = 2147483645
+		Instance.new("UICorner", Frame5).CornerRadius = UDim.new(1, 0)
+		t41[i] = {
+			object = Frame5,
+			speed = 0.006 + math.random() * 0.016,
+			phase = math.random() * 3.1415926535897931 * 2,
+			twinkle = 0.7 + math.random() * 1.4
+		}
+	end
+
+	v14(RunService.RenderStepped:Connect(function(dt)
+		if not Frame3.Visible or not v13() then
+			return
+		end
+
+		local now = os.clock()
+
+		UIGradient2.Rotation = 118 + math.sin(now * 0.12) * 18
+		v562.Position = UDim2.fromScale(0.16 + math.sin(now * 0.17) * 0.08, 0.27 + math.cos(now * 0.13) * 0.07)
+		v563.Position = UDim2.fromScale(0.84 + math.cos(now * 0.15) * 0.07, 0.72 + math.sin(now * 0.11) * 0.08)
+		v564.Position = UDim2.fromScale(0.6 + math.sin(now * 0.1) * 0.12, 0.08 + math.cos(now * 0.19) * 0.04)
+
+		for _, v in ipairs(t41) do
+			local object = v.object
+
+			if object.Parent then
+				local v573 = object.Position.Y.Scale - v.speed * dt
+				local v574 = object.Position.X.Scale + math.sin(now * 0.18 + v.phase) * dt * 0.0012
+
+				if v573 < -0.03 then
+					v574 = math.random()
+					v573 = 1.03
+				end
+
+				if v574 < 0 then
+					v574 = 1
+				elseif v574 > 1 then
+					v574 = 0
+				end
+
+				object.Position = UDim2.fromScale(v574, v573)
+				object.BackgroundTransparency = 0.2 + 0.42 * (0.5 + 0.5 * math.sin(now * v.twinkle + v.phase))
+			end
+		end
+	end))
+end))
+
+local UIStroke2 = Instance.new("UIStroke", Frame3)
+
+UIStroke2.Color = Color3.fromRGB(67, 76, 96)
+UIStroke2.Transparency = 0.3
+UIStroke2.Thickness = 1.2
+
+local Frame4 = Instance.new("Frame", Frame3)
+
+Frame4.Size = UDim2.new(1, 0, 0, 72)
+Frame4.BackgroundColor3 = Color3.fromRGB(18, 24, 39)
+Frame4.BackgroundTransparency = 0.08
+Frame4.BorderSizePixel = 0
+Frame4.ZIndex = 2147483647
+Instance.new("UICorner", Frame4).CornerRadius = UDim.new(0, 18)
+
+local TextLabel = Instance.new("TextLabel", Frame4)
+
+TextLabel.Size = UDim2.new(1, -210, 0, 34)
+TextLabel.Position = UDim2.fromOffset(20, 8)
+TextLabel.BackgroundTransparency = 1
+TextLabel.Text = "КАТАЛОГ ПРЕДМЕТОВ"
+TextLabel.TextColor3 = Color3.fromRGB(245, 248, 255)
+TextLabel.Font = Enum.Font.GothamBlack
+TextLabel.TextSize = 21
+TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel.ZIndex = 2147483647
+
+local TextLabel2 = Instance.new("TextLabel", Frame4)
+
+TextLabel2.Size = UDim2.new(1, -210, 0, 20)
+TextLabel2.Position = UDim2.fromOffset(21, 39)
+TextLabel2.BackgroundTransparency = 1
+TextLabel2.Text = "От дорогих к дешёвым • данные Supreme Values"
+TextLabel2.TextColor3 = Color3.fromRGB(133, 145, 166)
+TextLabel2.Font = Enum.Font.GothamMedium
+TextLabel2.TextSize = 12
+TextLabel2.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel2.ZIndex = 2147483647
+
+local TextButton2 = Instance.new("TextButton", Frame4)
+
+TextButton2.AnchorPoint = Vector2.new(1, 0)
+TextButton2.Position = UDim2.new(1, -13, 0, 12)
+TextButton2.Size = UDim2.fromOffset(38, 38)
+TextButton2.BackgroundColor3 = Color3.fromRGB(42, 45, 56)
+TextButton2.BorderSizePixel = 0
+TextButton2.Text = "×"
+TextButton2.TextColor3 = Color3.fromRGB(230, 234, 243)
+TextButton2.Font = Enum.Font.GothamBold
+TextButton2.TextSize = 22
+TextButton2.ZIndex = 2147483647
+Instance.new("UICorner", TextButton2).CornerRadius = UDim.new(0, 10)
+
+local TextBox = Instance.new("TextBox", Frame4)
+
+TextBox.AnchorPoint = Vector2.new(1, 0)
+TextBox.Position = UDim2.new(1, -61, 0, 12)
+TextBox.Size = UDim2.fromOffset(145, 38)
+TextBox.BackgroundColor3 = Color3.fromRGB(30, 33, 43)
+TextBox.BorderSizePixel = 0
+TextBox.PlaceholderText = "Поиск..."
+TextBox.Text = ""
+TextBox.TextColor3 = Color3.fromRGB(240, 243, 250)
+TextBox.PlaceholderColor3 = Color3.fromRGB(116, 126, 145)
+TextBox.Font = Enum.Font.GothamMedium
+TextBox.TextSize = 13
+TextBox.ClearTextOnFocus = false
+TextBox.ZIndex = 2147483647
+Instance.new("UICorner", TextBox).CornerRadius = UDim.new(0, 10)
+
+local ScrollingFrame = Instance.new("ScrollingFrame", Frame3)
+
+ScrollingFrame.Position = UDim2.fromOffset(12, 82)
+ScrollingFrame.Size = UDim2.new(1, -24, 1, -94)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.BorderSizePixel = 0
+ScrollingFrame.ScrollBarThickness = 5
+ScrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(82, 145, 205)
+ScrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ScrollingFrame.CanvasSize = UDim2.new()
+ScrollingFrame.ZIndex = 2147483647
+
+local UIListLayout = Instance.new("UIListLayout", ScrollingFrame)
+
+UIListLayout.Padding = UDim.new(0, 10)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+Instance.new("UIPadding", ScrollingFrame).PaddingBottom = UDim.new(0, 12)
+
+local t42 = {}
+
+local function v584(p122, p123)
+	local image = p123.image
+
+	if type(image) ~= "string" or image == "" then
+		return
+	end
+
+	if image:match("^rbxasset") or image:match("^rbxthumb") then
+		p122.Image = image
+
+		return
+	end
+
+	if not image:match("^https?://") then
+		return
+	end
+
+	if t42[image] then
+		p122.Image = t42[image]
+
+		return
+	end
+
+	if type(writefile) ~= "function" or type(getcustomasset) ~= "function" then
+		return
+	end
+
+	task.spawn(function()
+		local ok, image2 = pcall(function()
+			local v588 = v21(image)
+
+			if not v588 then
+				return nil
+			end
+
+			local v589 = image:gsub("[^%w]", "_"):sub(-72)
+			local match = image:match("%.([%a%d]+)$") or image:match("%.([%a%d]+)%?") or "png"
+
+			if match ~= "png" and match ~= "jpg" and match ~= "jpeg" and match ~= "webp" then
+				match = "png"
+			end
+
+			local v591 = "MM2Catalog_" .. v589 .. "." .. match
+
+			writefile(v591, v588)
+
+			return getcustomasset(v591)
+		end)
+
+		if ok and image2 and p122.Parent then
+			t42[image] = image2
+			p122.Image = image2
+		end
+	end)
+end
+
+local n21 = 0
+local t43 = {}
+local n22 = 48
+
+local function v595(p124)
+	if type(p124.range) == "table" then
+		local min = p124.range.min or p124.range[1]
+		local max = p124.range.max or p124.range[2]
+
+		if min and max then
+			return "[" .. v29(min) .. " - " .. v29(max) .. "]"
+		end
+	end
+
+	return v488(p124.range, "[Н/Д]")
+end
+local function v598(p125, p126)
+	local v599 = Frame3.AbsoluteSize.X > 0 and Frame3.AbsoluteSize.X < 560
+	local v600 = v599 and 220 or 170
+	local v601 = v599 and 92 or 146
+	local v602 = v599 and 112 or 174
+	local Frame5 = Instance.new("Frame", ScrollingFrame)
+
+	Frame5.Name = "ItemCard"
+	Frame5.Size = UDim2.new(1, -8, 0, v600)
+	Frame5.BackgroundColor3 = Color3.fromRGB(17, 22, 34)
+	Frame5.BorderSizePixel = 0
+	Frame5.LayoutOrder = p126
+	Frame5.Active = true
+	Frame5.ZIndex = 2147483647
+	Instance.new("UICorner", Frame5).CornerRadius = UDim.new(0, 16)
+
+	local UIGradient2 = Instance.new("UIGradient", Frame5)
+	local t44 = {
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(27, 35, 53)),
+		(ColorSequenceKeypoint.new(0.58, Color3.fromRGB(16, 21, 33)))
+	}
+
+	do
+		local values = table.pack(ColorSequenceKeypoint.new(1, Color3.fromRGB(22, 17, 36)))
+
+		table.move(values, 1, values.n, 3, t44)
+	end
+
+	UIGradient2.Color = ColorSequence.new(t44)
+	UIGradient2.Rotation = 108
+
+	local UIStroke3 = Instance.new("UIStroke", Frame5)
+
+	UIStroke3.Color = p125.isHard and Color3.fromRGB(240, 144, 84) or Color3.fromRGB(92, 128, 196)
+	UIStroke3.Transparency = 0.32
+	UIStroke3.Thickness = 1.1
+
+	local Frame6 = Instance.new("Frame", Frame5)
+
+	Frame6.Size = UDim2.new(0, 3, 1, -24)
+	Frame6.Position = UDim2.fromOffset(0, 12)
+	Frame6.BackgroundColor3 = p125.isHard and Color3.fromRGB(255, 139, 76) or Color3.fromRGB(95, 164, 255)
+	Frame6.BorderSizePixel = 0
+	Frame6.ZIndex = 2147483647
+	Instance.new("UICorner", Frame6).CornerRadius = UDim.new(1, 0)
+
+	local Frame7 = Instance.new("Frame", Frame5)
+
+	Frame7.Position = UDim2.fromOffset(10, 10)
+	Frame7.Size = UDim2.fromOffset(v601, v601)
+	Frame7.BackgroundColor3 = Color3.fromRGB(9, 13, 22)
+	Frame7.BorderSizePixel = 0
+	Frame7.ZIndex = 2147483647
+	Instance.new("UICorner", Frame7).CornerRadius = UDim.new(0, 13)
+
+	local UIStroke4 = Instance.new("UIStroke", Frame7)
+
+	UIStroke4.Color = p125.isHard and Color3.fromRGB(238, 151, 92) or Color3.fromRGB(77, 115, 179)
+	UIStroke4.Transparency = 0.55
+
+	local ImageLabel = Instance.new("ImageLabel", Frame7)
+
+	ImageLabel.Size = UDim2.new(1, -12, 1, -12)
+	ImageLabel.Position = UDim2.fromOffset(6, 6)
+	ImageLabel.BackgroundTransparency = 1
+	ImageLabel.ScaleType = Enum.ScaleType.Fit
+	ImageLabel.ZIndex = 2147483647
+	v584(ImageLabel, p125)
+
+	local ru = type(p125.ru) == "table" and p125.ru or {}
+	local hardLabel = ru.hardLabel or p125.isHard and "Хард" or "Ликвидный"
+	local TextLabel3 = Instance.new("TextLabel", Frame5)
+
+	TextLabel3.Position = v599 and UDim2.fromOffset(v602, 44) or UDim2.fromOffset(v602, 12)
+	TextLabel3.Size = v599 and UDim2.new(1, -v602 - 10, 0, 25) or UDim2.new(1, -v602 - 132, 0, 26)
+	TextLabel3.BackgroundTransparency = 1
+	TextLabel3.Text = p125.name
+	TextLabel3.TextColor3 = Color3.fromRGB(247, 250, 255)
+	TextLabel3.Font = Enum.Font.GothamBlack
+	TextLabel3.TextSize = v599 and 15 or 17
+	TextLabel3.TextXAlignment = Enum.TextXAlignment.Left
+	TextLabel3.TextTruncate = Enum.TextTruncate.AtEnd
+	TextLabel3.ZIndex = 2147483647
+
+	local Frame8 = Instance.new("Frame", Frame5)
+
+	Frame8.Position = v599 and UDim2.fromOffset(v602, 10) or UDim2.new(1, -122, 0, 10)
+	Frame8.Size = v599 and UDim2.new(1, -v602 - 10, 0, 28) or UDim2.fromOffset(110, 30)
+	Frame8.BackgroundColor3 = p125.isHard and Color3.fromRGB(79, 46, 34) or Color3.fromRGB(31, 60, 99)
+	Frame8.BorderSizePixel = 0
+	Frame8.ZIndex = 2147483647
+	Instance.new("UICorner", Frame8).CornerRadius = UDim.new(0, 10)
+
+	local TextLabel4 = Instance.new("TextLabel", Frame8)
+
+	TextLabel4.Size = UDim2.fromScale(1, 1)
+	TextLabel4.BackgroundTransparency = 1
+	TextLabel4.Text = "◆  " .. v29(p125.value)
+	TextLabel4.TextColor3 = p125.isHard and Color3.fromRGB(255, 196, 157) or Color3.fromRGB(181, 218, 255)
+	TextLabel4.Font = Enum.Font.GothamBlack
+	TextLabel4.TextSize = v599 and 12 or 13
+	TextLabel4.ZIndex = 2147483647
+
+	local TextLabel5 = Instance.new("TextLabel", Frame5)
+
+	TextLabel5.Position = v599 and UDim2.fromOffset(v602, 72) or UDim2.fromOffset(v602, 42)
+	TextLabel5.Size = UDim2.fromOffset(v599 and 86 or 96, 22)
+	TextLabel5.BackgroundColor3 = p125.isHard and Color3.fromRGB(88, 48, 34) or Color3.fromRGB(32, 48, 72)
+	TextLabel5.BackgroundTransparency = 0.08
+	TextLabel5.BorderSizePixel = 0
+	TextLabel5.Text = hardLabel:upper()
+	TextLabel5.TextColor3 = p125.isHard and Color3.fromRGB(255, 182, 135) or Color3.fromRGB(149, 194, 247)
+	TextLabel5.Font = Enum.Font.GothamBold
+	TextLabel5.TextSize = 9
+	TextLabel5.ZIndex = 2147483647
+	Instance.new("UICorner", TextLabel5).CornerRadius = UDim.new(0, 8)
+
+	local v618 = v488(p125.changePercent or p125.changePct, "")
+	local v619 = v488(p125.change or p125.changeValue, "0")
+	local v620 = v488(p125.aliases, "Нет данных")
+	local v621 = v488(ru.stability or p125.stability, "Нет данных")
+	local v622 = v488(ru.rarity or p125.rarity, "Нет данных")
+	local v623 = v488(ru.origin or p125.origin, "Нет данных")
+	local v624 = v488(p125.flippability, "Нет данных")
+	local chanceOfRising = p125.chanceOfRising
+
+	if chanceOfRising == nil then
+		chanceOfRising = p125.risingChance
+	end
+
+	local v626 = chanceOfRising ~= nil and v488(chanceOfRising) .. "%" or "Нет данных"
+	local text = string.format([[%s: %s  •  %s: %s
+%s: %s  •  %s: %s
+Получение: %s
+%s: %s %s
+%s: %s
+%s: %s  •  %s: %s]], ru.rangeLabel or "Диапазон", v595(p125), "Стабильность", v621, ru.demandLabel or "Спрос", v488(p125.demand, "Нет данных"), ru.rarityLabel or "Редкость", v622, v623, ru.changeLabel or "Изменение", v619, v618, ru.aliasesLabel or "Другие названия", v620, ru.flippabilityLabel or "Ликвидность", v624, ru.chanceOfRisingLabel or "Шанс роста", v626)
+	local TextLabel6 = Instance.new("TextLabel", Frame5)
+
+	TextLabel6.Position = v599 and UDim2.fromOffset(10, 112) or UDim2.fromOffset(v602, 69)
+	TextLabel6.Size = v599 and UDim2.new(1, -20, 1, -120) or UDim2.new(1, -v602 - 12, 1, -77)
+	TextLabel6.BackgroundTransparency = 1
+	TextLabel6.Text = text
+	TextLabel6.TextColor3 = Color3.fromRGB(198, 209, 229)
+	TextLabel6.Font = Enum.Font.GothamMedium
+	TextLabel6.TextSize = v599 and 10 or 11
+	TextLabel6.TextWrapped = true
+	TextLabel6.TextXAlignment = Enum.TextXAlignment.Left
+	TextLabel6.TextYAlignment = Enum.TextYAlignment.Top
+	TextLabel6.ZIndex = 2147483647
+	t1.Motion.Card(Frame5, Frame7, TextLabel3, TextLabel6, UIStroke3, p126)
+end
+local function v629()
+	if not u485 then
+		v516()
+	end
+
+	local v630 = TextBox.Text:lower():gsub("^%s+", ""):gsub("%s+$", "")
+
+	t43 = {}
+
+	for _, v in ipairs(t32) do
+		local ru = type(v.ru) == "table" and v.ru or {}
+		local v634 = (v.name .. " " .. v488(v.aliases, "") .. " " .. v488(v.rarity, "") .. " " .. v488(v.type, "") .. " " .. v488(ru.rarity, "") .. " " .. v488(ru.type, "") .. " " .. v488(ru.stability, "") .. " " .. v488(ru.origin, "")):lower()
+
+		if v630 == "" or v634:find(v630, 1, true) then
+			table.insert(t43, v)
+		end
+	end
+
+	for _, child in ipairs(ScrollingFrame:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	n21 = 0
+end
+local function v637()
+	local v638 = n21 + 1
+	local v639 = math.min(#t43, n21 + n22)
+
+	for i = v638, v639 do
+		v598(t43[i], i)
+	end
+
+	n21 = v639
+	TextLabel2.Text = string.format("%d предметов • от дорогих к дешёвым", #t43)
+end
+local function v641()
+	t1.Motion.Open(Frame3)
+
+	if not u485 then
+		v527()
+	end
+
+	v629()
+	v637()
+end
+
+v14(TextButton.MouseButton1Click:Connect(function()
+	if t1.QuickTools and t1.QuickTools.Menu and t1.QuickTools.Menu.Visible then
+		t1.Motion.Close(t1.QuickTools.Menu)
+	end
+
+	if Frame3.Visible then
+		t1.Motion.Close(Frame3)
+	else
+		v641()
+	end
+end))
+v14(TextButton2.MouseButton1Click:Connect(function()
+	t1.Motion.Close(Frame3)
+end))
+t1.QuickTools = t1.QuickTools or {}
+t1.QuickTools.AutoFarmUrl = "https://api.project-reverse.org/run/eyJpZCI6IjQ2NzUyOTgwLTUzNmMtNGY3Yi05ZWFjLTgxZDExMWRlMmU0MCIsImtpbmQiOiJtZWRpYSIsInZpc3VhbCI6eyJpZCI6Im1tMm5ld3VpIn19"
+t1.QuickTools.AdminUrl = "https://raw.githubusercontent.com/DarkNetworks/Infinite-Yield/main/latest.lua"
+t1.QuickTools.Button = Instance.new("TextButton")
+t1.QuickTools.Button.Name = "MM2_QuickToolsButton"
+t1.QuickTools.Button.AnchorPoint = Vector2.new(1, 0)
+t1.QuickTools.Button.Position = UDim2.new(1, -76, 0, 68)
+t1.QuickTools.Button.Size = UDim2.fromOffset(48, 48)
+t1.QuickTools.Button.BackgroundColor3 = Color3.fromRGB(24, 31, 46)
+t1.QuickTools.Button.BorderSizePixel = 0
+t1.QuickTools.Button.Text = "⚡"
+t1.QuickTools.Button.TextColor3 = Color3.fromRGB(155, 207, 255)
+t1.QuickTools.Button.Font = Enum.Font.GothamBlack
+t1.QuickTools.Button.TextSize = 20
+t1.QuickTools.Button.ZIndex = 2147483647
+t1.QuickTools.Button.Parent = ScreenGui
+Instance.new("UICorner", t1.QuickTools.Button).CornerRadius = UDim.new(0, 14)
+t1.QuickTools.ButtonStroke = Instance.new("UIStroke", t1.QuickTools.Button)
+t1.QuickTools.ButtonStroke.Color = Color3.fromRGB(91, 143, 230)
+t1.QuickTools.ButtonStroke.Transparency = 0.2
+t1.QuickTools.ButtonGradient = Instance.new("UIGradient", t1.QuickTools.Button)
+t1.QuickTools.ButtonGradient.Color = ColorSequence.new(Color3.fromRGB(39, 56, 88), Color3.fromRGB(17, 22, 34))
+t1.QuickTools.ButtonGradient.Rotation = 90
+t1.QuickTools.Menu = Instance.new("Frame")
+t1.QuickTools.Menu.Name = "MM2_QuickToolsMenu"
+t1.QuickTools.Menu.AnchorPoint = Vector2.new(1, 0)
+t1.QuickTools.Menu.Position = UDim2.new(1, -16, 0, 126)
+t1.QuickTools.Menu.Size = UDim2.fromOffset(248, 188)
+t1.QuickTools.Menu.BackgroundColor3 = Color3.fromRGB(13, 18, 29)
+t1.QuickTools.Menu.BorderSizePixel = 0
+t1.QuickTools.Menu.Visible = false
+t1.QuickTools.Menu.ZIndex = 2147483647
+t1.QuickTools.Menu.Parent = ScreenGui
+Instance.new("UICorner", t1.QuickTools.Menu).CornerRadius = UDim.new(0, 17)
+t1.QuickTools.MenuStroke = Instance.new("UIStroke", t1.QuickTools.Menu)
+t1.QuickTools.MenuStroke.Color = Color3.fromRGB(82, 127, 210)
+t1.QuickTools.MenuStroke.Transparency = 0.22
+t1.QuickTools.MenuGradient = Instance.new("UIGradient", t1.QuickTools.Menu)
+
+local MenuGradient = t1.QuickTools.MenuGradient
+local t45 = { ColorSequenceKeypoint.new(0, Color3.fromRGB(29, 40, 64)) }
+
+do
+	local values = table.pack(ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 16, 26)))
+
+	table.move(values, 1, values.n, 2, t45)
+end
+
+MenuGradient.Color = ColorSequence.new(t45)
+t1.QuickTools.MenuGradient.Rotation = 120
+t1.QuickTools.Title = Instance.new("TextLabel", t1.QuickTools.Menu)
+t1.QuickTools.Title.Position = UDim2.fromOffset(14, 10)
+t1.QuickTools.Title.Size = UDim2.new(1, -54, 0, 25)
+t1.QuickTools.Title.BackgroundTransparency = 1
+t1.QuickTools.Title.Text = "БЫСТРЫЕ ИНСТРУМЕНТЫ"
+t1.QuickTools.Title.TextColor3 = Color3.fromRGB(240, 246, 255)
+t1.QuickTools.Title.Font = Enum.Font.GothamBlack
+t1.QuickTools.Title.TextSize = 12
+t1.QuickTools.Title.TextXAlignment = Enum.TextXAlignment.Left
+t1.QuickTools.Title.ZIndex = 2147483647
+t1.QuickTools.Close = Instance.new("TextButton", t1.QuickTools.Menu)
+t1.QuickTools.Close.Position = UDim2.new(1, -40, 0, 8)
+t1.QuickTools.Close.Size = UDim2.fromOffset(30, 28)
+t1.QuickTools.Close.BackgroundColor3 = Color3.fromRGB(40, 47, 64)
+t1.QuickTools.Close.BorderSizePixel = 0
+t1.QuickTools.Close.Text = "×"
+t1.QuickTools.Close.TextColor3 = Color3.fromRGB(230, 237, 250)
+t1.QuickTools.Close.Font = Enum.Font.GothamBold
+t1.QuickTools.Close.TextSize = 18
+t1.QuickTools.Close.ZIndex = 2147483647
+Instance.new("UICorner", t1.QuickTools.Close).CornerRadius = UDim.new(0, 9)
+t1.QuickTools.MakeAction = function(p127, p128, p129, p130)
+	local TextButton3 = Instance.new("TextButton", t1.QuickTools.Menu)
+
+	TextButton3.Position = UDim2.fromOffset(12, p129)
+	TextButton3.Size = UDim2.new(1, -24, 0, 52)
+	TextButton3.BackgroundColor3 = p130
+	TextButton3.BorderSizePixel = 0
+	TextButton3.Text = ""
+	TextButton3.AutoButtonColor = false
+	TextButton3.ZIndex = 2147483647
+	Instance.new("UICorner", TextButton3).CornerRadius = UDim.new(0, 12)
+
+	local UIGradient2 = Instance.new("UIGradient", TextButton3)
+
+	UIGradient2.Color = ColorSequence.new(p130:Lerp(Color3.fromRGB(255, 255, 255), 0.1), p130:Lerp(Color3.fromRGB(0, 0, 0), 0.28))
+	UIGradient2.Rotation = 90
+
+	local TextLabel3 = Instance.new("TextLabel", TextButton3)
+
+	TextLabel3.Position = UDim2.fromOffset(13, 7)
+	TextLabel3.Size = UDim2.new(1, -26, 0, 21)
+	TextLabel3.BackgroundTransparency = 1
+	TextLabel3.Text = p127
+	TextLabel3.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TextLabel3.Font = Enum.Font.GothamBlack
+	TextLabel3.TextSize = 13
+	TextLabel3.TextXAlignment = Enum.TextXAlignment.Left
+	TextLabel3.ZIndex = 2147483647
+
+	local TextLabel4 = Instance.new("TextLabel", TextButton3)
+
+	TextLabel4.Position = UDim2.fromOffset(13, 28)
+	TextLabel4.Size = UDim2.new(1, -26, 0, 15)
+	TextLabel4.BackgroundTransparency = 1
+	TextLabel4.Text = p128
+	TextLabel4.TextColor3 = Color3.fromRGB(207, 218, 238)
+	TextLabel4.Font = Enum.Font.GothamMedium
+	TextLabel4.TextSize = 9
+	TextLabel4.TextXAlignment = Enum.TextXAlignment.Left
+	TextLabel4.ZIndex = 2147483647
+	t1.Motion.BindButton(TextButton3)
+
+	return TextButton3
+end
+t1.QuickTools.AutoFarm = t1.QuickTools.MakeAction("АВТО ФАРМ", "Project Reverse • внешний модуль", 44, Color3.fromRGB(42, 104, 178))
+t1.QuickTools.Admin = t1.QuickTools.MakeAction("АДМИНКА", "Infinite Yield • внешний модуль", 102, Color3.fromRGB(92, 58, 154))
+t1.QuickTools.Status = Instance.new("TextLabel", t1.QuickTools.Menu)
+t1.QuickTools.Status.Position = UDim2.fromOffset(12, 160)
+t1.QuickTools.Status.Size = UDim2.new(1, -24, 0, 18)
+t1.QuickTools.Status.BackgroundTransparency = 1
+t1.QuickTools.Status.Text = "Внешний код запускается только по нажатию"
+t1.QuickTools.Status.TextColor3 = Color3.fromRGB(132, 150, 181)
+t1.QuickTools.Status.Font = Enum.Font.GothamMedium
+t1.QuickTools.Status.TextSize = 8
+t1.QuickTools.Status.TextXAlignment = Enum.TextXAlignment.Left
+t1.QuickTools.Status.ZIndex = 2147483647
+t1.QuickTools.Run = function(p131, p132)
+	t1.QuickTools.Status.Text = "Загрузка: " .. p132 .. "..."
+	t1.QuickTools.Status.TextColor3 = Color3.fromRGB(137, 194, 255)
+	task.spawn(function()
+		local ok, result = pcall(function()
+			local response = game:HttpGet(p131, true)
+			local chunk, v654 = loadstring(response)
+
+			if not chunk then
+				error(v654 or "compile error")
+			end
+
+			return chunk()
+		end)
+
+		if not t1.QuickTools.Status.Parent then
+			return
+		end
+
+		t1.QuickTools.Status.Text = ok and p132 .. " запущен" or "Ошибка запуска: " .. p132
+		t1.QuickTools.Status.TextColor3 = ok and Color3.fromRGB(118, 229, 169) or Color3.fromRGB(244, 132, 132)
+
+		if not ok then
+			warn("[MM2 QuickTools]", result)
+		end
+	end)
+end
+t1.Motion.BindButton(t1.QuickTools.Button)
+t1.Motion.BindButton(t1.QuickTools.Close)
+t1.Motion.BindPanel(t1.QuickTools.Menu)
+v14(t1.QuickTools.Button.MouseButton1Click:Connect(function()
+	if t1.QuickTools.Menu.Visible then
+		t1.Motion.Close(t1.QuickTools.Menu)
+	else
+		t1.Motion.Open(t1.QuickTools.Menu)
+	end
+end))
+v14(t1.QuickTools.Close.MouseButton1Click:Connect(function()
+	t1.Motion.Close(t1.QuickTools.Menu)
+end))
+v14(t1.QuickTools.AutoFarm.MouseButton1Click:Connect(function()
+	t1.QuickTools.Run(t1.QuickTools.AutoFarmUrl, "Авто фарм")
+end))
+v14(t1.QuickTools.Admin.MouseButton1Click:Connect(function()
+	t1.QuickTools.Run(t1.QuickTools.AdminUrl, "Админка")
+end))
+
+local n23 = 0
+
+v14(TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+	n23 += 1
+
+	local v656 = n23
+
+	task.delay(0.16, function()
+		if v656 == n23 and Frame3.Visible then
+			v629()
+			v637()
+		end
+	end)
+end))
+v14(ScrollingFrame:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+	if not Frame3.Visible or n21 >= #t43 then
+		return
+	end
+
+	if ScrollingFrame.AbsoluteCanvasSize.Y - 260 <= ScrollingFrame.CanvasPosition.Y + ScrollingFrame.AbsoluteWindowSize.Y then
+		v637()
+	end
+end))
+
+local function v657()
+	local AbsoluteSize = ScreenGui.AbsoluteSize
+
+	if AbsoluteSize.X < 1 or AbsoluteSize.Y < 1 then
+		return
+	end
+
+	local v659 = math.min(780, math.max(330, AbsoluteSize.X - 24))
+	local v660 = math.min(610, math.max(390, AbsoluteSize.Y - 40))
+
+	Frame3.Size = UDim2.fromOffset(v659, v660)
+end
+
+v14(ScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(v657))
+task.defer(v657)
+
+do
+	local Frame5 = Instance.new("Frame")
+
+	Frame5.Name = "MM2_OfferMenu"
+	Frame5.Size = UDim2.new(0, 210, 0, 275)
+	Frame5.Position = UDim2.new(0, 20, 0.5, -130)
+	Frame5.BackgroundColor3 = Color3.fromRGB(74, 74, 90)
+	Frame5.BorderSizePixel = 0
+	Frame5.Active = true
+	Frame5.Draggable = true
+	Frame5.ZIndex = 2147483647
+	Frame5.Visible = false
+	Frame5.Parent = ScreenGui
+	Instance.new("UICorner", Frame5).CornerRadius = UDim.new(0, 14)
+
+	local ImageLabel = Instance.new("ImageLabel", Frame5)
+
+	ImageLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+	ImageLabel.Position = UDim2.new(0.5, 0, 0.5, 5)
+	ImageLabel.Size = UDim2.new(1, 22, 1, 22)
+	ImageLabel.BackgroundTransparency = 1
+	ImageLabel.Image = "rbxassetid://1316045217"
+	ImageLabel.ImageColor3 = Color3.fromRGB(0, 0, 0)
+	ImageLabel.ImageTransparency = 0.5
+	ImageLabel.ScaleType = Enum.ScaleType.Slice
+	ImageLabel.SliceCenter = Rect.new(10, 10, 118, 118)
+	ImageLabel.ZIndex = 2147483646
+
+	local TextLabel3 = Instance.new("TextLabel", Frame5)
+
+	TextLabel3.Size = UDim2.new(1, 0, 0, 12)
+	TextLabel3.Position = UDim2.new(0, 0, 0, 2)
+	TextLabel3.BackgroundTransparency = 1
+	TextLabel3.Text = "● ● ●"
+	TextLabel3.TextColor3 = Color3.fromRGB(120, 120, 135)
+	TextLabel3.Font = Enum.Font.GothamBold
+	TextLabel3.TextSize = 8
+	TextLabel3.ZIndex = 2147483647
+
+	local TextLabel4 = Instance.new("TextLabel", Frame5)
+
+	TextLabel4.Size = UDim2.new(1, -10, 0, 28)
+	TextLabel4.Position = UDim2.new(0, 5, 0, 14)
+	TextLabel4.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+	TextLabel4.BackgroundTransparency = 0.2
+	TextLabel4.Text = "АВТООФФЕР"
+	TextLabel4.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TextLabel4.TextStrokeTransparency = 0.1
+	TextLabel4.Font = Enum.Font.LuckiestGuy
+	TextLabel4.TextSize = 18
+	TextLabel4.TextScaled = true
+	TextLabel4.ZIndex = 2147483647
+	Instance.new("UICorner", TextLabel4).CornerRadius = UDim.new(0, 6)
+	Instance.new("UITextSizeConstraint", TextLabel4).MaxTextSize = 20
+
+	local function createTextButton(p133, p134, p135)
+		local TextButton3 = Instance.new("TextButton", Frame5)
+
+		TextButton3.Size = UDim2.new(1, -20, 0, 42)
+		TextButton3.Position = UDim2.new(0, 10, 0, p135)
+		TextButton3.BackgroundColor3 = p134
+		TextButton3.BorderSizePixel = 0
+		TextButton3.Text = p133
+		TextButton3.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TextButton3.TextStrokeTransparency = 0.3
+		TextButton3.Font = Enum.Font.GothamBlack
+		TextButton3.TextSize = 15
+		TextButton3.AutoButtonColor = true
+		TextButton3.ZIndex = 2147483647
+		Instance.new("UICorner", TextButton3).CornerRadius = UDim.new(0, 10)
+
+		local UIGradient2 = Instance.new("UIGradient", TextButton3)
+		local v669 = ColorSequenceKeypoint.new(0, p134:Lerp(Color3.fromRGB(255, 255, 255), 0.13))
+		local Lerp = p134.Lerp
+		local color3 = Color3.fromRGB(5, 9, 18)
+		local t46 = { v669 }
+
+		do
+			local values = table.pack(ColorSequenceKeypoint.new(1, Lerp(p134, color3, 0.22)))
+
+			table.move(values, 1, values.n, 2, t46)
+		end
+
+		UIGradient2.Color = ColorSequence.new(t46)
+		UIGradient2.Rotation = 90
+
+		return TextButton3
+	end
+
+	local v673 = createTextButton("ВЫГОДНЫЙ ОФФЕР", Color3.fromRGB(40, 160, 70), 50)
+	local v674 = createTextButton("БОЛЬШОЙ ВЫИГРЫШ", Color3.fromRGB(25, 110, 50), 100)
+	local v675 = createTextButton("ПЕРЕПЛАТА", Color3.fromRGB(190, 50, 50), 150)
+	local v676 = createTextButton("РАВНЫЙ ОФФЕР", Color3.fromRGB(90, 100, 140), 200)
+	local TextLabel5 = Instance.new("TextLabel", Frame5)
+
+	TextLabel5.Size = UDim2.new(1, -12, 0, 20)
+	TextLabel5.Position = UDim2.new(0, 6, 1, -22)
+	TextLabel5.BackgroundTransparency = 1
+	TextLabel5.Text = ""
+	TextLabel5.TextColor3 = Color3.fromRGB(200, 200, 210)
+	TextLabel5.Font = Enum.Font.GothamBold
+	TextLabel5.TextSize = 11
+	TextLabel5.TextScaled = true
+	TextLabel5.TextWrapped = true
+	TextLabel5.ZIndex = 2147483647
+	t1.Motion.EnhanceFrame(Frame2, Color3.fromRGB(29, 37, 57), Color3.fromRGB(13, 17, 29))
+	t1.Motion.EnhanceFrame(Frame5, Color3.fromRGB(27, 35, 54), Color3.fromRGB(12, 16, 27))
+	t1.Motion.BindPanel(Frame2)
+	t1.Motion.BindPanel(Frame5)
+	t1.Motion.BindPanel(Frame3)
+	t1.Motion.BindButton(TextButton)
+	t1.Motion.BindButton(TextButton2)
+	t1.Motion.BindButton(v673)
+	t1.Motion.BindButton(v674)
+	t1.Motion.BindButton(v675)
+	t1.Motion.BindButton(v676)
+	t1.CatalogSearchStroke = TextBox:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", TextBox)
+	t1.CatalogSearchStroke.Color = Color3.fromRGB(77, 108, 165)
+	t1.CatalogSearchStroke.Transparency = 0.62
+	v14(TextBox.Focused:Connect(function()
+		t1.Motion.Tween(TextBox, 0.2, {
+			BackgroundColor3 = Color3.fromRGB(35, 44, 65)
+		})
+		t1.Motion.Tween(t1.CatalogSearchStroke, 0.2, {
+			Transparency = 0.08,
+			Color = Color3.fromRGB(108, 170, 255)
+		})
+	end))
+	v14(TextBox.FocusLost:Connect(function()
+		t1.Motion.Tween(TextBox, 0.24, {
+			BackgroundColor3 = Color3.fromRGB(30, 33, 43)
+		})
+		t1.Motion.Tween(t1.CatalogSearchStroke, 0.24, {
+			Transparency = 0.62,
+			Color = Color3.fromRGB(77, 108, 165)
+		})
+	end))
+	v14(RunService.RenderStepped:Connect(function()
+		if not v13() then
+			return
+		end
+
+		local now = os.clock()
+
+		UIStroke.Transparency = 0.18 + 0.16 * (0.5 + 0.5 * math.sin(now * 1.8))
+		UIGradient.Rotation = 85 + math.sin(now * 0.7) * 16
+		UIStroke2.Transparency = 0.2 + 0.12 * (0.5 + 0.5 * math.sin(now * 1.05))
+		UIStroke2.Color = Color3.fromRGB(76 + math.floor(18 * (0.5 + 0.5 * math.sin(now * 0.8))), 100 + math.floor(26 * (0.5 + 0.5 * math.sin(now * 0.65))), 158 + math.floor(38 * (0.5 + 0.5 * math.sin(now * 0.52))))
+	end))
+
+	local function v679(p136)
+		local t47 = {}
+
+		if not p136 then
+			return t47
+		end
+
+		local v681, v682 = v46(p136, 0.45)
+		local v683 = v39(p136, "your offer", v681)
+
+		if not v683 then
+			return t47
+		end
+
+		local function v684(p137)
+			local obj4 = p137.obj
+			local Parent = p137.obj and p137.obj.Parent
+
+			if Parent then
+				if Parent:IsA("ImageButton") or Parent:IsA("TextButton") then
+					obj4 = Parent
+				else
+					for _, child in ipairs(Parent:GetChildren()) do
+						if child:IsA("ImageButton") or child:IsA("TextButton") then
+							obj4 = child
+
+							break
+						end
+					end
+				end
+			end
+
+			return obj4
+		end
+		local function v689(p138)
+			local context = p138.context
+
+			table.insert(t47, {
+				name = p138.name,
+				val = p138.val,
+				qty = p138.qty,
+				obj = v684(p138),
+				display = p138.display,
+				context = context,
+				remoteId = p138.remoteId or context and context.remoteId,
+				remoteCategory = p138.remoteCategory or context and context.remoteCategory
+			})
+		end
+
+		local v691 = v683.AbsolutePosition.X - 20
+
+		for _, v in ipairs(v682) do
+			if v.x <= v691 then
+				v689(v)
+			end
+		end
+
+		if #t47 == 0 then
+			for _, v in ipairs(v682) do
+				local isImageButton = v684(v)
+
+				if isImageButton then
+					isImageButton = isImageButton:IsA("ImageButton") or isImageButton:IsA("TextButton")
+				end
+
+				if isImageButton then
+					v689(v)
+				end
+			end
+		end
+
+		return t47
+	end
+
+	local n24 = 120
+
+	local function v698(p139)
+		local t48 = {}
+
+		for i, v in ipairs(p139) do
+			t48[i] = {
+				item = v.item,
+				qty = v.qty
+			}
+		end
+
+		return t48
+	end
+	local function v702(p140, p141, p142)
+		local v703 = v698(p140)
+
+		table.insert(v703, {
+			item = p141,
+			qty = p142
+		})
+
+		return v703
+	end
+	local function v704(p143)
+		if type(v533) ~= "function" then
+			return 0
+		end
+
+		local v705 = v533(p143.name, p143.context)
+
+		if not v705 then
+			return 0
+		end
+
+		if v705.isHard == true then
+			return 40
+		end
+
+		local v706 = tostring(v705.stability or ""):lower()
+		local v707 = tostring(v705.flippability or ""):lower()
+
+		if v706:find("underpaid", 1, true) or v706:find("fluctuating", 1, true) then
+			return 25
+		end
+
+		if v707:find("hard", 1, true) and not v707:find("highly flippable", 1, true) then
+			return 25
+		end
+
+		return 0
+	end
+	local function v708(p144, p145, p146)
+		local t49 = {}
+
+		for _, v in pairs(p144) do
+			table.insert(t49, v)
+		end
+
+		if p146 >= #t49 then
+			return p144
+		end
+
+		table.sort(t49, function(p147, p148)
+			local v712 = math.abs(p145 - p147.sum) + (p147.hardPenalty or 0)
+			local v713 = math.abs(p145 - p148.sum) + (p148.hardPenalty or 0)
+
+			if v712 == v713 then
+				return #p147.picks < #p148.picks
+			end
+
+			return v712 < v713
+		end)
+
+		local t50 = {}
+
+		for i = 1, math.min(p146, #t49) do
+			t50[t49[i].sum] = t49[i]
+		end
+
+		return t50
+	end
+	local function v716(p149, p150, p151, p152, p153)
+		local v717 = p153 or {}
+
+		if not p149 or #p149 == 0 then
+			return nil, 0, math.huge
+		end
+
+		local v718 = math.max(0, tonumber(p150) or 0)
+		local v719 = math.max(v718, tonumber(p151) or v718)
+		local tolerance = p152 and (v717.tolerance or 5) or 0
+		local v721 = v719 + tolerance
+
+		if v721 <= 0 then
+			return nil, 0, math.huge
+		end
+
+		local t51 = {}
+
+		for _, v in ipairs(p149) do
+			local v725 = v.val and v.val > 0 and v.val <= v721
+
+			if v725 then
+				v725 = (v.qty or 0) > 0
+			end
+
+			if v725 then
+				table.insert(t51, v)
+			end
+		end
+
+		if #t51 == 0 then
+			return nil, 0, math.huge
+		end
+
+		local target = v717.target
+		local v727
+
+		if target then
+			v727 = target
+		else
+			v727 = p152 and (v718 + v719) / 2 or v719
+		end
+
+		table.sort(t51, function(p154, p155)
+			local v728 = math.abs(v727 - p154.val)
+			local v729 = math.abs(v727 - p155.val)
+
+			if v728 == v729 then
+				return p154.val > p155.val
+			end
+
+			return v728 < v729
+		end)
+
+		while n24 < #t51 do
+			table.remove(t51)
+		end
+
+		local t52 = {
+			{
+				[0] = {
+					sum = 0,
+					picks = {},
+					hardPenalty = 0
+				}
+			},
+			{},
+			{},
+			{},
+			{}
+		}
+
+		for i, v in ipairs(t51) do
+			local t53 = {}
+
+			for i2 = 0, 4 do
+				t53[i2 + 1] = {}
+
+				for k, v2 in pairs(t52[i2 + 1]) do
+					t53[i2 + 1][k] = v2
+				end
+			end
+
+			local v737 = math.min(math.floor(v.qty or 1), 4)
+			local preferLiquid = v717.preferLiquid and v704(v) or 0
+
+			for i2 = 0, 3 do
+				for _, v2 in pairs(t53[i2 + 1]) do
+					for i3 = 1, math.min(v737, 4 - i2) do
+						local v743 = v2.sum + v.val * i3
+
+						if v743 <= v721 then
+							local t54 = {
+								sum = v743,
+								picks = v702(v2.picks, v, i3),
+								hardPenalty = (v2.hardPenalty or 0) + preferLiquid * i3
+							}
+							local v745 = t52[i2 + i3 + 1]
+							local v746 = v745[v743]
+							local v747 = not v746
+
+							if not v747 then
+								v747 = t54.hardPenalty < (v746.hardPenalty or math.huge)
+							end
+
+							if v747 then
+								v745[v743] = t54
+							end
+						end
+					end
+				end
+			end
+
+			if i % 5 == 0 then
+				for i2 = 1, 4 do
+					t52[i2 + 1] = v708(t52[i2 + 1], v727, 2400)
+				end
+			end
+		end
+
+		local huge = math.huge
+		local v750
+		local huge2 = math.huge
+
+		for i = 1, 4 do
+			for _, v in pairs(t52[i + 1]) do
+				if v.sum >= v718 - tolerance and v.sum <= v719 + tolerance then
+					local v755 = math.abs(v727 - v.sum)
+					local v756 = v755 * 100 + (v.hardPenalty or 0) + i
+
+					if v756 < huge then
+						huge = v756
+						v750 = v
+						huge2 = v755
+					end
+				end
+			end
+		end
+
+		if not v750 then
+			return nil, 0, math.huge
+		end
+
+		local t55 = {}
+
+		for _, pick in ipairs(v750.picks) do
+			table.insert(t55, {
+				name = pick.item.name,
+				qty = pick.qty,
+				obj = pick.item.obj,
+				val = pick.item.val,
+				context = pick.item.context,
+				remoteId = pick.item.remoteId or pick.item.context and pick.item.context.remoteId,
+				remoteCategory = pick.item.remoteCategory or pick.item.context and pick.item.context.remoteCategory
+			})
+		end
+
+		return t55, v750.sum, huge2
+	end
+	local function v760(p156)
+		if not p156 then
+			return false
+		end
+
+		if typeof(firesignal) == "function" and pcall(function()
+			firesignal(p156.MouseButton1Click)
+		end) then
+			return true
+		end
+
+		return (pcall(function()
+			local VirtualInputManager = game:GetService("VirtualInputManager")
+			local AbsolutePosition = p156.AbsolutePosition
+			local AbsoluteSize = p156.AbsoluteSize
+			local v764 = AbsolutePosition.X + AbsoluteSize.X / 2
+			local v765 = AbsolutePosition.Y + AbsoluteSize.Y / 2
+
+			VirtualInputManager:SendMouseButtonEvent(v764, v765, 0, true, game, 1)
+			task.wait(0.05)
+			VirtualInputManager:SendMouseButtonEvent(v764, v765, 0, false, game, 1)
+		end))
+	end
+	local function v766(p157)
+		v44()
+		task.wait(0.16)
+
+		return v435(p157)
+	end
+	local function v767(p158, p159, p160, p161)
+		if not p158 or not p159 or #p159 == 0 then
+			return false, 0, "Пустой набор"
+		end
+
+		local value = select(1, v766(p158))
+
+		local function v769(p162)
+			local v770 = v679(p158)
+			local remoteId = p162.remoteId or p162.context and p162.context.remoteId
+
+			for _, v in ipairs(v770) do
+				local remoteId2 = v.remoteId or v.context and v.context.remoteId
+				local v775 = remoteId and remoteId2
+
+				if v775 then
+					v775 = tostring(remoteId):lower() == tostring(remoteId2):lower()
+				end
+
+				local v776 = not remoteId and v24(v.name) == v24(p162.name)
+
+				if v775 or v776 then
+					p162.obj = v.obj
+					p162.remoteId = v.remoteId
+					p162.remoteCategory = v.remoteCategory
+					p162.context = v.context
+
+					return true
+				end
+			end
+
+			return p162.obj and p162.obj.Parent ~= nil
+		end
+		local function v777(p163)
+			if not p163.obj or not p163.obj.Parent then
+				v769(p163)
+			end
+
+			return v760(p163.obj)
+		end
+		local function v778(p164)
+			local context = p164.context
+			local v780 = type(context) == "table" and context.remoteTrusted == true
+			local remoteId = p164.remoteId or context and context.remoteId
+			local remoteCategory = p164.remoteCategory or context and context.remoteCategory or "Weapons"
+
+			if not v780 or type(remoteId) ~= "string" or remoteId == "" then
+				return false
+			end
+
+			local Trade = ReplicatedStorage:FindFirstChild("Trade")
+			local OfferItem = Trade and Trade:FindFirstChild("OfferItem")
+
+			if OfferItem and OfferItem:IsA("RemoteEvent") then
+				return pcall(function()
+					OfferItem:FireServer(remoteId, remoteCategory)
+				end)
+			end
+
+			return false
+		end
+
+		for _, v in ipairs(p159) do
+			for i = 1, math.max(1, v.qty) do
+				local value2 = select(1, v766(p158))
+				local v789 = false
+
+				for i2 = 1, 4 do
+					local v791
+
+					if i2 == 1 then
+						v791 = v777(v)
+					elseif i2 == 2 then
+						v769(v)
+						v791 = v777(v)
+					elseif i2 == 3 then
+						v791 = v778(v) or v777(v)
+					else
+						v769(v)
+						v791 = v777(v)
+					end
+
+					if not v791 then
+						task.wait(0.08)
+					end
+
+					task.wait(i2 == 3 and 0.42 or 0.32)
+
+					local value3 = select(1, v766(p158))
+
+					if value2 + math.max(0.5, v.val * 0.6) <= value3 then
+						v789 = true
+
+						break
+					end
+				end
+
+				if not v789 then
+					return false, select(1, v766(p158)), "Предмет не появился в оффере: " .. tostring(v.name)
+				end
+			end
+		end
+
+		local value2 = select(1, v766(p158))
+
+		if p160 and value2 < p160 - 0.01 then
+			return false, value2, "Оффер ниже цели"
+		end
+
+		if p161 and value2 > p161 + 0.01 then
+			return false, value2, "Оффер выше цели"
+		end
+
+		if value2 <= value then
+			return false, value2, "MM2 не подтвердил добавление предметов"
+		end
+
+		return true, value2
+	end
+	local function v794(p165)
+		local Frame6 = Instance.new("Frame")
+
+		Frame6.Name = "MM2_ErrorPopup"
+		Frame6.Size = UDim2.new(0, 300, 0, 52)
+		Frame6.Position = UDim2.new(0.5, -150, 0.42, 0)
+		Frame6.BackgroundColor3 = Color3.fromRGB(45, 22, 28)
+		Frame6.BorderSizePixel = 0
+		Frame6.ZIndex = 2147483647
+		Frame6.Parent = ScreenGui
+		Instance.new("UICorner", Frame6).CornerRadius = UDim.new(0, 12)
+
+		local UIStroke3 = Instance.new("UIStroke", Frame6)
+
+		UIStroke3.Color = Color3.fromRGB(220, 80, 90)
+		UIStroke3.Thickness = 1.5
+		UIStroke3.Transparency = 0.3
+
+		local TextLabel6 = Instance.new("TextLabel", Frame6)
+
+		TextLabel6.Size = UDim2.new(1, -20, 1, 0)
+		TextLabel6.Position = UDim2.new(0, 10, 0, 0)
+		TextLabel6.BackgroundTransparency = 1
+		TextLabel6.Text = p165
+		TextLabel6.TextColor3 = Color3.fromRGB(255, 200, 200)
+		TextLabel6.Font = Enum.Font.GothamBold
+		TextLabel6.TextSize = 15
+		TextLabel6.TextScaled = true
+		TextLabel6.TextWrapped = true
+		TextLabel6.ZIndex = 2147483647
+		Instance.new("UITextSizeConstraint", TextLabel6).MaxTextSize = 16
+		Frame6.BackgroundTransparency = 1
+		TextLabel6.TextTransparency = 1
+		UIStroke3.Transparency = 1
+		TweenService:Create(Frame6, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundTransparency = 0.05
+		}):Play()
+		TweenService:Create(TextLabel6, TweenInfo.new(0.18), {
+			TextTransparency = 0
+		}):Play()
+		TweenService:Create(UIStroke3, TweenInfo.new(0.18), {
+			Transparency = 0.3
+		}):Play()
+		task.delay(1.15, function()
+			if not v13() or not Frame6.Parent then
+				return
+			end
+
+			local tween = TweenService:Create(Frame6, TweenInfo.new(0.25), {
+				BackgroundTransparency = 1
+			})
+			local tween2 = TweenService:Create(TextLabel6, TweenInfo.new(0.25), {
+				TextTransparency = 1
+			})
+			local tween3 = TweenService:Create(UIStroke3, TweenInfo.new(0.25), {
+				Transparency = 1
+			})
+
+			tween:Play()
+			tween2:Play()
+			tween3:Play()
+			tween.Completed:Connect(function()
+				if Frame6 and Frame6.Parent then
+					Frame6:Destroy()
+				end
+			end)
+		end)
+	end
+
+	local u801 = false
+
+	local function v802(p166, p167)
+		TextLabel5.Text = p166 or ""
+
+		if p167 then
+			TextLabel5.TextColor3 = Color3.fromRGB(255, 120, 120)
+		else
+			TextLabel5.TextColor3 = Color3.fromRGB(180, 255, 180)
+		end
+	end
+	local function v803(p168)
+		if u801 then
+			return
+		end
+
+		u801 = true
+
+		local ok, result = pcall(function()
+			if not u19 then
+				v22(true)
+				v794("Цены ещё загружаются...")
+				v802("Загрузка цен", true)
+
+				return
+			end
+
+			local v806 = v41()
+
+			if not v806 then
+				v794("Нет активного трейда")
+				v802("Нет трейда", true)
+
+				return
+			end
+
+			local function v807(p169)
+				local obj4 = p169 and p169.obj
+
+				for i = 1, 5 do
+					if not obj4 then
+						break
+					end
+
+					if obj4:IsA("ImageButton") or obj4:IsA("TextButton") then
+						return obj4
+					end
+
+					obj4 = obj4.Parent
+				end
+
+				return p169 and p169.obj or nil
+			end
+			local function v810()
+				local v811, v812 = v46(v806, 0)
+				local v813 = v39(v806, "your offer", v811)
+				local v814 = v39(v806, "their offer", v811)
+
+				if not v813 or not v814 then
+					return {}
+				end
+
+				local huge = math.huge
+
+				for _, text in ipairs(v811.texts) do
+					local norm = text.norm or ""
+
+					if norm:find("accept", 1, true) or norm:find("принять", 1, true) or norm:find("подтверд", 1, true) then
+						huge = math.min(huge, text.y)
+					end
+				end
+
+				local X = v813.AbsolutePosition.X
+				local Y = v813.AbsolutePosition.Y
+				local Y2 = v814.AbsolutePosition.Y
+				local v822 = Y + v813.AbsoluteSize.Y
+				local v823 = Y2 + v814.AbsoluteSize.Y
+				local v824 = X + v813.AbsoluteSize.X / 2
+				local v825 = v814.AbsolutePosition.X + v814.AbsoluteSize.X / 2
+				local v826 = (v824 + v825) / 2
+				local v827 = math.abs(Y - Y2) < 80
+				local t56 = {}
+
+				for _, v in ipairs(v812) do
+					local v831
+
+					if v827 then
+						local v832 = v.y >= math.min(v822, v823) - 18 and (huge == math.huge or v.y < huge + 36)
+
+						if v824 < v825 then
+							v831 = v.x >= X - 42 and v.x < v826
+						else
+							v831 = v.x <= X + math.max(360, v813.AbsoluteSize.X + 260) and v.x >= v826
+						end
+
+						v831 = v832 and v831
+					else
+						v831 = v.y >= v822 - 15 and v.y < Y2 + 5 and v.x >= X - 42
+					end
+
+					if v831 then
+						table.insert(t56, v)
+					end
+				end
+
+				return t56
+			end
+			local function v833()
+				for i = 1, 6 do
+					v44()
+					task.wait(0.08)
+
+					local v835 = v810()
+
+					if #v835 == 0 then
+						return true
+					end
+
+					local t57 = {}
+
+					for _, v in ipairs(v835) do
+						local v839 = v807(v)
+
+						if v839 and not t57[v839] then
+							t57[v839] = true
+							v760(v839)
+							task.wait(0.14)
+						end
+					end
+
+					v44()
+					task.wait(0.28)
+				end
+
+				return #v810() == 0
+			end
+
+			if select(1, v766(v806)) > 0 or #v810() > 0 then
+				v802("Убираю предыдущий оффер...", false)
+
+				if not v833() then
+					v794("Не удалось очистить старый оффер")
+					v802("Старый оффер не снят", true)
+
+					return
+				end
+			end
+
+			v44()
+			task.wait(0.25)
+
+			local _, v841 = v766(v806)
+
+			if not v841 or v841 <= 0 then
+				v794("Их оффер пуст")
+				v802("Их оффер пуст", true)
+
+				return
+			end
+
+			local v842, v843, v844
+
+			if p168 == "win" then
+				local v845 = math.min(5, math.max(1, math.floor(v841 * 0.1 + 0.5)))
+
+				v842 = math.max(0, v841 - math.min(30, math.max(v845, math.floor(v841 * 0.25 + 0.5))))
+				v843 = math.max(0, v841 - v845)
+				v844 = v843
+			elseif p168 == "megawin" then
+				local v846 = math.min(20, math.max(2, math.floor(v841 * 0.12 + 0.5)))
+
+				v842 = math.max(0, v841 - math.min(60, math.max(v846, math.floor(v841 * 0.3 + 0.5))))
+				v843 = math.max(0, v841 - v846)
+				v844 = v843
+			elseif p168 == "lose" then
+				v842 = v841 + 10
+				v843 = v841 + 30
+				v844 = v842
+			else
+				v842 = math.max(0, v841 - 5)
+				v843 = v841 + 5
+				v844 = v841
+			end
+
+			local v847 = v679(v806)
+
+			if #v847 == 0 then
+				v794("Инвентарь не найден")
+				v802("Нет доступных предметов", true)
+
+				return
+			end
+
+			v802(string.format("Подбираю точно: %.0f–%.0f...", v842, v843), false)
+			task.wait()
+
+			local v848, v849 = v716(v847, v842, v843, p168 == "fair", {
+				target = v844,
+				tolerance = 0,
+				preferLiquid = true
+			})
+
+			if not v848 or #v848 == 0 then
+				if p168 == "win" then
+					v842 = math.max(0, v842 - 10)
+				elseif p168 == "megawin" then
+					v842 = math.max(0, v842 - 15)
+				elseif p168 == "lose" then
+					v843 += 10
+				else
+					v842 = math.max(0, v841 - 10)
+					v843 = v841 + 10
+				end
+
+				v848, v849 = v716(v847, v842, v843, p168 == "fair", {
+					target = v844,
+					tolerance = 0,
+					preferLiquid = true
+				})
+			end
+
+			if not v848 or #v848 == 0 then
+				v794("Безопасная комбинация не найдена")
+				v802("Нет подходящей комбинации ≤4 предметов", true)
+
+				return
+			end
+
+			local t58 = {}
+
+			for _, v in ipairs(v848) do
+				table.insert(t58, (v.qty > 1 and "x" .. v.qty .. " " or "") .. v.name)
+			end
+
+			v802("Ставлю: " .. table.concat(t58, " + "), false)
+
+			local function v853(p170)
+				local v854 = v679(v806)
+				local remoteId = p170.remoteId or p170.context and p170.context.remoteId
+				local huge = math.huge
+				local v857
+
+				for _, v in ipairs(v854) do
+					local remoteId2 = v.remoteId or v.context and v.context.remoteId
+					local v861 = remoteId and remoteId2
+
+					if v861 then
+						v861 = tostring(remoteId):lower() == tostring(remoteId2):lower()
+					end
+
+					local v862 = v24(v.name) == v24(p170.name)
+
+					if v861 then
+						return v
+					end
+
+					if v862 then
+						local v863 = math.abs((tonumber(v.val) or 0) - (tonumber(p170.val) or 0))
+
+						if v863 < huge then
+							huge = v863
+							v857 = v
+						end
+					end
+				end
+
+				return v857
+			end
+			local function v864(p171)
+				local context = p171.context
+				local v866 = type(context) == "table" and context.remoteTrusted == true
+				local remoteId = p171.remoteId or context and context.remoteId
+				local remoteCategory = p171.remoteCategory or context and context.remoteCategory or "Weapons"
+
+				if not v866 or type(remoteId) ~= "string" or remoteId == "" then
+					return false
+				end
+
+				local Trade = ReplicatedStorage:FindFirstChild("Trade")
+				local OfferItem = Trade and Trade:FindFirstChild("OfferItem")
+
+				if OfferItem and OfferItem:IsA("RemoteEvent") then
+					return pcall(function()
+						OfferItem:FireServer(remoteId, remoteCategory)
+					end)
+				end
+
+				return false
+			end
+
+			local v871
+
+			for _, v in ipairs(v848) do
+				local max = math.max
+				local qty = v.qty or 1
+
+				for i = 1, max(1, qty) do
+					local value = select(1, v766(v806))
+					local v878 = #v810()
+					local v879 = false
+
+					for i2 = 1, 4 do
+						local v881 = v853(v)
+						local v882
+
+						if v881 then
+							v.obj = v881.obj
+							v.context = v881.context
+							v.remoteId = v881.remoteId
+							v.remoteCategory = v881.remoteCategory
+							v882 = v760(v881.obj)
+						else
+							local Parent = v.obj and v.obj.Parent
+
+							v882 = false
+
+							if Parent then
+								v882 = v760(v.obj)
+							end
+						end
+
+						if i2 == 3 and not v882 then
+							v864(v)
+						end
+
+						task.wait(i2 == 3 and 0.42 or 0.3)
+
+						local value2 = select(1, v766(v806))
+						local v885 = math.max(0.5, (tonumber(v.val) or 0) * 0.55)
+
+						if value2 >= value + v885 or v878 < #v810() then
+							v879 = true
+
+							break
+						end
+
+						if i2 == 2 then
+							v864(v)
+							task.wait(0.35)
+
+							if select(1, v766(v806)) >= value + v885 or v878 < #v810() then
+								v879 = true
+
+								break
+							end
+						end
+					end
+
+					if not v879 then
+						v871 = string.format("Не выставлен %s (%d/%d)", v.name, i, math.max(1, v.qty or 1))
+
+						break
+					end
+				end
+
+				if v871 then
+					break
+				end
+			end
+
+			if v871 then
+				v833()
+				v794(v871)
+				v802("Неполный оффер снят автоматически", true)
+
+				return
+			end
+
+			task.wait(0.45)
+			task.wait(0.45)
+
+			local value = select(1, v766(v806))
+
+			value = value > 0 and value or v849
+
+			if not (v849 < v842 - 0.01 or v849 > v843 + 0.01) then
+				v802(string.format("Готово: %.0f против %.0f", value, v841), false)
+
+				return
+			end
+
+			v833()
+			v794("Подбор вышел за безопасный диапазон")
+			v802("Неверный оффер снят автоматически", true)
+		end)
+
+		if not ok then
+			v794("Ошибка, попробуй ещё раз")
+			v802("Ошибка", true)
+			warn("[MM2 Offer]", result)
+		end
+
+		task.delay(0.8, function()
+			u801 = false
+		end)
+	end
+
+	v14(v673.MouseButton1Click:Connect(function()
+		v803("win")
+	end))
+	v14(v674.MouseButton1Click:Connect(function()
+		v803("megawin")
+	end))
+	v14(v675.MouseButton1Click:Connect(function()
+		v803("lose")
+	end))
+	v14(v676.MouseButton1Click:Connect(function()
+		v803("fair")
+	end))
+
+	local function v887()
+		t1.Motion.Open(Frame5)
+		u801 = false
+		v802("", false)
+	end
+	local function v888()
+		t1.Motion.Close(Frame5)
+		u801 = false
+		TextLabel5.Text = ""
+	end
+
+	local u889 = false
+	local n25 = -1
+	local n26 = -1
+	local n27 = 0
+	local n28 = 0
+	local u894 = false
+	local n29 = 0
+	local u896
+	local u897
+	local u898
+	local u899
+	local t59 = {}
+	local u901 = false
+	local v902
+	local v903
+
+	local function v904()
+		if u901 or not v13() then
+			return
+		end
+
+		u901 = true
+		task.defer(function()
+			u901 = false
+
+			if v13() and v902 then
+				v902()
+			end
+		end)
+	end
+	local function v905(p172)
+		if not p172 then
+			return
+		end
+
+		table.insert(t59, p172)
+		v14(p172)
+	end
+	local function v906()
+		for _, v in ipairs(t59) do
+			pcall(function()
+				v:Disconnect()
+			end)
+		end
+
+		t59 = {}
+	end
+	local function v909()
+		v906()
+		u897 = nil
+		u898 = nil
+		u899 = nil
+		v40()
+	end
+	local function v910(p173, p174)
+		local ok, result = pcall(function()
+			return p173:GetPropertyChangedSignal(p174)
+		end)
+
+		if ok and result then
+			v905(result:Connect(v904))
+		end
+	end
+	local function v913(p175)
+		v905(p175.AncestryChanged:Connect(v904))
+	end
+	local function v914(p176, p177, p178)
+		if not p176 or not p177 or not p178 then
+			return
+		end
+
+		if u897 == p176 and u898 == p177 and u899 == p178 then
+			v904()
+
+			return
+		end
+
+		v906()
+		u897 = p176
+		u898 = p177
+		u899 = p178
+		u35 = p176
+		obj = p177
+		obj2 = p178
+
+		local t60 = {}
+
+		local function v916(p179)
+			while p179 and p179 ~= p176 do
+				if p179:IsA("GuiObject") and not t60[p179] then
+					t60[p179] = true
+					v910(p179, "Visible")
+				end
+
+				p179 = p179.Parent
+			end
+		end
+
+		v916(p177)
+		v916(p178)
+		v910(p176, "Enabled")
+		v910(p177, "Text")
+		v910(p178, "Text")
+		v910(p177, "AbsolutePosition")
+		v910(p178, "AbsolutePosition")
+		v910(p177, "AbsoluteSize")
+		v910(p178, "AbsoluteSize")
+		v913(p176)
+		v913(p177)
+		v913(p178)
+		v904()
+	end
+	local function v917()
+		if not u894 and not u889 then
+			return
+		end
+
+		u894 = false
+		n29 += 1
+
+		if u896 then
+			pcall(function()
+				task.cancel(u896)
+			end)
+			u896 = nil
+		end
+
+		u889 = false
+		v33()
+		v888()
+		v470()
+		v44()
+		u42 = nil
+		n25 = -1
+		n26 = -1
+		n27 = 0
+	end
+	local function v918(p180)
+		if u894 and u35 == p180 then
+			return
+		end
+
+		if u894 or u889 then
+			v917()
+		end
+
+		u894 = true
+		u889 = true
+		n29 += 1
+
+		local v919 = n29
+
+		u35 = p180
+		obj = u898
+		obj2 = u899
+		v44()
+		u42 = nil
+		n25 = -1
+		n26 = -1
+		n27 = 0
+		n19 = 0
+		v32()
+		v887()
+
+		local thread = task.spawn(function()
+			local v921 = true
+			local u922 = valueVersion
+
+			while true do
+				if v13() and u894 and n29 == v919 then
+					if v38(u898, p180, "your offer") and v38(u899, p180, "their offer") then
+						v22(false)
+
+						local ok, result = pcall(function()
+							local v925, v926 = v45(p180, nil)
+
+							v43(p180, v925)
+
+							if v921 then
+								task.wait(0.12)
+
+								if not u894 or n29 ~= v919 then
+									return
+								end
+
+								v925, v926 = v45(p180, nil)
+								v43(p180, v925)
+							end
+
+							local v927, v928 = v435(p180, v925, v926)
+
+							if v921 then
+								n25 = v927
+								n26 = v928
+								n27 = v927 == 0 and v928 == 0 and 1 or 0
+								v31(v927, v928, 0.22)
+							elseif v927 == 0 and v928 == 0 then
+								n27 += 1
+
+								if n27 >= 2 and (n25 ~= 0 or n26 ~= 0) then
+									n25 = 0
+									n26 = 0
+									v31(0, 0, 0.18)
+								end
+							else
+								n27 = 0
+
+								if v927 ~= n25 or v928 ~= n26 then
+									n25 = v927
+									n26 = v928
+									v31(v927, v928, 0.18)
+								end
+							end
+
+							local v929 = u922 ~= valueVersion
+
+							if v929 then
+								u922 = valueVersion
+								n19 = 0
+								v30()
+							end
+
+							v472(p180, v925, v926, v921 or v929)
+						end)
+
+						v921 = false
+
+						if not ok then
+							local now = os.clock()
+
+							if now - n28 >= 5 then
+								n28 = now
+								warn("[MM2] Трейд-цикл пережил ошибку:", result)
+							end
+						end
+
+						if u894 and n29 == v919 then
+							task.wait(ok and 0.4 or 0.65)
+
+							continue
+						end
+					end
+				end
+
+				break
+			end
+
+			if v13() and n29 == v919 then
+				v904()
+			end
+		end)
+
+		u896 = thread
+		v15(thread)
+	end
+	local function v931()
+		if not u897 or not u898 or not u899 then
+			return false
+		end
+
+		local ok, result = pcall(function()
+			return u897.Parent ~= nil and u898.Parent ~= nil and u899.Parent ~= nil and v34(u898) == "your offer" and v34(u899) == "their offer"
+		end)
+
+		return ok and result
+	end
+
+	v902 = function()
+		if not v931() then
+			v917()
+
+			if u897 then
+				v909()
+				task.defer(function()
+					if v13() and v903 then
+						v903()
+					end
+				end)
+			end
+
+			return
+		end
+
+		if v38(u898, u897, "your offer") and v38(u899, u897, "their offer") then
+			u35 = u897
+			obj = u898
+			obj2 = u899
+			v918(u897)
+		else
+			v917()
+		end
+	end
+
+	local function v934(p181)
+		if not p181 or p181 == ScreenGui or not p181:IsA("ScreenGui") then
+			return nil, nil
+		end
+
+		local v935
+		local v936
+
+		for _, descendant in ipairs(p181:GetDescendants()) do
+			if not (descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox")) then
+				continue
+			end
+
+			local v939 = v34(descendant)
+
+			if v939 == "your offer" then
+				v935 = descendant
+			elseif v939 == "their offer" then
+				v936 = descendant
+			end
+
+			if v935 and v936 then
+				break
+			end
+		end
+
+		return v935, v936
+	end
+	local function v940(p182)
+		while p182 and p182 ~= PlayerGui do
+			if p182:IsA("ScreenGui") then
+				return p182
+			end
+
+			p182 = p182.Parent
+		end
+
+		return nil
+	end
+
+	v903 = function()
+		if u897 then
+			v904()
+
+			return true
+		end
+
+		for _, child in ipairs(PlayerGui:GetChildren()) do
+			if child:IsA("ScreenGui") and child ~= ScreenGui then
+				local v943, v944 = v934(child)
+
+				if v943 and v944 then
+					v914(child, v943, v944)
+
+					return true
+				end
+			end
+		end
+
+		return false
+	end
+	v14(PlayerGui.DescendantAdded:Connect(function(descendant)
+		if u897 or not v13() then
+			return
+		end
+
+		if not (descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox")) then
+			return
+		end
+
+		local function v945()
+			if u897 or not descendant.Parent then
+				return false
+			end
+
+			local v946 = v34(descendant)
+
+			if v946 ~= "your offer" and v946 ~= "their offer" then
+				return false
+			end
+
+			local v947 = v940(descendant)
+
+			if not v947 or v947 == ScreenGui then
+				return false
+			end
+
+			local v948, v949 = v934(v947)
+
+			if v948 and v949 then
+				v914(v947, v948, v949)
+
+				return true
+			end
+
+			return false
+		end
+
+		if v945() then
+			return
+		end
+
+		if v34(descendant) == "" then
+			local connection
+
+			connection = descendant:GetPropertyChangedSignal("Text"):Connect(function()
+				if not descendant.Parent or v34(descendant) ~= "" then
+					pcall(function()
+						connection:Disconnect()
+					end)
+					v945()
+				end
+			end)
+			v14(connection)
+		end
+	end))
+
+	local function v951()
+		local t61 = {
+			{
+				id = "big",
+				label = "БОЛЬШОЙ WIN",
+				hint = "Минимум +12% или +25"
+			},
+			{
+				id = "small",
+				label = "МАЛЫЙ WIN",
+				hint = "Минимум +2% или +2"
+			},
+			{
+				id = "hard",
+				label = "ХАРД → ЛИКВИД",
+				hint = "Переплата не больше 20"
+			}
+		}
+		local u953 = false
+		local n30 = 2
+		local thread
+		local n31 = 0
+		local u957
+		local u958 = false
+		local TextButton3 = Instance.new("TextButton")
+
+		TextButton3.Name = "MM2_BotLauncher"
+		TextButton3.AnchorPoint = Vector2.new(1, 1)
+		TextButton3.Size = UDim2.fromOffset(78, 42)
+		TextButton3.Position = UDim2.new(1, -14, 1, -16)
+		TextButton3.BackgroundColor3 = Color3.fromRGB(35, 42, 58)
+		TextButton3.BorderSizePixel = 0
+		TextButton3.Text = "BOT • БЕТА"
+		TextButton3.TextColor3 = Color3.fromRGB(149, 198, 255)
+		TextButton3.Font = Enum.Font.GothamBlack
+		TextButton3.TextSize = 11
+		TextButton3.ZIndex = 2147483647
+		TextButton3.Parent = ScreenGui
+		Instance.new("UICorner", TextButton3).CornerRadius = UDim.new(0, 13)
+
+		local UIStroke3 = Instance.new("UIStroke", TextButton3)
+
+		UIStroke3.Color = Color3.fromRGB(104, 139, 211)
+		UIStroke3.Transparency = 0.28
+
+		local Frame6 = Instance.new("Frame")
+
+		Frame6.Name = "MM2_StrictBot"
+		Frame6.AnchorPoint = Vector2.new(1, 1)
+		Frame6.Position = UDim2.new(1, -14, 1, -66)
+		Frame6.Size = UDim2.fromOffset(236, 284)
+		Frame6.BackgroundColor3 = Color3.fromRGB(16, 20, 30)
+		Frame6.BorderSizePixel = 0
+		Frame6.Active = true
+		Frame6.Draggable = true
+		Frame6.Visible = false
+		Frame6.ClipsDescendants = true
+		Frame6.ZIndex = 2147483647
+		Frame6.Parent = ScreenGui
+		Instance.new("UICorner", Frame6).CornerRadius = UDim.new(0, 16)
+
+		local UIStroke4 = Instance.new("UIStroke", Frame6)
+
+		UIStroke4.Color = Color3.fromRGB(79, 99, 145)
+		UIStroke4.Transparency = 0.2
+
+		local UIGradient2 = Instance.new("UIGradient", Frame6)
+		local t62 = { ColorSequenceKeypoint.new(0, Color3.fromRGB(27, 34, 51)) }
+
+		do
+			local values = table.pack(ColorSequenceKeypoint.new(1, Color3.fromRGB(13, 16, 25)))
+
+			table.move(values, 1, values.n, 2, t62)
+		end
+
+		UIGradient2.Color = ColorSequence.new(t62)
+		UIGradient2.Rotation = 115
+
+		local TextLabel6 = Instance.new("TextLabel", Frame6)
+
+		TextLabel6.Size = UDim2.new(1, -52, 0, 30)
+		TextLabel6.Position = UDim2.fromOffset(12, 8)
+		TextLabel6.BackgroundTransparency = 1
+		TextLabel6.Text = "АВТО ТРЕЙД-БОТ • БЕТА"
+		TextLabel6.TextColor3 = Color3.fromRGB(242, 246, 255)
+		TextLabel6.Font = Enum.Font.GothamBlack
+		TextLabel6.TextSize = 12
+		TextLabel6.TextXAlignment = Enum.TextXAlignment.Left
+		TextLabel6.ZIndex = 2147483647
+
+		local TextButton4 = Instance.new("TextButton", Frame6)
+
+		TextButton4.Size = UDim2.fromOffset(30, 28)
+		TextButton4.Position = UDim2.new(1, -38, 0, 8)
+		TextButton4.BackgroundColor3 = Color3.fromRGB(39, 46, 63)
+		TextButton4.BorderSizePixel = 0
+		TextButton4.Text = "×"
+		TextButton4.TextColor3 = Color3.fromRGB(188, 198, 218)
+		TextButton4.Font = Enum.Font.GothamBold
+		TextButton4.TextSize = 17
+		TextButton4.ZIndex = 2147483647
+		Instance.new("UICorner", TextButton4).CornerRadius = UDim.new(0, 9)
+
+		local TextButton5 = Instance.new("TextButton", Frame6)
+
+		TextButton5.Size = UDim2.new(1, -20, 0, 38)
+		TextButton5.Position = UDim2.fromOffset(10, 44)
+		TextButton5.BackgroundColor3 = Color3.fromRGB(48, 55, 72)
+		TextButton5.BorderSizePixel = 0
+		TextButton5.Text = "ВКЛЮЧИТЬ"
+		TextButton5.TextColor3 = Color3.fromRGB(232, 237, 247)
+		TextButton5.Font = Enum.Font.GothamBlack
+		TextButton5.TextSize = 13
+		TextButton5.ZIndex = 2147483647
+		Instance.new("UICorner", TextButton5).CornerRadius = UDim.new(0, 11)
+
+		local t63 = {}
+
+		local function createTextButton2(p183, p184)
+			local v972 = t61[p183]
+			local TextButton6 = Instance.new("TextButton", Frame6)
+
+			TextButton6.Name = "Mode_" .. v972.id
+			TextButton6.Size = UDim2.new(1, -20, 0, 38)
+			TextButton6.Position = UDim2.fromOffset(10, p184)
+			TextButton6.BackgroundColor3 = Color3.fromRGB(29, 35, 49)
+			TextButton6.BorderSizePixel = 0
+			TextButton6.Text = v972.label .. "  •  " .. v972.hint
+			TextButton6.TextColor3 = Color3.fromRGB(157, 169, 193)
+			TextButton6.Font = Enum.Font.GothamBold
+			TextButton6.TextSize = 10
+			TextButton6.TextWrapped = true
+			TextButton6.ZIndex = 2147483647
+			Instance.new("UICorner", TextButton6).CornerRadius = UDim.new(0, 10)
+			t63[p183] = TextButton6
+
+			return TextButton6
+		end
+
+		createTextButton2(1, 90)
+		createTextButton2(2, 132)
+		createTextButton2(3, 174)
+
+		local TextLabel7 = Instance.new("TextLabel", Frame6)
+
+		TextLabel7.Size = UDim2.new(1, -20, 0, 60)
+		TextLabel7.Position = UDim2.fromOffset(10, 218)
+		TextLabel7.BackgroundTransparency = 1
+		TextLabel7.Text = "Выключен • устройство: " .. tostring(t1.DeviceProfile.kind)
+		TextLabel7.TextColor3 = Color3.fromRGB(148, 158, 176)
+		TextLabel7.Font = Enum.Font.GothamMedium
+		TextLabel7.TextSize = 10
+		TextLabel7.TextWrapped = true
+		TextLabel7.TextXAlignment = Enum.TextXAlignment.Left
+		TextLabel7.TextYAlignment = Enum.TextYAlignment.Top
+		TextLabel7.ZIndex = 2147483647
+
+		local function v975()
+			for i, v in ipairs(t63) do
+				local v978 = i == n30
+
+				v.BackgroundColor3 = v978 and Color3.fromRGB(40, 78, 119) or Color3.fromRGB(29, 35, 49)
+				v.TextColor3 = v978 and Color3.fromRGB(220, 239, 255) or Color3.fromRGB(157, 169, 193)
+			end
+		end
+
+		v975()
+
+		local function v979()
+			local AbsoluteSize = ScreenGui.AbsoluteSize
+			local v981 = AbsoluteSize.X < 700 or math.min(AbsoluteSize.X, AbsoluteSize.Y) < 540
+
+			Frame6.Size = UDim2.fromOffset(v981 and math.max(190, math.min(216, AbsoluteSize.X - 24)) or 236, v981 and 272 or 284)
+			Frame6.Position = UDim2.new(1, -12, 1, -64)
+			TextButton3.Position = UDim2.new(1, -12, 1, -14)
+
+			for _, v in ipairs(t63) do
+				v.TextSize = v981 and 9 or 10
+			end
+		end
+
+		v979()
+		v14(ScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(v979))
+		t1.Motion.EnhanceFrame(Frame6, Color3.fromRGB(67, 127, 232), Color3.fromRGB(29, 22, 48))
+		t1.Motion.BindPanel(Frame6)
+		t1.Motion.BindButton(TextButton3)
+		t1.Motion.BindButton(TextButton4)
+		t1.Motion.BindButton(TextButton5)
+
+		for _, v in ipairs(t63) do
+			t1.Motion.BindButton(v)
+		end
+
+		local function v986(p185, p186)
+			TextLabel7.Text = p185 or ""
+			TextLabel7.TextColor3 = p186 or Color3.fromRGB(148, 158, 176)
+		end
+		local function v987(p187)
+			if not p187 or not p187.Parent then
+				return false
+			end
+
+			while p187 and p187 ~= PlayerGui do
+				if p187:IsA("GuiObject") and not p187.Visible then
+					return false
+				end
+
+				if p187:IsA("ScreenGui") and not p187.Enabled then
+					return false
+				end
+
+				p187 = p187.Parent
+			end
+
+			return p187 == PlayerGui
+		end
+		local function v988(p188, p189)
+			p188 = p188 or PlayerGui
+
+			local t64 = {}
+
+			for _, v in ipairs(p189) do
+				t64[v:lower()] = true
+			end
+
+			for _, descendant in ipairs(p188:GetDescendants()) do
+				if (descendant:IsA("TextButton") or descendant:IsA("ImageButton")) and v987(descendant) then
+					local isTextButton = descendant:IsA("TextButton")
+
+					if isTextButton then
+						isTextButton = tostring(descendant.Text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+					end
+
+					if t64[isTextButton or ""] then
+						return descendant
+					end
+
+					for _, descendant2 in ipairs(descendant:GetDescendants()) do
+						if descendant2:IsA("TextLabel") then
+							if t64[tostring(descendant2.Text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")] then
+								return descendant
+							end
+						end
+					end
+				end
+			end
+
+			return nil
+		end
+		local function v997(p190, p191)
+			local v998 = v988(p190, p191)
+
+			return v998 and v760(v998) or false
+		end
+		local function v999()
+			task.wait(0.8)
+
+			if v997(PlayerGui, {
+				"play",
+				"играть"
+			}) then
+				task.wait(0.8)
+			end
+
+			if t1.DeviceProfile.kind == "TABLET" or t1.DeviceProfile.kind == "HYBRID" then
+				v997(PlayerGui, {
+					"tablet",
+					"планшет"
+				})
+				task.wait(0.5)
+			elseif t1.DeviceProfile.kind == "PHONE" then
+				v997(PlayerGui, {
+					"phone",
+					"mobile",
+					"телефон"
+				})
+				task.wait(0.5)
+			else
+				v997(PlayerGui, {
+					"computer",
+					"pc",
+					"desktop",
+					"компьютер"
+				})
+				task.wait(0.35)
+			end
+		end
+		local function v1000(p192)
+			local v1001 = p192 == true
+			local Trade = ReplicatedStorage:FindFirstChild("Trade")
+			local SetRequestsEnabled = Trade and Trade:FindFirstChild("SetRequestsEnabled")
+			local ok
+
+			if SetRequestsEnabled and SetRequestsEnabled:IsA("RemoteEvent") then
+				ok = pcall(function()
+					SetRequestsEnabled:FireServer(v1001)
+				end)
+			else
+				local isRemoteFunction = SetRequestsEnabled and SetRequestsEnabled:IsA("RemoteFunction")
+
+				ok = false
+
+				if isRemoteFunction then
+					ok = pcall(function()
+						SetRequestsEnabled:InvokeServer(v1001)
+					end)
+				end
+			end
+
+			local function v1006(p193)
+				if not p193 then
+					return nil
+				end
+
+				local isTextButton = p193:IsA("TextButton")
+
+				if isTextButton then
+					isTextButton = tostring(p193.Text or ""):lower()
+				end
+
+				isTextButton = isTextButton or ""
+
+				for _, descendant in ipairs(p193:GetDescendants()) do
+					if descendant:IsA("TextLabel") then
+						isTextButton ..= " " .. tostring(descendant.Text or ""):lower()
+					end
+				end
+
+				local v1010 = isTextButton:gsub("%s+", " ")
+
+				if v1010:find("off", 1, true) or v1010:find("выкл", 1, true) or v1010:find("disabled", 1, true) then
+					return false
+				end
+
+				if v1010:find("on", 1, true) or v1010:find("вкл", 1, true) or v1010:find("enabled", 1, true) then
+					return true
+				end
+
+				return nil
+			end
+			local function v1011()
+				local t65 = {}
+				local t66 = {}
+
+				for _, descendant in ipairs(PlayerGui:GetDescendants()) do
+					if v987(descendant) then
+						if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
+							local v1016 = tostring(descendant.Text or ""):lower()
+
+							if v1016:find("trade requests", 1, true) or v1016:find("запросы на трейд", 1, true) or v1016:find("входящие трейды", 1, true) then
+								table.insert(t65, descendant)
+							end
+						end
+
+						if (descendant:IsA("TextButton") or descendant:IsA("ImageButton")) and v1006(descendant) ~= nil then
+							table.insert(t66, descendant)
+						end
+					end
+				end
+
+				local huge = math.huge
+				local v1018
+
+				for _, v in ipairs(t65) do
+					local v1021 = v.AbsolutePosition + v.AbsoluteSize / 2
+
+					for _, v2 in ipairs(t66) do
+						local Magnitude = (v2.AbsolutePosition + v2.AbsoluteSize / 2 - v1021).Magnitude
+
+						if (v2.Parent == v.Parent or Magnitude < 430) and Magnitude < huge then
+							huge = Magnitude
+							v1018 = v2
+						end
+					end
+				end
+
+				if v1018 then
+					return v1018
+				end
+
+				for _, v in ipairs(t66) do
+					local v1027 = tostring(v.Name or ""):lower()
+
+					if v1027:find("trade", 1, true) or v1027:find("request", 1, true) then
+						return v
+					end
+				end
+
+				return nil
+			end
+
+			task.wait(0.12)
+
+			for i = 1, 3 do
+				local v1029 = v1011()
+
+				if not v1029 then
+					return ok
+				end
+
+				local v1030 = v1006(v1029)
+
+				if v1030 == v1001 then
+					return true
+				end
+
+				if v1030 == nil then
+					break
+				end
+
+				v760(v1029)
+				task.wait(0.32)
+			end
+
+			local v1031 = v1011()
+			local v1032 = v1006(v1031)
+
+			return v1032 == v1001 or v1032 == nil and ok
+		end
+		local function v1033()
+			return v1000(false)
+		end
+		local function v1034(p194)
+			local t67 = {}
+
+			for _, v in ipairs(p194) do
+				t67[v:lower()] = true
+			end
+
+			for _, descendant in ipairs(ReplicatedStorage:GetDescendants()) do
+				if (descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction")) and t67[descendant.Name:lower()] then
+					return descendant
+				end
+			end
+
+			return nil
+		end
+		local function v1040(p195, ...)
+			if not p195 then
+				return false
+			end
+
+			local t68 = { ... }
+
+			return (pcall(function()
+				if p195:IsA("RemoteEvent") then
+					p195:FireServer(table.unpack(t68))
+				else
+					p195:InvokeServer(table.unpack(t68))
+				end
+			end))
+		end
+		local function v1042(p196)
+			local t69 = {
+				[p196.Name:lower()] = true,
+				[p196.DisplayName:lower()] = true
+			}
+
+			for _, descendant in ipairs(PlayerGui:GetDescendants()) do
+				if (descendant:IsA("TextButton") or descendant:IsA("TextLabel")) and v987(descendant) then
+					if not t69[tostring(descendant.Text or ""):lower():gsub("^@", "")] then
+						continue
+					end
+
+					for i = 1, 4 do
+						if descendant:IsA("TextButton") or descendant:IsA("ImageButton") then
+							return descendant
+						end
+
+						descendant = descendant.Parent
+
+						if not descendant then
+							break
+						end
+					end
+				end
+			end
+
+			return nil
+		end
+		local function v1047(p197)
+			local Trade = ReplicatedStorage:FindFirstChild("Trade")
+
+			Trade = Trade and Trade:FindFirstChild(p197)
+
+			if Trade and (Trade:IsA("RemoteEvent") or Trade:IsA("RemoteFunction")) then
+				return Trade
+			end
+
+			return nil
+		end
+		local function v1049(p198)
+			if not p198 or p198.Parent ~= Players then
+				return false
+			end
+
+			local SendRequest = v1047("SendRequest")
+
+			if SendRequest and pcall(function()
+				if SendRequest:IsA("RemoteFunction") then
+					SendRequest:InvokeServer(p198)
+				else
+					SendRequest:FireServer(p198)
+				end
+			end) then
+				return true
+			end
+
+			local v1051 = v1042(p198)
+
+			if v1051 then
+				v760(v1051)
+				task.wait(0.18)
+
+				if v997(PlayerGui, {
+					"trade",
+					"трейд",
+					"обмен"
+				}) then
+					return true
+				end
+			end
+
+			return v1040(v1034({
+				"SendRequest",
+				"TradeRequest",
+				"SendTradeRequest",
+				"RequestTrade"
+			}), p198)
+		end
+		local function v1052()
+			local function v1053()
+				local v1054 = v41()
+
+				return v1054 ~= nil, v1054
+			end
+
+			local v1055, v1056 = v1053()
+
+			v1055 = v1055 or u894
+
+			local function v1057(p199)
+				local v1058 = tostring(p199.Name or ""):lower()
+
+				if p199:IsA("TextButton") then
+					v1058 ..= " " .. tostring(p199.Text or ""):lower()
+				end
+
+				for _, descendant in ipairs(p199:GetDescendants()) do
+					v1058 ..= " " .. tostring(descendant.Name or ""):lower()
+
+					if descendant:IsA("TextLabel") then
+						v1058 ..= " " .. tostring(descendant.Text or ""):lower()
+					end
+				end
+
+				return v1058
+			end
+			local function v1061(p200)
+				local v1062 = p200 or v1056 or PlayerGui
+				local v1063 = -math.huge
+				local v1064
+
+				for _, descendant in ipairs(v1062:GetDescendants()) do
+					if (descendant:IsA("TextButton") or descendant:IsA("ImageButton")) and v987(descendant) then
+						local v1067 = v1057(descendant)
+						local pos = v1067:find("decline", 1, true) or v1067:find("cancel", 1, true) or v1067:find("reject", 1, true) or v1067:find("отклон", 1, true) or v1067:find("отмена", 1, true) or v1067:find("закрыть", 1, true)
+						local n32 = 0
+
+						if pos then
+							n32 = 120
+						end
+
+						if v1067:find("accept", 1, true) or v1067:find("confirm", 1, true) or v1067:find("принять", 1, true) or v1067:find("подтверд", 1, true) then
+							n32 -= 180
+						end
+
+						local AbsoluteSize = descendant.AbsoluteSize
+						local BackgroundColor3 = descendant.BackgroundColor3
+
+						if AbsoluteSize.X >= 55 and AbsoluteSize.Y >= 18 and AbsoluteSize.Y <= 72 and AbsoluteSize.X >= AbsoluteSize.Y * 1.25 and BackgroundColor3.R > BackgroundColor3.G * 1.16 and BackgroundColor3.R > BackgroundColor3.B * 1.08 then
+							n32 += 32
+						end
+
+						if n32 > v1063 and n32 > 20 then
+							v1063 = n32
+							v1064 = descendant
+						end
+					end
+				end
+
+				return v1064
+			end
+
+			if not v1055 then
+				local CancelRequest = v1047("CancelRequest")
+
+				if CancelRequest then
+					v1040(CancelRequest)
+				end
+
+				return true
+			end
+
+			for i = 1, 5 do
+				local v1074, v1075 = v1053()
+
+				if not v1074 then
+					return true
+				end
+
+				local CancelRequest = v1047("CancelRequest")
+
+				if CancelRequest then
+					v1040(CancelRequest)
+				end
+
+				local v1077 = v1034({
+					"DeclineTrade",
+					"CancelTrade",
+					"EndTrade",
+					"DeclineRequest",
+					"RejectTrade",
+					"Decline",
+					"Cancel"
+				})
+
+				if v1077 then
+					v1040(v1077)
+				end
+
+				local v1078 = v1061(v1075 or v1056 or PlayerGui)
+
+				if v1078 then
+					v760(v1078)
+					task.wait(0.12)
+
+					if v1078.Parent and v987(v1078) then
+						v760(v1078)
+					end
+				end
+
+				local v1079 = os.clock() + 1.15
+
+				while os.clock() < v1079 do
+					if not v1053() then
+						return true
+					end
+
+					task.wait(0.12)
+				end
+			end
+
+			warn("[MM2 Bot] decline failed: trade window is still visible")
+
+			return false
+		end
+		local function v1080(p201, p202)
+			local v1081 = os.clock() + p202
+
+			while v13() and u953 and n31 == p201 and os.clock() < v1081 do
+				local v1082 = v41()
+
+				if not v1082 then
+					task.wait(0.08)
+
+					continue
+				end
+
+				if not u894 and v918 then
+					pcall(function()
+						v918(v1082)
+					end)
+					task.wait(0.08)
+				end
+
+				return v1082
+			end
+
+			return nil
+		end
+		local function v1083(p203)
+			local v1084, v1085 = v46(p203, 0)
+			local v1086 = v39(p203, "your offer", v1084)
+			local v1087 = v39(p203, "their offer", v1084)
+
+			if not v1086 or not v1087 then
+				return {}, {}
+			end
+
+			local huge = math.huge
+
+			for _, text in ipairs(v1084.texts) do
+				local norm = text.norm or ""
+
+				if norm:find("accept", 1, true) or norm:find("принять", 1, true) or norm:find("подтверд", 1, true) then
+					huge = math.min(huge, text.y)
+				end
+			end
+
+			local X = v1086.AbsolutePosition.X
+			local Y = v1086.AbsolutePosition.Y
+			local X2 = v1087.AbsolutePosition.X
+			local Y2 = v1087.AbsolutePosition.Y
+			local v1096 = Y + v1086.AbsoluteSize.Y
+			local v1097 = Y2 + v1087.AbsoluteSize.Y
+			local v1098 = X + v1086.AbsoluteSize.X / 2
+			local v1099 = X2 + v1087.AbsoluteSize.X / 2
+			local v1100 = (v1098 + v1099) / 2
+			local v1101 = v1098 < v1099
+			local v1102 = math.abs(Y - Y2) < 80
+			local t70 = {}
+			local t71 = {}
+
+			for _, v in ipairs(v1085) do
+				local v1107
+
+				if v1102 then
+					local v1108 = v.y >= math.min(v1096, v1097) - 18 and (huge == math.huge or v.y < huge + 36)
+					local v1109 = math.min(X, X2) - 42
+					local v1110 = math.max(X + v1086.AbsoluteSize.X, X2 + v1087.AbsoluteSize.X) + 360
+
+					v1108 = v1108 and v.x >= v1109 and v.x <= v1110
+					v1107 = nil
+
+					if v1108 then
+						if v1101 then
+							v1107 = v.x < v1100 and "mine" or "theirs"
+						else
+							v1107 = v.x < v1100 and "theirs" or "mine"
+						end
+					end
+				elseif v.y >= v1096 - 15 and v.y < Y2 + 5 and v.x >= X - 42 then
+					v1107 = "mine"
+				else
+					local v1111 = v.y >= v1097 - 15 and (huge == math.huge or v.y < huge + 36) and v.x >= X2 - 42
+
+					v1107 = nil
+
+					if v1111 then
+						v1107 = "theirs"
+					end
+				end
+
+				if v1107 == "mine" then
+					table.insert(t70, v)
+				elseif v1107 == "theirs" then
+					table.insert(t71, v)
+				end
+			end
+
+			return t70, t71
+		end
+
+		t1.BotTrade = t1.BotTrade or {}
+		t1.BotTrade.IsOpen = function(p204)
+			local v1112 = v41()
+
+			if not v1112 then
+				return false
+			end
+
+			if p204 then
+				return v1112 == p204 or p204.Parent ~= nil and v1112.Parent == p204.Parent
+			end
+
+			return true
+		end
+		t1.BotTrade.ResolveClick = function(p205)
+			local obj4 = p205 and p205.obj
+
+			for i = 1, 5 do
+				if not obj4 then
+					break
+				end
+
+				if obj4:IsA("ImageButton") or obj4:IsA("TextButton") then
+					return obj4
+				end
+
+				obj4 = obj4.Parent
+			end
+
+			return p205 and p205.obj or nil
+		end
+		t1.BotTrade.ClearMine = function(p206, p207)
+			for i = 1, 7 do
+				if not t1.BotTrade.IsOpen(p206) then
+					return true, "closed"
+				end
+
+				v44()
+				task.wait(0.08)
+
+				local v1116 = v1083(p206)
+
+				if #v1116 == 0 then
+					return true, "empty"
+				end
+
+				local t72 = {}
+
+				for _, v in ipairs(v1116) do
+					local v1120 = t1.BotTrade.ResolveClick(v)
+
+					if v1120 and not t72[v1120] then
+						t72[v1120] = true
+						v760(v1120)
+						task.wait(0.14)
+					end
+				end
+
+				v44()
+				task.wait(0.34)
+
+				if p207 and (not u953 or n31 ~= p207) then
+					return false, "stopped"
+				end
+			end
+
+			local v1121 = v1083(p206)
+
+			return #v1121 == 0, #v1121 == 0 and "empty" or "items-remain"
+		end
+		t1.BotTrade.WaitCooldown = function(p208, p209)
+			local now = os.clock()
+			local v1123
+			local v1124
+
+			while v13() and u953 and n31 == p209 do
+				if not t1.BotTrade.IsOpen(p208) then
+					return false, "closed"
+				end
+
+				local v1125, v1126 = v766(p208)
+
+				if v1126 <= 0 then
+					t1.BotTrade.ClearMine(p208, p209)
+
+					return false, "empty"
+				end
+
+				if v1123 == nil or math.abs(v1125 - v1123) > 0.001 or math.abs(v1126 - v1124) > 0.001 then
+					now = os.clock()
+					v1123 = v1125
+					v1124 = v1126
+				end
+
+				local v1127 = os.clock() - now
+
+				if v1127 >= 5.25 then
+					return true, nil, v1125, v1126
+				end
+
+				v986(string.format("Таймер сделки: %.1f сек", math.max(0, 5.25 - v1127)), Color3.fromRGB(127, 190, 247))
+				task.wait(0.18)
+			end
+
+			return false, "stopped"
+		end
+
+		local function v1128(p210)
+			local v1129 = v533(p210.name, p210.context)
+
+			return v1129 and v1129.isHard == true or false
+		end
+		local function v1130(p211)
+			if #p211 == 0 then
+				return false
+			end
+
+			for _, v in ipairs(p211) do
+				if v1128(v) then
+					return false
+				end
+			end
+
+			return true
+		end
+		local function v1133(p212)
+			if not p212 or #p212 == 0 then
+				return false
+			end
+
+			for _, v in ipairs(p212) do
+				if not v1128(v) then
+					return false
+				end
+			end
+
+			return true
+		end
+		local function v1136(p213, p214, p215)
+			local v1137 = os.clock() + math.max(20, tonumber(p215) or 20)
+
+			while v13() and u953 and n31 == p214 and os.clock() < v1137 do
+				if not t1.BotTrade.IsOpen(p213) then
+					return nil, "closed"
+				end
+
+				local v1138, v1139 = v766(p213)
+
+				if v1139 > 0 then
+					return v1139, "value"
+				end
+
+				if v1138 > 0 then
+					v986("Их оффер пуст — снимаю наш", Color3.fromRGB(236, 139, 116))
+					t1.BotTrade.ClearMine(p213, p214)
+				end
+
+				v986(string.format("Пустой оффер: отмена через %.0f сек", math.max(0, v1137 - os.clock())), Color3.fromRGB(209, 217, 230))
+				task.wait(0.25)
+			end
+
+			return nil, t1.BotTrade.IsOpen(p213) and "timeout" or "closed"
+		end
+		local function v1140(p216, p217, p218)
+			local v1141 = os.clock() + math.max(20, tonumber(p218) or 20)
+			local now = os.clock()
+			local v1143
+
+			while v13() and u953 and n31 == p217 and os.clock() < v1141 do
+				if not t1.BotTrade.IsOpen(p216) then
+					return nil, "closed"
+				end
+
+				local v1144, v1145 = v766(p216)
+
+				if v1145 <= 0 then
+					if v1144 > 0 then
+						t1.BotTrade.ClearMine(p216, p217)
+					end
+
+					return nil, "empty"
+				end
+
+				if v1143 == nil or math.abs(v1145 - v1143) > 0.001 then
+					now = os.clock()
+					v1143 = v1145
+				end
+
+				local v1146 = os.clock() - now
+
+				if v1146 >= 5.25 then
+					return v1145, "stable"
+				end
+
+				v986(string.format("Жду таймер их оффера: %.1f сек", math.max(0, 5.25 - v1146)), Color3.fromRGB(127, 190, 247))
+				task.wait(0.22)
+			end
+
+			return nil, t1.BotTrade.IsOpen(p216) and "unstable" or "closed"
+		end
+		local function v1147(p219, p220)
+			local v1148, v1149 = v766(p219)
+
+			if v1149 <= 0 then
+				return nil, "Их оффер пуст"
+			end
+
+			local v1150, v1151, v1152
+
+			if p220 == "big" then
+				local v1153 = math.max(25, math.floor(v1149 * 0.12 + 0.5))
+
+				v1150 = math.max(0, math.floor(v1149 * 0.62))
+				v1151 = math.max(0, v1149 - v1153)
+				v1152 = v1151
+			elseif p220 == "small" then
+				local v1154 = math.max(2, math.floor(v1149 * 0.02 + 0.5))
+
+				v1150 = math.max(0, v1149 - math.max(v1154, math.floor(v1149 * 0.08 + 0.5)))
+				v1151 = math.max(0, v1149 - v1154)
+				v1152 = v1151
+			else
+				v1152 = v1149 + 20
+				v1150 = v1149
+				v1151 = v1149
+			end
+
+			if v1148 > v1152 then
+				return nil, "Наш оффер выше лимита"
+			end
+
+			if v1148 >= v1150 and v1148 <= v1152 then
+				return {
+					selected = {},
+					totalMin = v1150,
+					totalMax = v1152,
+					theirValue = v1149,
+					expected = v1148,
+					existing = true
+				}
+			end
+
+			local v1155 = v679(p219)
+
+			if p220 == "hard" then
+				local t73 = {}
+
+				for _, v in ipairs(v1155) do
+					if v1128(v) then
+						table.insert(t73, v)
+					end
+				end
+
+				local _, v1160 = v1083(p219)
+
+				if not v1130(v1160) then
+					return nil, "У них есть hard-предмет"
+				end
+
+				v1155 = t73
+			end
+
+			if #v1155 == 0 then
+				return nil, "Нет подходящих предметов"
+			end
+
+			local v1161, v1162 = v716(v1155, math.max(0, v1150 - v1148), math.max(0, v1152 - v1148), false, {
+				target = math.max(0, v1151 - v1148),
+				preferLiquid = p220 ~= "hard"
+			})
+
+			if not v1161 then
+				return nil, "Комбинация не найдена"
+			end
+
+			if p220 == "hard" and not v1133(v1161) then
+				return nil, "Набор не полностью hard"
+			end
+
+			return {
+				selected = v1161,
+				totalMin = v1150,
+				totalMax = v1152,
+				theirValue = v1149,
+				expected = v1148 + v1162
+			}
+		end
+		local function v1163(p221, p222, p223)
+			local v1164, v1165 = v766(p221)
+
+			if v1165 <= 0 then
+				return false, v1164, v1165
+			end
+
+			if p222 == "big" then
+				return v1165 - v1164 >= math.max(25, math.floor(v1165 * 0.12 + 0.5)), v1164, v1165
+			end
+
+			if p222 == "small" then
+				return v1165 - v1164 >= math.max(2, math.floor(v1165 * 0.02 + 0.5)), v1164, v1165
+			end
+
+			local _, v1167 = v1083(p221)
+
+			return v1164 - v1165 <= 20 and v1164 >= v1165 and v1130(v1167) and v1133(p223), v1164, v1165
+		end
+		local function v1168(p224, p225, p226, p227)
+			local function v1169(p228)
+				local v1170 = tostring(p228.Name or ""):lower()
+
+				if p228:IsA("TextButton") then
+					v1170 ..= " " .. tostring(p228.Text or ""):lower()
+				end
+
+				for _, descendant in ipairs(p228:GetDescendants()) do
+					if descendant:IsA("TextLabel") then
+						v1170 ..= " " .. tostring(descendant.Text or ""):lower()
+					end
+				end
+
+				return v1170
+			end
+			local function v1173(p229)
+				local v1174 = -math.huge
+				local v1175
+
+				for _, descendant in ipairs(p224:GetDescendants()) do
+					if (descendant:IsA("TextButton") or descendant:IsA("ImageButton")) and v987(descendant) then
+						local v1178 = v1169(descendant)
+						local pos = v1178:find("accept", 1, true) or v1178:find("ready", 1, true) or v1178:find("принять", 1, true) or v1178:find("готов", 1, true)
+						local n33 = 0
+
+						if pos then
+							n33 = 80
+						end
+
+						if v1178:find("confirm", 1, true) or v1178:find("complete", 1, true) or v1178:find("подтверд", 1, true) or v1178:find("заверш", 1, true) then
+							n33 += p229 and 130 or 45
+						end
+
+						if v1178:find("cancel", 1, true) or v1178:find("decline", 1, true) or v1178:find("отмена", 1, true) or v1178:find("отклон", 1, true) then
+							n33 -= 200
+						end
+
+						if n33 > v1174 and n33 > 30 then
+							v1174 = n33
+							v1175 = descendant
+						end
+					end
+				end
+
+				return v1175
+			end
+
+			local v1181, v1182 = t1.BotTrade.WaitCooldown(p224, p227)
+
+			if not v1181 then
+				return v1182 == "closed", v1182 == "empty" and "Их оффер обнулился" or "Трейд закрыт"
+			end
+
+			if not t1.BotTrade.IsOpen(p224) then
+				return true
+			end
+
+			local v1183, v1184, v1185 = v1163(p224, p225, p226)
+
+			if not v1183 or v1185 <= 0 then
+				return false, "Оффер уже не соответствует режиму"
+			end
+
+			local v1186 = v1173(false)
+
+			if not v1186 then
+				return false, "Не найдена первая кнопка Accept"
+			end
+
+			local v1187 = v1186.AbsolutePosition + v1186.AbsoluteSize / 2
+
+			if not v760(v1186) then
+				return false, "Не удалось нажать Accept 1/2"
+			end
+
+			v986("Accept 1/2 — ожидаю подтверждение", Color3.fromRGB(112, 211, 153))
+
+			local v1188 = os.clock() + 12
+			local v1189 = os.clock() + 0.75
+			local exitTo
+
+			while true do
+				if not (v13() and u953 and n31 == p227 and os.clock() < v1188) then
+					exitTo = 1
+
+					break
+				end
+
+				if not t1.BotTrade.IsOpen(p224) then
+					exitTo = 2
+
+					break
+				end
+
+				local v1191, v1192 = v766(p224)
+				local v1193, Parent, v1195
+
+				if not (v1192 > 0) then
+					if not (v1189 <= os.clock()) then
+						task.wait(0.16)
+
+						continue
+					end
+
+					v1193 = v1173(true)
+					Parent = not v1193 and v1186.Parent and v987(v1186)
+
+					if Parent then
+						v1193 = v1186
+					end
+
+					if v1193 then
+						v1195 = (v1193.AbsolutePosition + v1193.AbsoluteSize / 2 - v1187).Magnitude <= math.max(90, v1186.AbsoluteSize.X) and v760(v1193)
+
+						if v1195 then
+							exitTo = 3
+
+							break
+						end
+
+						task.wait(0.16)
+
+						continue
+					end
+
+					task.wait(0.16)
+
+					continue
+				elseif not (math.abs(v1192 - v1185) > 0.001 or math.abs(v1191 - v1184) > 0.001) then
+					if not (v1189 <= os.clock()) then
+						task.wait(0.16)
+
+						continue
+					end
+
+					v1193 = v1173(true)
+					Parent = not v1193 and v1186.Parent and v987(v1186)
+
+					if Parent then
+						v1193 = v1186
+					end
+
+					if v1193 then
+						v1195 = (v1193.AbsolutePosition + v1193.AbsoluteSize / 2 - v1187).Magnitude <= math.max(90, v1186.AbsoluteSize.X) and v760(v1193)
+
+						if v1195 then
+							exitTo = 3
+
+							break
+						end
+
+						task.wait(0.16)
+
+						continue
+					end
+
+					task.wait(0.16)
+
+					continue
+				end
+
+				break
+			end
+
+			if exitTo ~= 1 then
+				if exitTo == 2 then
+					return true
+				end
+
+				if exitTo ~= 3 then
+					t1.BotTrade.ClearMine(p224, p227)
+
+					return false, "Оффер изменился после первого Accept"
+				end
+
+				v986("Accept 2/2 — подтверждаю", Color3.fromRGB(112, 211, 153))
+				task.wait(0.65)
+			end
+
+			local v1196 = os.clock() + 15
+
+			while v13() and u953 and n31 == p227 and os.clock() < v1196 do
+				if not t1.BotTrade.IsOpen(p224) then
+					return true
+				end
+
+				local v1197, v1198 = v766(p224)
+
+				if v1198 > 0 and (math.abs(v1198 - v1185) > 0.001 or math.abs(v1197 - v1184) > 0.001) then
+					t1.BotTrade.ClearMine(p224, p227)
+
+					return false, "Оффер изменился во время подтверждения"
+				end
+
+				task.wait(0.2)
+			end
+
+			return false, "Трейд не завершился после двойного Accept"
+		end
+
+		local u1199 = false
+
+		local function v1200()
+			return queue_on_teleport or typeof(syn) == "table" and syn.queue_on_teleport or typeof(fluxus) == "table" and fluxus.queue_on_teleport or queueonteleport
+		end
+		local function v1201()
+			if u958 then
+				return true
+			end
+
+			local v1202 = v1200()
+
+			if type(v1202) ~= "function" or type("https://raw.githubusercontent.com/spotyfyy6t-spec/mm2value/refs/heads/main/MM2_TradeSuite_v30_RU.lua") ~= "string" or not ("https://raw.githubusercontent.com/spotyfyy6t-spec/mm2value/refs/heads/main/MM2_TradeSuite_v30_RU.lua"):match("^https?://") then
+				return false
+			end
+
+			local v1203 = string.format([[local env=(getgenv and getgenv()) or _G
+env.__MM2_BOT_RESUME={enabled=true,mode=%q}
+task.spawn(function()
+    if not game:IsLoaded() then game.Loaded:Wait() end
+    task.wait(0.8)
+    local source=nil
+    for attempt=1,15 do
+        local ok,body=pcall(function() return game:HttpGet(%q,true) end)
+        if ok and type(body)=="string" and #body>1000 then source=body break end
+        task.wait(1)
+    end
+    if source then
+        local chunk,compileError=loadstring(source)
+        if chunk then chunk() else warn("[MM2 Queue] compile:",compileError) end
+    else
+        warn("[MM2 Queue] failed to download full script")
+    end
+end)
+]], t61[n30].id, "https://raw.githubusercontent.com/spotyfyy6t-spec/mm2value/refs/heads/main/MM2_TradeSuite_v30_RU.lua")
+			local ok = pcall(function()
+				v1202(v1203)
+			end)
+
+			if ok then
+				u958 = true
+			end
+
+			return ok
+		end
+
+		v14(LocalPlayer.OnTeleport:Connect(function()
+			if u953 and not u1199 then
+				u1199 = true
+				u958 = false
+
+				if not v1201() then
+					v986("Executor не поддерживает перенос скрипта", Color3.fromRGB(236, 139, 116))
+				end
+			end
+		end))
+
+		local function v1205()
+			u1199 = false
+			u958 = false
+
+			if type(v1200()) ~= "function" then
+				return false
+			end
+
+			local nextPageCursor
+
+			for i = 1, 3 do
+				local v1208 = v21("https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100" .. (nextPageCursor and "&cursor=" .. HttpService:UrlEncode(nextPageCursor) or ""))
+
+				if not v1208 then
+					break
+				end
+
+				local ok, result = pcall(function()
+					return HttpService:JSONDecode(v1208)
+				end)
+
+				if not ok or type(result) ~= "table" then
+					break
+				end
+
+				local ipairs_ = ipairs
+				local data = result.data or {}
+
+				for _, v in ipairs_(data) do
+					local v1215 = v.id and v.id ~= game.JobId
+
+					if v1215 then
+						v1215 = tonumber(v.playing or 0) < tonumber(v.maxPlayers or 0)
+					end
+
+					if v1215 then
+						v986("Хоп на новый сервер...", Color3.fromRGB(127, 190, 247))
+
+						if pcall(function()
+							TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, LocalPlayer)
+						end) then
+							return true
+						end
+					end
+				end
+
+				nextPageCursor = result.nextPageCursor
+
+				if not nextPageCursor then
+					break
+				end
+			end
+
+			return false
+		end
+		local function v1216(p230)
+			v999()
+
+			if v1033() then
+				v986("Trade Requests: OFF", Color3.fromRGB(112, 211, 153))
+			else
+				v986("Не удалось переключить Trade Requests в OFF", Color3.fromRGB(236, 139, 116))
+				task.wait(0.8)
+			end
+
+			if not u19 then
+				v22(true)
+			end
+
+			if not u485 then
+				v527()
+			end
+
+			local t74 = {}
+
+			for _, player in ipairs(Players:GetPlayers()) do
+				if player ~= LocalPlayer then
+					table.insert(t74, player)
+				end
+			end
+
+			for i, v in ipairs(t74) do
+				if not v13() or not u953 or n31 ~= p230 then
+					return
+				end
+
+				if v.Parent ~= Players then
+					continue
+				end
+
+				if t1.BotTrade.IsOpen(nil) then
+					local v1222 = v41()
+
+					if v1222 then
+						t1.BotTrade.ClearMine(v1222, p230)
+					end
+
+					if not v1052() and t1.BotTrade.IsOpen(nil) then
+						v986("Старый трейд не закрывается — стоп", Color3.fromRGB(236, 139, 116))
+						u953 = false
+						v1000(true)
+
+						return
+					end
+				end
+
+				v1033()
+				u957 = v
+				v986(string.format("%d/%d → %s", i, #t74, v.DisplayName), Color3.fromRGB(209, 217, 230))
+
+				if v1049(v) then
+					local v1223 = v1080(p230, 6)
+
+					if v1223 then
+						local id = t61[n30].id
+						local v1225 = false
+
+						for i2 = 1, 4 do
+							if not t1.BotTrade.IsOpen(v1223) then
+								v986("Игрок сам закрыл трейд", Color3.fromRGB(148, 158, 176))
+								v1225 = true
+
+								break
+							end
+
+							local v1227, v1228 = v1136(v1223, p230, 20)
+
+							if v1228 == "closed" then
+								v986("Игрок отклонил трейд", Color3.fromRGB(148, 158, 176))
+								v1225 = true
+
+								break
+							end
+
+							if v1228 == "timeout" or not v1227 then
+								t1.BotTrade.ClearMine(v1223, p230)
+								v986("Оффер пуст 20 сек — отклоняю", Color3.fromRGB(236, 139, 116))
+
+								break
+							end
+
+							local v1229, v1230 = v1140(v1223, p230, 20)
+
+							if v1230 == "closed" then
+								v986("Игрок сам закрыл трейд", Color3.fromRGB(148, 158, 176))
+								v1225 = true
+
+								break
+							end
+
+							if v1230 == "empty" then
+								t1.BotTrade.ClearMine(v1223, p230)
+								v986("Их оффер убран — наш тоже снят", Color3.fromRGB(236, 139, 116))
+							else
+								if not v1229 then
+									v986("Оффер нестабилен — отклоняю", Color3.fromRGB(236, 139, 116))
+
+									break
+								end
+
+								t1.BotTrade.ClearMine(v1223, p230)
+
+								if not t1.BotTrade.IsOpen(v1223) then
+									v1225 = true
+
+									break
+								end
+
+								local v1231, v1232 = v1147(v1223, id)
+
+								if not v1231 then
+									v986(v1232 or "Нет безопасного оффера", Color3.fromRGB(236, 139, 116))
+
+									break
+								end
+
+								local v1233, value, v1235
+
+								if #v1231.selected > 0 then
+									v1233, value, v1235 = v767(v1223, v1231.selected, v1231.totalMin, v1231.totalMax)
+								else
+									value = select(1, v766(v1223))
+									v1233 = value >= v1231.totalMin - 0.01 and value <= v1231.totalMax + 0.01
+									v1235 = v1233 and nil or "Текущий оффер вне диапазона"
+								end
+
+								if not v1233 then
+									local v1236 = v986
+
+									v1235 = v1235 or "Не удалось выставить оффер"
+									v1236(v1235, Color3.fromRGB(236, 139, 116))
+
+									break
+								end
+
+								v986(string.format("Оффер %.0f / %.0f — жду таймер", value, v1231.theirValue), Color3.fromRGB(112, 211, 153))
+
+								local v1237, v1238 = v1168(v1223, id, v1231.selected, p230)
+
+								if v1237 then
+									v1225 = true
+
+									break
+								end
+
+								if not t1.BotTrade.IsOpen(v1223) then
+									v1225 = true
+
+									break
+								end
+
+								t1.BotTrade.ClearMine(v1223, p230)
+
+								if v1238 and (v1238:find("измен", 1, true) or v1238:find("обнул", 1, true)) then
+									v986("Оффер изменился — пересобираю", Color3.fromRGB(127, 190, 247))
+								else
+									v986(v1238 or "Подтверждение не удалось", Color3.fromRGB(236, 139, 116))
+
+									break
+								end
+							end
+						end
+
+						if not v1225 and t1.BotTrade.IsOpen(v1223) then
+							t1.BotTrade.ClearMine(v1223, p230)
+
+							if not v1052() and t1.BotTrade.IsOpen(v1223) then
+								v986("Не удалось отклонить трейд — бот остановлен", Color3.fromRGB(236, 139, 116))
+								u953 = false
+								v1000(true)
+
+								return
+							end
+						end
+					else
+						v1052()
+					end
+				end
+
+				v1033()
+				task.wait(0.55)
+			end
+
+			u957 = nil
+
+			if v13() and u953 and n31 == p230 and not v1205() then
+				v986("Хоп недоступен: проверь queue и SELF_LOADER_URL", Color3.fromRGB(236, 139, 116))
+				u953 = false
+				v1000(true)
+				TextButton5.Text = "ВКЛЮЧИТЬ"
+				TextButton5.BackgroundColor3 = Color3.fromRGB(48, 54, 67)
+				TextButton3.BackgroundColor3 = Color3.fromRGB(35, 42, 58)
+				TextButton3.TextColor3 = Color3.fromRGB(149, 198, 255)
+			end
+		end
+		local function v1239(p231)
+			n31 += 1
+			u953 = p231 == true
+
+			if thread then
+				pcall(function()
+					task.cancel(thread)
+				end)
+				thread = nil
+			end
+
+			if u953 then
+				v1033()
+
+				local v1240 = n31
+
+				v15(task.spawn(function()
+					while v13() and u953 and n31 == v1240 do
+						v1033()
+						task.wait(3)
+					end
+				end))
+				u958 = false
+				TextButton5.Text = "ВЫКЛЮЧИТЬ"
+				TextButton5.BackgroundColor3 = Color3.fromRGB(35, 132, 78)
+				TextButton3.BackgroundColor3 = Color3.fromRGB(27, 112, 70)
+				TextButton3.TextColor3 = Color3.fromRGB(226, 255, 239)
+				v986("Запуск строгого режима...", Color3.fromRGB(112, 211, 153))
+
+				local v1241 = n31
+
+				thread = task.spawn(function()
+					local ok, result = pcall(function()
+						v1216(v1241)
+					end)
+
+					if not ok and u953 and n31 == v1241 then
+						warn("[MM2 Bot]", result)
+						v986("Ошибка остановлена безопасно", Color3.fromRGB(236, 139, 116))
+						u953 = false
+						v1000(true)
+						TextButton5.Text = "ВКЛЮЧИТЬ"
+						TextButton5.BackgroundColor3 = Color3.fromRGB(48, 54, 67)
+						TextButton3.BackgroundColor3 = Color3.fromRGB(35, 42, 58)
+						TextButton3.TextColor3 = Color3.fromRGB(149, 198, 255)
+					end
+				end)
+				v15(thread)
+			else
+				u957 = nil
+				v1000(true)
+				TextButton5.Text = "ВКЛЮЧИТЬ"
+				TextButton5.BackgroundColor3 = Color3.fromRGB(48, 54, 67)
+				TextButton3.BackgroundColor3 = Color3.fromRGB(35, 42, 58)
+				TextButton3.TextColor3 = Color3.fromRGB(149, 198, 255)
+				v986("Выключен")
+			end
+		end
+
+		v14(TextButton3.MouseButton1Click:Connect(function()
+			if Frame6.Visible then
+				t1.Motion.Close(Frame6)
+			else
+				t1.Motion.Open(Frame6)
+			end
+		end))
+		v14(TextButton4.MouseButton1Click:Connect(function()
+			t1.Motion.Close(Frame6)
+		end))
+		v14(TextButton5.MouseButton1Click:Connect(function()
+			v1239(not u953)
+		end))
+
+		for i, v in ipairs(t63) do
+			local v1246 = i
+
+			v14(v.MouseButton1Click:Connect(function()
+				if u953 then
+					v986("Сначала выключи бота", Color3.fromRGB(236, 139, 116))
+
+					return
+				end
+
+				n30 = v1246
+				v975()
+			end))
+		end
+
+		local __MM2_BOT_RESUME = v11.__MM2_BOT_RESUME
+
+		v11.__MM2_BOT_RESUME = nil
+
+		if type(__MM2_BOT_RESUME) == "table" and __MM2_BOT_RESUME.enabled then
+			for i, v in ipairs(t61) do
+				if v.id == __MM2_BOT_RESUME.mode then
+					n30 = i
+
+					break
+				end
+			end
+
+			v975()
+			task.delay(1.2, function()
+				if v13() then
+					v1239(true)
+				end
+			end)
+		end
+	end
+
+	v951()
+	v15(task.spawn(function()
+		task.wait()
+
+		local t75 = {}
+
+		local function v1251(p232)
+			if not p232 or not p232:IsA("GuiObject") then
+				return
+			end
+
+			table.insert(t75, p232:FindFirstChildOfClass("UIScale") or Instance.new("UIScale", p232))
+		end
+
+		v1251(Frame2)
+		v1251(Frame5)
+		v1251(Frame)
+
+		local function v1252()
+			local AbsoluteSize = ScreenGui.AbsoluteSize
+			local kind = t1.DeviceProfile.kind
+			local scale
+
+			if kind == "PHONE" then
+				scale = 0.72
+			elseif kind == "TABLET" then
+				scale = 0.86
+			elseif kind == "HYBRID" then
+				scale = 0.92
+			else
+				local v1256 = AbsoluteSize.X < 1050 or AbsoluteSize.Y < 650
+
+				scale = 1
+
+				if v1256 then
+					scale = 0.94
+				end
+			end
+
+			for _, v in ipairs(t75) do
+				if v.Parent then
+					v.Scale = scale
+				end
+			end
+
+			local v1259 = kind == "PHONE"
+			local v1260 = v1259 and 8 or kind == "PC" and 20 or 14
+
+			TextButton.Size = v1259 and UDim2.fromOffset(40, 40) or UDim2.fromOffset(48, 48)
+
+			local v1261 = AbsoluteSize.Y < 520 and 54 or 70
+
+			TextButton.Position = UDim2.new(1, -v1260, 0, v1261)
+			TextButton.Text = "&"
+
+			if t1.QuickTools and t1.QuickTools.Button then
+				t1.QuickTools.Button.Size = TextButton.Size
+				t1.QuickTools.Button.Position = UDim2.new(1, -(v1260 + (v1259 and 48 or 58)), 0, v1261)
+				t1.QuickTools.Menu.Position = UDim2.new(1, -v1260, 0, v1261 + 58)
+			end
+		end
+
+		v1252()
+		v14(ScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(v1252))
+	end))
+	v903()
+end
+
+v22(true)
+v15(task.spawn(function()
+	task.wait(0.8)
+
+	if v13() then
+		v527()
+	end
+end))
+v16()
+print("MM2 Trade Suite v30.0 RU — FULL SMART-TRADE EDITION LOADED!")
+print("Русский каталог, безопасные валюты, умные офферы и строгий бот готовы.")
