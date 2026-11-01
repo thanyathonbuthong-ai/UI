@@ -1,0 +1,3521 @@
+if _G.NLHvH and type(_G.NLHvH.unload) == "function" then
+	pcall(_G.NLHvH.unload)
+end
+
+local Players          = game:GetService("Players")
+local ReplicatedStorage= game:GetService("ReplicatedStorage")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local Debris           = game:GetService("Debris")
+local GuiService       = game:GetService("GuiService")
+local Teams            = game:GetService("Teams")
+local CollectionService = game:GetService("CollectionService")
+local StatsService     = game:GetService("Stats")
+local HttpService      = game:GetService("HttpService")
+local WorkspaceService = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then return end
+local function getCam() return WorkspaceService.CurrentCamera end
+
+local function atan2(y, x)
+	if math.atan2 then return math.atan2(y, x) end
+		if x > 0 then return math.atan(y / x) end
+	if x < 0 then
+		if y >= 0 then return math.atan(y / x) + math.pi end
+		return math.atan(y / x) - math.pi
+	end
+	if y > 0 then return math.pi / 2 end
+	if y < 0 then return -math.pi / 2 end
+	return 0
+end
+
+local function keyEquals(a, b)
+	if a == b then return true end
+	if a and b and a.EnumType and b.EnumType and a.Name and b.Name then
+		return a.EnumType == b.EnumType and a.Name == b.Name
+	end
+	return false
+end
+
+local COL = {
+	window      = Color3.fromRGB(13, 14, 16),
+	window_edge = Color3.fromRGB(38, 41, 47),
+	header      = Color3.fromRGB(9, 10, 11),
+	rail        = Color3.fromRGB(11, 12, 14),
+	rail_active = Color3.fromRGB(22, 24, 28),
+	panel       = Color3.fromRGB(19, 21, 24),
+	panel_head  = Color3.fromRGB(25, 27, 31),
+	row         = Color3.fromRGB(24, 26, 30),
+	row_hover   = Color3.fromRGB(32, 35, 40),
+	row_dark    = Color3.fromRGB(16, 17, 20),
+	accent      = Color3.fromRGB(74, 136, 240),
+	accent_dark = Color3.fromRGB(43, 84, 160),
+	text        = Color3.fromRGB(176, 182, 190),
+	text_dim    = Color3.fromRGB(112, 118, 126),
+	white       = Color3.fromRGB(236, 239, 243),
+	green       = Color3.fromRGB(102, 204, 102),
+	red         = Color3.fromRGB(238, 86, 86),
+	orange      = Color3.fromRGB(240, 158, 62),
+	purple      = Color3.fromRGB(170, 128, 252),
+	track       = Color3.fromRGB(43, 46, 52),
+}
+local FONT      = Enum.Font.Gotham
+local FONT_MED  = Enum.Font.GothamMedium
+local FONT_BOLD = Enum.Font.GothamBold
+
+local IS_TOUCH = UserInputService.TouchEnabled
+
+local function cfgColor(r, g, b) return { r = r, g = g, b = b } end
+
+local DEFAULTS = {
+	menu_key   = Enum.KeyCode.Insert,
+	menu_button= "touch",
+	rage = {
+		enabled      = true,
+		silent       = true,     		selection    = "crosshair", 		hitbox       = "head",   		multipoint   = 30,       		fov          = 180,      		autofire     = true,
+		hitchance    = 100,
+		firetime     = 100,      		autoreload   = true,
+		teamcheck    = false,		nevermiss    = true,     		wallbang     = true,     		walls        = "ignore", 		backtrack    = true,
+		backtrack_ms = 200,
+		team_targets = {},
+		resolver     = "average",		key_mode     = "always", 		key          = nil,
+	},
+
+	aa = {
+		enabled      = false,
+		pitch        = "off",    		yaw          = 180,      		at_targets   = false,    		spin         = false,
+		spin_speed   = 420,      		flip_key     = nil,      		jitter       = "off",    		jitter_range = 60,
+		jitter_rate  = 8,        		fakelag      = false,
+		fakelag_mode = "factor", 		fakelag_ticks= 8,
+		arrows       = true,     		pos_jitter   = 0,        	},
+
+	vis = {
+		esp          = true,
+		box          = "corner", 		name         = true,
+		health       = true,
+		weapon       = true,
+		distance     = false,
+		teamcolors   = true,
+		teammates    = true,
+		maxdist      = 1500,
+		chams        = true,
+		chams_visible  = cfgColor(88, 168, 255),
+		chams_occluded = cfgColor(255, 138, 56),
+		chams_fill   = 60,       		fovcircle    = true,
+		target_indicator = true,
+		hitmarker    = true,
+		hitsound     = true,
+		hitsound_vol = 40,
+		watermark    = true,
+		keybinds     = true,
+	},
+
+	misc = {
+		bhop        = "off",     		autostrafe  = false,
+		knifebot    = false,
+		knife_range = 7,
+		antiafk     = true,
+		remove_scope= false,
+		wings       = false,
+		god         = false,
+		autodefend  = true,
+		autodefend_time = 4,
+		instant_reload = true,
+	},
+}
+
+local CFG = nil
+local function deepCopy(t)
+	local c = {}
+	for k, v in pairs(t) do
+		if type(v) == "table" then c[k] = deepCopy(v) else c[k] = v end
+	end
+	return c
+end
+local function deepMerge(dst, src)
+	for k, v in pairs(src) do
+		if dst[k] ~= nil and type(dst[k]) == "table" and type(v) == "table" then
+			deepMerge(dst[k], v)
+		else
+			dst[k] = v
+		end
+	end
+end
+CFG = deepCopy(DEFAULTS)
+
+local function col3(c) return Color3.new(c.r / 255, c.g / 255, c.b / 255) end
+local function colCfg(color3) return cfgColor(math.floor(color3.R * 255 + 0.5), math.floor(color3.G * 255 + 0.5), math.floor(color3.B * 255 + 0.5)) end
+
+local PRESETS = {}
+PRESETS["rage"] = function()
+	deepMerge(CFG, {
+		rage = { enabled = true, silent = true, fov = 180, autofire = true, hitbox = "head",
+			multipoint = 40, hitchance = 100, walls = "ignore", backtrack = true, backtrack_ms = 200,
+			resolver = "average", firetime = 100, nevermiss = true, wallbang = true, teamcheck = false },
+		aa   = { enabled = true, spin = true, spin_speed = 480, jitter = "offset", jitter_range = 60,
+			jitter_rate = 10, fakelag = true, fakelag_mode = "factor", fakelag_ticks = 8, yaw = 180 },
+		vis  = { esp = true, box = "corner", chams = true },
+		misc = { bhop = "always", autostrafe = true },
+	})
+end
+PRESETS["legit"] = function()
+	deepMerge(CFG, {
+		rage = { enabled = true, silent = true, fov = 12, autofire = false, hitbox = "nearest",
+			multipoint = 60, hitchance = 55, walls = "visible", backtrack = false, resolver = "off" },
+		aa   = { enabled = false },
+		misc = { bhop = "off", autostrafe = false },
+	})
+end
+PRESETS["closet"] = function()
+	deepMerge(CFG, {
+		rage = { enabled = true, silent = true, fov = 45, autofire = false, hitbox = "head",
+			multipoint = 30, hitchance = 75, walls = "ignore", backtrack = true, backtrack_ms = 120 },
+		aa   = { enabled = false },
+	})
+end
+
+local conns            = {}   local renderBinds      = {}   local char, human, root = nil, nil, nil
+local menuOpen         = false
+local typingInMenu     = false
+local capturingBind    = nil local capturingBindBtn = nil local fpsCount, fpsValue, fpsClock = 0, 0, os.clock()
+local bootTime         = os.clock()
+
+local equippedTool     = nil
+local gunStats         = nil
+local reloading        = false
+local scoped           = false
+local lastShotAt       = 0
+local firingLoop       = false
+local heldInputs       = {}   local rageToggleState  = true
+local flipHeld         = false
+local prevMouseBehavior= Enum.MouseBehavior.Default
+local prevMouseIcon    = true
+
+local aaSpinAngle      = 0
+local aaJitterTimer    = 0
+local aaJitterSign     = 1
+local aaJitterValue    = 0
+local aaLagTicks       = 0
+local aaLastYaw        = nil
+
+local pendingHits      = {}
+
+local meleeNames       = {}
+local eventLog         = {}   local logListeners     = {}
+local doHitFeedback       local updateAmmoLabel     local reloadGun           local startFiring         local setMenuOpen         local applyGunHUD         local setScope            local unload              local saveConfigNow
+local dead = false
+
+local function connect(signal, fn)
+	local c = signal:Connect(fn)
+	table.insert(conns, c)
+	return c
+end
+local function bindRender(name, priority, fn)
+	RunService:BindToRenderStep(name, priority, fn)
+	table.insert(renderBinds, name)
+end
+
+local function waitFor(parent, name, timeout)
+	local ok, inst = pcall(function() return parent:WaitForChild(name, timeout or 10) end)
+	return ok and inst or nil
+end
+
+local GunRemotes = waitFor(ReplicatedStorage, "GunRemotes", 15)
+local ShootEvent = GunRemotes and GunRemotes:FindFirstChild("ShootEvent")
+local FuncReload = GunRemotes and GunRemotes:FindFirstChild("FuncReload")
+local MeleeEvent = waitFor(ReplicatedStorage, "meleeEvent", 15)
+local RemotesFolder = waitFor(ReplicatedStorage, "Remotes", 15)
+local RequestTeamChange = RemotesFolder and RemotesFolder:FindFirstChild("RequestTeamChange")
+local GiverPressed = RemotesFolder and RemotesFolder:FindFirstChild("GiverPressed")
+
+local SharedModules = waitFor(ReplicatedStorage, "SharedModules", 15)
+local GunTracers    = nil
+pcall(function() GunTracers = require(SharedModules:WaitForChild("GunTracers", 5)) end)
+
+local PlayerSettingsObj = waitFor(ReplicatedStorage, "PlayerSettings", 15)
+
+local PlayerGui = waitFor(LocalPlayer, "PlayerGui", 15)
+local PlayerScripts = waitFor(LocalPlayer, "PlayerScripts", 15)
+
+pcall(function()
+	local melees = ReplicatedStorage.Prison_ITEMS.Tools:FindFirstChild("Melees")
+		or ReplicatedStorage.Prison_ITEMS:FindFirstChild("Melees")
+	if melees then
+		for _, t in ipairs(melees:GetChildren()) do
+			if t:IsA("Tool") then meleeNames[t.Name] = true end
+		end
+	end
+end)
+meleeNames["Crude Knife"] = true
+meleeNames["Hammer"] = true
+
+local vanillaController = nil
+local vanillaDisabled   = false
+
+local function findVanillaGunScript()
+	local containers = {}
+	if PlayerScripts then table.insert(containers, PlayerScripts) end
+	if PlayerGui then table.insert(containers, PlayerGui) end
+	if LocalPlayer.Character then table.insert(containers, LocalPlayer.Character) end
+	for _, c in ipairs(containers) do
+		local ok, desc = pcall(function() return c:GetDescendants() end)
+		if ok and desc then
+			for _, d in ipairs(desc) do
+				if d:IsA("BaseScript") and (d.Name == "GunController" or d.Name == "GunClient") then
+					return d
+				end
+			end
+		end
+	end
+	return nil
+end
+
+local function killVanillaGunScript()
+	local s = findVanillaGunScript()
+	if s then
+		vanillaController = s
+		pcall(function() s.Disabled = true end)
+		vanillaDisabled = (s.Disabled == true)
+		if vanillaDisabled then
+			warn("[neverlose] vanilla GunController disabled — gun driver active")
+		else
+			warn("[neverlose] could not disable vanilla GunController (jamming its fire path instead)")
+		end
+	end
+end
+killVanillaGunScript()
+if PlayerScripts then
+	connect(PlayerScripts.DescendantAdded, function(d)
+		if d:IsA("BaseScript") and (d.Name == "GunController" or d.Name == "GunClient") and not vanillaDisabled then
+			task.defer(killVanillaGunScript)
+		end
+	end)
+end
+
+local bulletParams = RaycastParams.new()
+bulletParams.FilterType = Enum.RaycastFilterType.Exclude
+bulletParams.FilterDescendantsInstances = {}
+pcall(function() bulletParams.CollisionGroup = "ClientBullet" end)
+local function setBulletFilter(list)
+	bulletParams.FilterDescendantsInstances = list
+end
+
+local function logEvent(text, color)
+	table.insert(eventLog, { t = os.time(), text = text, col = color or COL.text_dim })
+	if #eventLog > 120 then table.remove(eventLog, 1) end
+		for _, cb in ipairs(logListeners) do pcall(cb, text, color) end
+end
+
+local records = {}
+local function hitboxParts(charRec)
+		local list = {}
+	local c = charRec.char
+	if not c then return list end
+	local function try(name, label)
+		local p = c:FindFirstChild(name)
+		if p and p:IsA("BasePart") then table.insert(list, { part = p, label = label }) end
+	end
+	try("Head", "head")
+	try("UpperTorso", "chest")
+	try("Torso", "chest")
+	try("LowerTorso", "stomach")
+	try("HumanoidRootPart", "body")
+	return list
+end
+
+local function makeRecord(plr)
+	local rec = {
+		player    = plr,
+		char      = nil,
+		hum       = nil,
+		alive     = false,
+		esp       = nil,   		highlight = nil,
+		history   = {},    		lastHealth= 100,
+		pendingDiedLogged = false,
+		jitterSpeed = 0,   		lastPos = nil,
+		lastPosT = os.clock(),
+	}
+	records[plr] = rec
+	return rec
+end
+
+local function destroyRecordESP(rec)
+	if rec.esp then pcall(function() rec.esp.frame:Destroy() end); rec.esp = nil end
+	if rec.highlight then pcall(function() rec.highlight:Destroy() end); rec.highlight = nil end
+end
+
+local function refreshRecord(rec)
+	local plr = rec.player
+	local tok = (rec.refreshToken or 0) + 1
+	rec.refreshToken = tok
+	rec.char = plr.Character
+	rec.hum = rec.char and rec.char:FindFirstChildOfClass("Humanoid")
+	rec.alive = rec.hum and rec.hum.Health > 0 or false
+	rec.history = {}
+	rec.lastHealth = rec.hum and rec.hum.Health or 100
+	destroyRecordESP(rec)
+
+	if rec.char and not rec.hum then
+		local c = rec.char
+		task.spawn(function()
+			for _ = 1, 40 do
+				task.wait(0.25)
+				if plr.Character ~= c or rec.refreshToken ~= tok then return end
+				local hum = c:FindFirstChildOfClass("Humanoid")
+				if hum then
+					if plr.Character == c then task.defer(refreshRecord, rec) end
+					return
+				end
+			end
+		end)
+	end
+	if rec.hum then
+		connect(rec.hum:GetPropertyChangedSignal("Health"), function()
+			local h = rec.hum and rec.hum.Health
+			if not h then return end
+			local old = rec.lastHealth
+			rec.lastHealth = h
+			if h <= 0 and old > 0 then
+				local pend = pendingHits[rec]
+				if pend and os.clock() - pend.t < 1.0 then
+					logEvent("killed " .. plr.Name, COL.purple)
+				else
+					logEvent(plr.Name .. " died", COL.text_dim)
+				end
+				pendingHits[rec] = nil
+			elseif h < old then
+				local pend = pendingHits[rec]
+				if pend and os.clock() - pend.t < 0.6 then
+					local dmg = math.floor(old - h + 0.5)
+					logEvent("hit " .. plr.Name .. " for " .. dmg .. " (" .. pend.hitbox .. ")", COL.green)
+					doHitFeedback()
+					pendingHits[rec] = nil
+				end
+			end
+		end)
+	end
+end
+
+local function playerIsValidTarget(rec)
+		local plr = rec.player
+	if plr == LocalPlayer then return false end
+	if not (rec.char and rec.hum and rec.hum.Health > 0) then return false end
+	if rec.char:FindFirstChildOfClass("ForceField") then return false end
+	if CFG.rage.teamcheck then
+		if plr.Team == LocalPlayer.Team then return false end
+		local Guards = Teams:FindFirstChild("Guards")
+		local Inmates = Teams:FindFirstChild("Inmates")
+		if LocalPlayer.Team == Guards and plr.Team == Inmates
+			and not rec.char:GetAttribute("Hostile") then
+			return false
+		end
+	end
+	if type(CFG.rage.team_targets) == "table" then
+		local tn = plr.Team and plr.Team.Name
+		if tn and CFG.rage.team_targets[tn] == false then
+			return false
+		end
+	end
+	return true
+end
+
+local HISTORY_SECONDS = 0.5
+local function sampleHistory()
+	local now = os.clock()
+	for _, rec in pairs(records) do
+		if rec.char and rec.hum and rec.hum.Health > 0 then
+			local snap = { t = now, pos = {} }
+			for _, hb in ipairs(hitboxParts(rec)) do
+				snap.pos[hb.label] = hb.part.Position
+			end
+			table.insert(rec.history, snap)
+			while #rec.history > 0 and (now - rec.history[1].t) > HISTORY_SECONDS do
+				table.remove(rec.history, 1)
+			end
+						local rootPart = rec.char:FindFirstChild("HumanoidRootPart")
+			if rootPart then
+				local p = rootPart.Position
+				if rec.lastPos then
+					local dt = now - rec.lastPosT
+					if dt > 0.016 then
+						local v = (p - rec.lastPos) / dt
+						rec.velocity = v
+						rec.jitterSpeed = v.Magnitude
+					end
+				end
+				rec.lastPos = p
+				rec.lastPosT = now
+			end
+		end
+	end
+end
+
+local function backtrackPosition(rec, label, currentPos)
+	local ms = CFG.rage.backtrack_ms or 0
+	if not (CFG.rage.backtrack and ms > 0) then return currentPos, false end
+	local target = os.clock() - ms / 1000
+	local best = nil
+	for _, snap in ipairs(rec.history) do
+		if snap.t <= target then best = snap end
+	end
+	if best and best.pos[label] then
+		return best.pos[label], true
+	end
+	return currentPos, false
+end
+
+local function resolvePosition(rec, label, pos)
+	local mode = CFG.rage.resolver
+	if mode == "off" then return pos end
+		if mode == "average" then
+		local sum, n = nil, 0
+		local cutoff = os.clock() - math.min(0.25, (CFG.rage.backtrack_ms or 0) / 1000 + 0.05)
+		for i = #rec.history, 1, -1 do
+			local snap = rec.history[i]
+			if snap.t >= cutoff and snap.pos[label] then
+				sum = sum and sum + snap.pos[label] or snap.pos[label]
+				n = n + 1
+				if n >= 12 then break end
+			end
+		end
+		if sum and n > 2 then
+			return sum / n
+		end
+		return pos
+	end
+		if mode == "extrapolate" and rec.velocity then
+		return pos + rec.velocity * 0.12
+	end
+	return pos
+end
+
+local function chooseHitbox(rec, camPos, lookVec)
+	local boxes = hitboxParts(rec)
+	if #boxes == 0 then return nil, nil end
+	local wanted = CFG.rage.hitbox
+	local choice, choicePos, choiceLabel
+	if wanted == "nearest" then
+				local bestD = math.huge
+		for _, hb in ipairs(boxes) do
+			local p = hb.part.Position
+			local to = p - camPos
+			local along = to:Dot(lookVec)
+			local off = (to - lookVec * along).Magnitude
+			if off < bestD then bestD = off; choice = hb; choicePos = p; choiceLabel = hb.label end
+		end
+	else
+		local wantName = (wanted == "head" and "head")
+			or (wanted == "torso" and "chest")
+			or "body"
+		for _, hb in ipairs(boxes) do
+			if hb.label == wantName then choice = hb; choicePos = hb.part.Position; choiceLabel = hb.label; break end
+		end
+		if not choice then
+			choice = boxes[1]
+			choicePos = choice.part.Position
+			choiceLabel = choice.label
+		end
+	end
+	if not choice then return nil, nil end
+
+		local pos = resolvePosition(rec, choiceLabel, choicePos)
+	pos = backtrackPosition(rec, choiceLabel, pos)
+
+		local mp = (CFG.rage.multipoint or 0) / 100
+	if mp > 0 then
+		local sz = choice.part.Size
+		pos = pos + Vector3.new(
+			(sz.X * 0.5 * mp) * (math.random() * 2 - 1),
+			(sz.Y * 0.5 * mp) * (math.random() * 2 - 1),
+			(sz.Z * 0.5 * mp) * (math.random() * 2 - 1)
+		)
+	end
+	return choice.part, pos, choiceLabel
+end
+
+local function pointVisibleFromCamera(aimPos, rec)
+	local cam = getCam()
+	if not cam then return true end
+	local origin = cam.CFrame.Position
+	local dir = aimPos - origin
+	local dist = dir.Magnitude
+	if dist < 1 then return true end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { char or LocalPlayer.Character }
+	local hit = WorkspaceService:Raycast(origin, dir, params)
+	if hit and hit.Instance and rec.char and hit.Instance:IsDescendantOf(rec.char) then
+		return true 	end
+	if hit then return false end
+	return true
+end
+
+local currentTarget = nil
+local function rageActive()
+	local m = CFG.rage.key_mode
+	if m == "always" then return true end
+	if m == "hold" then
+		local k = CFG.rage.key
+		return k ~= nil and UserInputService:IsKeyDown(k)
+	end
+	if m == "toggle" then return rageToggleState end
+	return true
+end
+
+local myLastHealth, forcedDefend, forcedDefendUntil = 100, nil, 0
+
+local function pickDefendTarget()
+	local bestRec, bestDist = nil, math.huge
+	local anyRec, anyDist = nil, math.huge
+	for _, rec in pairs(records) do
+		local plr = rec.player
+		if plr ~= LocalPlayer and rec.char and rec.hum and rec.hum.Health > 0
+			and not rec.char:FindFirstChildOfClass("ForceField") then
+			local r = rec.char:FindFirstChild("HumanoidRootPart") or rec.char:FindFirstChild("Head")
+			if r and root then
+				local d = (r.Position - root.Position).Magnitude
+				local armed = false
+				for _, t in ipairs(rec.char:GetChildren()) do
+					if t:IsA("Tool") and (t:GetAttribute("ToolType") == "Gun" or meleeNames[t.Name]) then
+						armed = true
+						break
+					end
+				end
+				if armed and d < bestDist then
+					bestRec, bestDist = rec, d
+				end
+				if d < anyDist then
+					anyRec, anyDist = rec, d
+				end
+			end
+		end
+	end
+	if bestRec then return bestRec end
+	if anyRec and anyDist <= 40 then return anyRec end
+	return nil
+end
+
+local function onMyHealthChanged(h)
+	local old = myLastHealth
+	myLastHealth = h
+	if h >= old then return end
+	if h <= 0 then return end
+	if not (CFG.rage.enabled and CFG.misc.autodefend) then return end
+	local attacker = nil
+	pcall(function()
+		local c = human and human:FindFirstChild("creator")
+		if c and c.Value and c.Value:IsA("Player") then
+			attacker = records[c.Value]
+		end
+	end)
+	if not attacker then attacker = pickDefendTarget() end
+	if attacker then
+		forcedDefend = attacker
+		forcedDefendUntil = os.clock() + (CFG.misc.autodefend_time or 4)
+		logEvent("autodefend → " .. attacker.player.Name, COL.red)
+	end
+end
+
+local function scanTarget()
+	if not (CFG.rage.enabled and rageActive())
+		and not (CFG.rage.enabled and CFG.misc.autodefend and forcedDefend) then
+		return nil
+	end
+	local cam = getCam()
+	if not cam then return nil end
+	local camPos = cam.CFrame.Position
+	local lookVec = cam.CFrame.LookVector
+	if forcedDefend then
+		if os.clock() >= forcedDefendUntil then
+			forcedDefend = nil
+		elseif CFG.misc.autodefend and forcedDefend.char and forcedDefend.hum
+			and forcedDefend.hum.Health > 0
+			and not forcedDefend.char:FindFirstChildOfClass("ForceField") then
+			local fd = forcedDefend
+			local part, pos, label = chooseHitbox(fd, camPos, lookVec)
+			if part and pos then
+				if currentTarget ~= fd then
+					currentTarget = fd
+					logEvent("autodefend → " .. fd.player.Name, COL.red)
+				end
+				return fd, part, pos, label
+			end
+		else
+			forcedDefend = nil
+		end
+	end
+	local fovRad = math.rad(CFG.rage.fov or 180) * 0.5
+
+	local best, bestPart, bestPos, bestLabel, bestScore
+	local bestMode = CFG.rage.selection
+	local bestHealth = math.huge
+	local bestDist = math.huge
+
+	for _, rec in pairs(records) do
+		if playerIsValidTarget(rec) then
+			local part, pos, label = chooseHitbox(rec, camPos, lookVec)
+			if part and pos then
+				local to = pos - camPos
+				local dist = to.Magnitude
+				local ang = math.acos(math.clamp(to.Unit:Dot(lookVec), -1, 1))
+				if ang <= fovRad and dist < 4096 then
+					if CFG.rage.walls == "visible" and not pointVisibleFromCamera(pos, rec) then
+											else
+						local better = false
+						if bestMode == "distance" then
+							better = dist < bestDist
+						elseif bestMode == "health" then
+							local hp = rec.hum and rec.hum.Health or 100
+							better = hp < bestHealth
+							if hp < bestHealth then bestHealth = hp end
+						else 							better = ang < (bestScore or math.huge)
+						end
+						if better or not best then
+							best, bestPart, bestPos, bestLabel = rec, part, pos, label
+							bestDist = dist
+							if bestMode == "crosshair" then bestScore = ang end
+						end
+					end
+				end
+			end
+		end
+	end
+	if best then
+		if currentTarget ~= best then
+			currentTarget = best
+			logEvent("target acquired → " .. best.player.Name, COL.accent)
+		end
+		return best, bestPart, bestPos, bestLabel
+	end
+	if currentTarget then currentTarget = nil end
+	return nil
+end
+
+local HUD = {}
+local wiredActionArea, wiredButton2, wiredReload = nil, nil, nil
+local function wireHUD()
+	pcall(function()
+		local home = PlayerGui:WaitForChild("Home", 10)
+		local hud = home:WaitForChild("hud", 10)
+		HUD.hud           = hud
+		HUD.gunFrame      = hud:WaitForChild("BottomRightFrame", 5):WaitForChild("GunFrame", 5)
+		HUD.bullets       = HUD.gunFrame:WaitForChild("BulletsLabel", 5)
+		HUD.touchReload   = HUD.gunFrame:FindFirstChild("TouchReloadButton")
+		HUD.actionArea    = hud:FindFirstChild("ActionArea")
+		HUD.actionButton2 = hud:FindFirstChild("ActionButton2")
+		HUD.mobileGunFrame= hud:FindFirstChild("MobileGunFrame")
+		if HUD.mobileGunFrame then
+			HUD.ignoreTouch  = HUD.mobileGunFrame:FindFirstChild("IgnoreTouchArea")
+			HUD.mobileCursor = HUD.mobileGunFrame:FindFirstChild("MobileCursor")
+			HUD.taserBar     = HUD.mobileGunFrame:FindFirstChild("TaserProgress")
+		end
+		HUD.scope = PlayerGui:WaitForChild("CrosshairGui", 10):WaitForChild("ScopeFrame", 5)
+	end)
+end
+wireHUD()
+
+local isInsideDynThumb = nil
+pcall(function()
+	isInsideDynThumb = require(SharedModules:WaitForChild("isInsideDynThumbFrame", 5))
+end)
+
+local mobileCursorOffset = 0
+pcall(function()
+	local off = PlayerSettingsObj and PlayerSettingsObj:GetAttribute("MobileCursorOffset")
+	if off then mobileCursorOffset = off * 15 end
+	if PlayerSettingsObj then
+		PlayerSettingsObj:GetAttributeChangedSignal("MobileCursorOffset"):Connect(function()
+			local o = PlayerSettingsObj:GetAttribute("MobileCursorOffset")
+			if o then mobileCursorOffset = o * 15 end
+		end)
+	end
+end)
+
+local lastInputTouch = UserInputService:GetLastInputType() == Enum.UserInputType.Touch
+local lastKnifeAt    = 0
+local cameraAimPoint = nil      local savedCamDist   = nil
+
+local function playToolSound(tool, name)
+	if not tool then return end
+	pcall(function()
+		local handle = tool:FindFirstChild("Handle")
+		if not handle then return end
+		local s = handle:FindFirstChild(name)
+		if s and s:IsA("Sound") then
+			local c = s:Clone()
+			c.Parent = handle
+			c:Play()
+			Debris:AddItem(c, 5)
+		end
+	end)
+end
+
+updateAmmoLabel = function()
+	pcall(function()
+		if not (equippedTool and HUD.bullets) then return end
+		local ammo = equippedTool:GetAttribute("Local_CurrentAmmo") or 0
+		if gunStats and gunStats.Behavior == "Sniper" then
+			HUD.bullets.Text = ammo .. " | " .. (equippedTool:GetAttribute("StoredAmmo") or 0)
+		else
+			HUD.bullets.Text = ammo .. "/" .. (gunStats and gunStats.MaxAmmo or 30)
+		end
+	end)
+end
+
+applyGunHUD = function(visible)
+	pcall(function()
+		if HUD.gunFrame then HUD.gunFrame.Visible = visible and not lastInputTouch end
+		if HUD.mobileGunFrame then HUD.mobileGunFrame.Visible = visible and lastInputTouch end
+		if not visible then
+			if HUD.actionArea then HUD.actionArea.Visible = false end
+			if HUD.actionButton2 then HUD.actionButton2.Visible = false end
+			if HUD.mobileCursor then HUD.mobileCursor.Visible = false end
+			if HUD.scope and not scoped then HUD.scope.Visible = false end
+		else
+			if HUD.actionArea then
+				HUD.actionArea.Text = "Shoot"
+				HUD.actionArea.Visible = lastInputTouch
+					and UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
+			end
+			if HUD.actionButton2 then
+				HUD.actionButton2.Text = "Zoom"
+				HUD.actionButton2.Visible = lastInputTouch
+					and UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
+					and gunStats ~= nil and gunStats.Behavior == "Sniper"
+			end
+		end
+	end)
+end
+
+setScope = function(on)
+	if not (equippedTool and gunStats) then return end
+	if gunStats.Behavior ~= "Sniper" then return end
+	if scoped == on then return end
+	scoped = on
+	pcall(function()
+		local cam = getCam()
+		if not cam then return end
+		if on then
+			local ok, pm = pcall(function()
+				return require(PlayerScripts:WaitForChild("PlayerModule", 3))
+			end)
+			if ok then
+				local cc = pm:GetCameras() and pm:GetCameras().activeCameraController
+				if cc and cc.currentSubjectDistance then savedCamDist = cc.currentSubjectDistance end
+			end
+			UserInputService.MouseIconEnabled = false
+			LocalPlayer.CameraMode = Enum.CameraMode.LockFirstPerson
+			if CFG.misc.remove_scope then
+				cam.FieldOfView = 70
+				if HUD.scope then HUD.scope.Visible = false end
+			else
+				cam.FieldOfView = 15
+				if HUD.scope then HUD.scope.Visible = true end
+			end
+			_G.cameraSensitivity = 0.1
+			logEvent("scoped", COL.text_dim)
+		else
+			UserInputService.MouseIconEnabled = true
+			LocalPlayer.CameraMode = Enum.CameraMode.Classic
+			cam.FieldOfView = 70
+			if HUD.scope then HUD.scope.Visible = false end
+			_G.cameraSensitivity = 1
+			if savedCamDist then
+				local ok, pm = pcall(function()
+					return require(PlayerScripts:WaitForChild("PlayerModule", 3))
+				end)
+				if ok then
+					local cc = pm:GetCameras() and pm:GetCameras().activeCameraController
+					if cc then pcall(function() cc:SetCameraToSubjectDistance(savedCamDist) end) end
+				end
+				savedCamDist = nil
+			end
+		end
+	end)
+end
+
+reloadGun = function()
+	local tool = equippedTool
+	if not (tool and gunStats) or reloading then return end
+	local session = tool:GetAttribute("Local_ReloadSession") or 0
+	if session ~= 0 then return end
+	if gunStats.Behavior == "Sniper" and (tool:GetAttribute("StoredAmmo") or 0) <= 0 then return end
+
+	reloading = true
+	playToolSound(tool, "ReloadSound")
+	local sess = os.clock()
+	tool:SetAttribute("Local_ReloadSession", sess)
+	task.spawn(function()
+		if FuncReload then pcall(function() FuncReload:InvokeServer() end) end
+		task.wait(CFG.misc.instant_reload and 0.05 or (gunStats.ReloadTime or 2.5))
+		if equippedTool == tool and tool:GetAttribute("Local_ReloadSession") == sess then
+			if gunStats.Behavior == "Sniper" then
+				local stored = tool:GetAttribute("StoredAmmo") or 0
+				local cur = tool:GetAttribute("Local_CurrentAmmo") or 0
+				if cur < (gunStats.MaxAmmo or 1) then
+					tool:SetAttribute("Local_CurrentAmmo", 1)
+					tool:SetAttribute("StoredAmmo", math.max(0, stored - 1))
+				end
+			else
+				tool:SetAttribute("Local_CurrentAmmo", gunStats.MaxAmmo or 30)
+			end
+			updateAmmoLabel()
+		end
+		if equippedTool == tool then
+			tool:SetAttribute("Local_ReloadSession", 0)
+		end
+		reloading = false
+		logEvent("reloaded", COL.text_dim)
+	end)
+end
+
+local function spreadDirection(origin, target, spreadRadius, behavior)
+	local r = math.random()
+	if behavior == "Sniper" or behavior == "Shotgun" then
+		r = math.sqrt(r)
+	end
+	local base = CFrame.new(origin, target)
+	local roll = 360 - 720 * math.random()
+	return (base * CFrame.Angles(0, 0, math.rad(roll)) * CFrame.Angles(0, r * spreadRadius, 0)).LookVector
+end
+
+local function computeCameraAimPoint(inputObj)
+	local cam = getCam()
+	if not cam then return nil, nil end
+	local vp = cam.ViewportSize
+	local x, y
+	if UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter then
+		x, y = vp.X / 2, vp.Y / 2
+	elseif inputObj and inputObj.UserInputType == Enum.UserInputType.Touch then
+		local inset = GuiService:GetGuiInset()
+		x = inputObj.Position.X + inset.X
+		y = inputObj.Position.Y + inset.Y - mobileCursorOffset
+	else
+		local m = UserInputService:GetMouseLocation()
+		x, y = m.X, m.Y
+	end
+	if not x then return nil, nil end
+	local ray = cam:ViewportPointToRay(x, y)
+	local result = WorkspaceService:Raycast(ray.Origin, ray.Direction * 1500, bulletParams)
+	if result then
+		return result.Position, result.Instance
+	end
+	return ray.Origin + ray.Direction * 1500, nil
+end
+
+local function touchAllowedToFire(input)
+	if HUD.mobileGunFrame and HUD.mobileGunFrame.Visible then
+		local ig = HUD.ignoreTouch
+		if ig then
+			local p, ap, as = input.Position, ig.AbsolutePosition, ig.AbsoluteSize
+			if p.X >= ap.X and p.X <= ap.X + as.X and p.Y >= ap.Y and p.Y <= ap.Y + as.Y then
+				return false
+			end
+		end
+	end
+	if isInsideDynThumb then
+		local ok, inside = pcall(isInsideDynThumb, input.Position.X, input.Position.Y)
+		if ok and inside then return false end
+	end
+	return true
+end
+
+local function fireOnce(inputObj)
+	local tool = equippedTool
+	if not (tool and gunStats) then return false end
+	local cam = getCam()
+	local head = char and (char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart"))
+	local origin = head and head.Position or (root and root.Position)
+	if not (cam and origin) then return false end
+
+	local behavior = gunStats.Behavior or "Rifle"
+	local range = gunStats.Range or 1000
+	local pellets = gunStats.ProjectileCount or 1
+
+		local muzzle = nil
+	do
+		local m = tool:FindFirstChild("Muzzle")
+		if m and m:IsA("BasePart") then muzzle = m.Position end
+		if not muzzle then
+			local h = tool:FindFirstChild("Handle")
+			if h and h:IsA("BasePart") then muzzle = h.Position end
+		end
+		if not muzzle then muzzle = origin end
+	end
+	local function tracer(pos)
+		if not GunTracers then return end
+		pcall(function()
+			if behavior == "Sniper" then GunTracers.createSniper(muzzle, pos)
+			elseif behavior == "Taser" then GunTracers.createTaser(muzzle, pos)
+			else GunTracers.createBullet(muzzle, pos) end
+		end)
+	end
+	local function flare()
+		pcall(function()
+			local h = tool:FindFirstChild("Handle")
+			local f = h and h:FindFirstChild("Flare")
+			if f then
+				f.Enabled = true
+				task.delay(0.05, function()
+					if f and f.Parent then f.Enabled = false end
+				end)
+			end
+		end)
+	end
+
+	local shots = {}
+	local targetRec, targetPart, aimPos, targetLabel
+	if CFG.rage.enabled and rageActive() then
+		targetRec, targetPart, aimPos, targetLabel = scanTarget()
+	end
+
+	if targetPart and aimPos then
+				if not CFG.rage.silent then
+			cameraAimPoint = aimPos
+		end
+		local willHit = CFG.rage.nevermiss or ((math.random() * 100) <= (CFG.rage.hitchance or 100))
+		local shotOrigin = origin
+		if willHit and CFG.rage.wallbang then
+			local toT = aimPos - origin
+			if toT.Magnitude > 2 then
+				pcall(function()
+					local res = WorkspaceService:Raycast(origin, toT, bulletParams)
+					if res and res.Instance and targetRec.char
+						and not res.Instance:IsDescendantOf(targetRec.char) then
+						shotOrigin = aimPos - toT.Unit * 1
+					end
+				end)
+			end
+		end
+		local mp = (CFG.rage.multipoint or 0) / 100
+		local sz = targetPart.Size
+		for i = 1, pellets do
+			local pos, inst
+			if willHit then
+				pos = aimPos
+				if mp > 0 then
+					pos = pos + Vector3.new(
+						sz.X * 0.5 * mp * (math.random() * 2 - 1),
+						sz.Y * 0.5 * mp * (math.random() * 2 - 1),
+						sz.Z * 0.5 * mp * (math.random() * 2 - 1)
+					)
+				end
+				inst = targetPart
+			else
+								local off = Vector3.new(
+					(math.random() * 2 - 1),
+					(math.random() * 2 - 1) * 0.5,
+					(math.random() * 2 - 1)
+				) * (2 + math.random() * 5)
+				local dir = (aimPos + off - origin)
+				if dir.Magnitude < 0.1 then dir = cam.CFrame.LookVector end
+				local res = WorkspaceService:Raycast(origin, dir.Unit * range, bulletParams)
+				pos = res and res.Position or (origin + dir.Unit * range)
+				inst = res and res.Instance or nil
+				if inst and targetRec.char and inst:IsDescendantOf(targetRec.char) then
+					willHit = true 				end
+			end
+			table.insert(shots, { shotOrigin, pos, inst })
+			tracer(pos)
+		end
+		if willHit then
+			pendingHits[targetRec] = { t = os.clock(), hitbox = targetLabel or "body" }
+		else
+			logEvent("missed " .. targetRec.player.Name .. " (hit chance)", COL.red)
+		end
+	else
+				local aimPoint = computeCameraAimPoint(inputObj)
+		if not aimPoint then return false end
+		local spreadRadius = gunStats.SpreadRadius or 1
+		if behavior == "Sniper" then
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if hum and hum:GetState() == Enum.HumanoidStateType.Freefall then
+				spreadRadius = spreadRadius * 100
+			elseif not scoped then
+				spreadRadius = spreadRadius * 22
+			end
+		end
+		for i = 1, pellets do
+			local dir = spreadDirection(origin, aimPoint, spreadRadius, behavior)
+			local res = WorkspaceService:Raycast(origin, dir * range, bulletParams)
+			local pos = res and res.Position or (origin + dir * range)
+			local inst = res and res.Instance or nil
+			table.insert(shots, { origin, pos, inst })
+			tracer(pos)
+		end
+	end
+
+	if #shots == 0 then return false end
+
+		playToolSound(tool, "ShootSound")
+	if behavior == "Shotgun" then
+		task.delay(0.2, function() playToolSound(tool, "SecondarySound") end)
+	end
+	flare()
+
+		if ShootEvent then
+		ShootEvent:FireServer(shots)
+	end
+
+		lastShotAt = os.clock()
+	local ammo = (tool:GetAttribute("Local_CurrentAmmo") or 1) - 1
+	tool:SetAttribute("Local_CurrentAmmo", ammo)
+	updateAmmoLabel()
+	if ammo <= 0 and CFG.rage.autoreload then
+		task.delay(0.1, reloadGun)
+	end
+	return true
+end
+
+startFiring = function(inputObj, auto)
+	if firingLoop then return end
+	if not (equippedTool and gunStats) then return end
+	if menuOpen then return end
+	if equippedTool:GetAttribute("ToolType") ~= "Gun" then return end
+	firingLoop = true
+	task.spawn(function()
+		local tool = equippedTool
+		while not dead and equippedTool == tool and tool.Parent == char do
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if not (hum and hum.Health > 0) then break end
+			if reloading then break end
+			local ammo = tool:GetAttribute("Local_CurrentAmmo") or 0
+			if ammo <= 0 then
+				if CFG.rage.autoreload then task.spawn(reloadGun) end
+				break
+			end
+						local holding
+			if auto then
+				holding = scanTarget() ~= nil and (CFG.rage.autofire or CFG.misc.autodefend)
+			else
+				holding = (next(heldInputs) ~= nil)
+			end
+			if not holding then break end
+						local delayS = math.max(0.01, (gunStats.FireRate or 0.15) * ((CFG.rage.firetime or 100) / 100))
+			local waitS = delayS - (os.clock() - lastShotAt)
+			if waitS > 0 then task.wait(waitS) end
+			if equippedTool ~= tool or reloading then break end
+						if gunStats.Behavior == "Taser" and (gunStats.ChargeTime or 0) > 0 then
+				task.wait(gunStats.ChargeTime)
+				if equippedTool ~= tool or reloading then break end
+			end
+			if menuOpen then break end
+			fireOnce(inputObj)
+						if not (auto or (gunStats.AutoFire ~= false)) then break end
+		end
+		cameraAimPoint = nil
+		firingLoop = false
+	end)
+end
+
+local toolConns = {}
+local function clearToolConns()
+	for _, c in ipairs(toolConns) do pcall(function() c:Disconnect() end) end
+	toolConns = {}
+end
+
+local function onGunEquipped(tool)
+	clearToolConns()
+	local attrs = tool:GetAttributes()
+	gunStats = {
+		ToolType       = attrs.ToolType or "Gun",
+		Behavior       = attrs.Behavior or "Rifle",
+		FireRate       = attrs.FireRate or 0.15,
+		MaxAmmo        = attrs.MaxAmmo or 30,
+		SpreadRadius   = attrs.SpreadRadius or 1,
+		Range          = attrs.Range or 1000,
+		ProjectileCount= attrs.ProjectileCount or 1,
+		AutoFire       = attrs.AutoFire, 		ReloadTime     = attrs.ReloadTime or 2.5,
+		ChargeTime     = attrs.ChargeTime or 0,
+	}
+	equippedTool = tool
+	reloading = false
+	scoped = false
+	cameraAimPoint = nil
+	tool:SetAttribute("Local_CurrentAmmo", attrs.CurrentAmmo or attrs.MaxAmmo or 30)
+	tool:SetAttribute("Local_ReloadSession", 0)
+		if not vanillaDisabled then
+		tool:SetAttribute("Local_IsShooting", true)
+	end
+	applyGunHUD(true)
+	updateAmmoLabel()
+		if gunStats.Behavior == "Sniper" then
+		pcall(function() UserInputService.MouseIcon = "rbxassetid://98794608762931" end)
+	end
+	table.insert(toolConns, tool:GetAttributeChangedSignal("StoredAmmo"):Connect(updateAmmoLabel))
+	table.insert(toolConns, tool:GetAttributeChangedSignal("CurrentAmmo"):Connect(function()
+		local v = tool:GetAttribute("CurrentAmmo")
+		if v ~= nil then
+			tool:SetAttribute("Local_CurrentAmmo", v)
+			updateAmmoLabel()
+		end
+	end))
+	logEvent("equipped " .. tool.Name, COL.text_dim)
+end
+
+local function onMeleeEquipped(tool)
+	clearToolConns()
+	equippedTool = tool
+	gunStats = nil
+	reloading = false
+end
+
+local function onToolRemoved(tool)
+	if equippedTool ~= tool then return end
+	clearToolConns()
+	if scoped then
+		scoped = false
+		pcall(function()
+			LocalPlayer.CameraMode = Enum.CameraMode.Classic
+			getCam().FieldOfView = 70
+			if HUD.scope then HUD.scope.Visible = false end
+			_G.cameraSensitivity = 1
+		end)
+	end
+	pcall(function() UserInputService.MouseIcon = "" end)
+	equippedTool = nil
+	gunStats = nil
+	reloading = false
+	cameraAimPoint = nil
+	applyGunHUD(false)
+end
+
+local function watchCharacter(c)
+	connect(c.ChildAdded, function(child)
+		if child:IsA("Tool") then
+			local t = child:GetAttribute("ToolType")
+			if t == nil then
+				if meleeNames[child.Name] then onMeleeEquipped(child) end
+				task.spawn(function()
+					for _ = 1, 20 do
+						task.wait(0.25)
+						if child.Parent ~= c then return end
+						if child:GetAttribute("ToolType") == "Gun" then
+							onGunEquipped(child)
+							return
+						end
+					end
+				end)
+			elseif t == "Gun" then
+				onGunEquipped(child)
+			elseif meleeNames[child.Name] then
+				onMeleeEquipped(child)
+			end
+		end
+	end)
+	connect(c.ChildRemoved, function(child)
+		if child:IsA("Tool") then onToolRemoved(child) end
+	end)
+		for _, child in ipairs(c:GetChildren()) do
+		if child:IsA("Tool") then
+			local t = child:GetAttribute("ToolType")
+			if t == "Gun" then onGunEquipped(child)
+			elseif meleeNames[child.Name] then onMeleeEquipped(child) end
+		end
+	end
+end
+
+local function onTouchFireButton(input)
+	if menuOpen then return end
+	if equippedTool and gunStats then
+		heldInputs[input] = true
+		startFiring(input)
+	end
+end
+
+local function hookHUDControls()
+	if HUD.actionArea and HUD.actionArea ~= wiredActionArea then
+		wiredActionArea = HUD.actionArea
+		connect(HUD.actionArea.InputBegan, function(input)
+			if input.UserInputType == Enum.UserInputType.Touch then
+				onTouchFireButton(input)
+			end
+		end)
+		connect(HUD.actionArea.InputEnded, function(input)
+			heldInputs[input] = nil
+		end)
+	end
+	if HUD.actionButton2 and HUD.actionButton2 ~= wiredButton2 then
+		wiredButton2 = HUD.actionButton2
+		connect(HUD.actionButton2.InputBegan, function(input)
+			if input.UserInputType == Enum.UserInputType.Touch
+				and input.UserInputState == Enum.UserInputState.Begin then
+				if gunStats and gunStats.Behavior == "Sniper" then setScope(not scoped) end
+			end
+		end)
+	end
+	if HUD.touchReload and HUD.touchReload ~= wiredReload then
+		wiredReload = HUD.touchReload
+		connect(HUD.touchReload.MouseButton1Down, function()
+			if not menuOpen then reloadGun() end
+		end)
+	end
+end
+hookHUDControls()
+
+local function knifebotTick()
+	if not (CFG.misc.knifebot and equippedTool and meleeNames[equippedTool.Name]) then return end
+	if menuOpen then return end
+	if os.clock() - lastKnifeAt < 0.65 then return end
+	local myRoot = root
+	if not myRoot then return end
+	local best, bestDist = nil, CFG.misc.knife_range or 7
+	for _, rec in pairs(records) do
+		if playerIsValidTarget(rec) and rec.char then
+			local r = rec.char:FindFirstChild("HumanoidRootPart")
+			if r then
+				local d = (r.Position - myRoot.Position).Magnitude
+				if d <= bestDist then best, bestDist = rec, d end
+			end
+		end
+	end
+	if best then
+		lastKnifeAt = os.clock()
+		local tool = equippedTool
+				pcall(function()
+			local anim = tool:FindFirstChild("Handle") and tool.Handle:FindFirstChild("Animation")
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if anim and hum then
+				hum:LoadAnimation(anim):Play()
+			end
+		end)
+		local victim = best.player
+		task.delay(0.15, function()
+			if MeleeEvent and equippedTool == tool then
+				pcall(function()
+					MeleeEvent:FireServer(victim, tool.Name == "Hammer" and math.random(1, 2) or nil, 1)
+				end)
+				logEvent("knifed " .. victim.Name, COL.green)
+			end
+		end)
+	end
+end
+
+local aaAutoRotateOff = false
+
+local function nearestEnemyRoot()
+	local myRoot = root
+	if not myRoot then return nil end
+	local best, bestD = nil, math.huge
+	for _, rec in pairs(records) do
+		if playerIsValidTarget(rec) and rec.char then
+			local r = rec.char:FindFirstChild("HumanoidRootPart")
+			if r then
+				local d = (r.Position - myRoot.Position).Magnitude
+				if d < bestD then best, bestD = r, d end
+			end
+		end
+	end
+	return best
+end
+
+local function antiAimTick(dt)
+	if dead then return end
+	local h, r = human, root
+	if not (CFG.aa.enabled and h and r and h.Health > 0) then
+		if aaAutoRotateOff and h then
+			pcall(function() h.AutoRotate = true end)
+			aaAutoRotateOff = false
+		end
+		return
+	end
+	if h.SeatPart then return end 	if not aaAutoRotateOff then
+		h.AutoRotate = false
+		aaAutoRotateOff = true
+	end
+
+	local cam = getCam()
+	if not cam then return end
+	local look = cam.CFrame.LookVector
+	local camYaw = atan2(-look.X, -look.Z)
+	local yaw = camYaw + math.rad(CFG.aa.yaw or 0)
+
+		if CFG.aa.at_targets then
+		local enemy = nearestEnemyRoot()
+		if enemy and r then
+			local d = (r.Position - enemy.Position)
+			if d.Magnitude > 0.05 then
+				yaw = atan2(-d.X, -d.Z) + math.rad(CFG.aa.yaw or 0)
+			end
+		end
+	end
+
+		if CFG.aa.spin then
+		aaSpinAngle = aaSpinAngle + math.rad(CFG.aa.spin_speed or 420) * dt
+		yaw = yaw + aaSpinAngle
+	end
+
+		if CFG.aa.jitter ~= "off" then
+		aaJitterTimer = aaJitterTimer + dt
+		local period = 1 / math.max(1, CFG.aa.jitter_rate or 8)
+		if aaJitterTimer >= period then
+			aaJitterTimer = 0
+			local rng = math.rad(CFG.aa.jitter_range or 60)
+			if CFG.aa.jitter == "offset" then
+				aaJitterSign = -aaJitterSign
+				aaJitterValue = rng * aaJitterSign
+			elseif CFG.aa.jitter == "center" then
+				aaJitterValue = rng * (math.random() * 2 - 1)
+			else 				aaJitterValue = math.pi * (math.random() * 2 - 1)
+			end
+		end
+		yaw = yaw + aaJitterValue
+	end
+
+		if flipHeld then yaw = yaw + math.pi end
+
+		local pitch = 0
+	if CFG.aa.pitch == "down" then
+		pitch = math.rad(-89)
+	elseif CFG.aa.pitch == "up" then
+		pitch = math.rad(89)
+	end
+
+		if CFG.aa.fakelag then
+		if aaLagTicks <= 0 then
+			aaLagTicks = (CFG.aa.fakelag_mode == "random")
+				and math.random(2, math.max(2, CFG.aa.fakelag_ticks or 8))
+				or (CFG.aa.fakelag_ticks or 8)
+			aaLastYaw = yaw
+		else
+			aaLagTicks = aaLagTicks - 1
+			yaw = aaLastYaw or yaw
+		end
+	end
+
+		local pos = r.Position
+	if (CFG.aa.pos_jitter or 0) > 0 then
+		pos = pos + Vector3.new(math.random() * 2 - 1, 0, math.random() * 2 - 1) * CFG.aa.pos_jitter
+	end
+	r.CFrame = CFrame.new(pos) * CFrame.Angles(pitch, yaw, 0)
+end
+
+local function movementTick()
+	local h, r = human, root
+	if not (h and r and h.Health > 0) then return end
+	if menuOpen then return end
+
+		if CFG.misc.bhop ~= "off" then
+		local want = false
+		if CFG.misc.bhop == "always" then
+			want = true
+		elseif CFG.misc.bhop == "space" then
+			want = UserInputService:IsKeyDown(Enum.KeyCode.Space)
+				or UserInputService:IsKeyDown(Enum.KeyCode.ButtonA)
+		end
+		if want then
+			local st = h:GetState()
+			if st == Enum.HumanoidStateType.Running or st == Enum.HumanoidStateType.RunningNoPhysics then
+				h.Jump = true
+			end
+		end
+	end
+
+		if CFG.misc.autostrafe then
+		local st = h:GetState()
+		if st == Enum.HumanoidStateType.Freefall then
+			local v = r.AssemblyLinearVelocity
+			local hv = Vector3.new(v.X, 0, v.Z)
+			local spd = hv.Magnitude
+			local md = h.MoveDirection
+			if spd > 4 and md.Magnitude > 0.1 then
+				local nv = Vector3.new(md.X * spd, v.Y, md.Z * spd)
+				if not pcall(function() r.Velocity = nv end) then
+					pcall(function() r.AssemblyLinearVelocity = nv end)
+				end
+			end
+		end
+	end
+end
+
+pcall(function()
+	local VirtualUser = game:GetService("VirtualUser")
+	connect(LocalPlayer.Idled, function()
+		if CFG.misc.antiafk then
+			pcall(function()
+				VirtualUser:CaptureController()
+				VirtualUser:ClickButton2(Vector2.new())
+			end)
+		end
+	end)
+end)
+
+local EMOTES = {
+	{ "floss", 5917570207 },
+	{ "rampage", 113757174040209 },
+	{ "shuffle", 4349242221 },
+	{ "t-pose", 3338010159 },
+	{ "lol", 3337966527 },
+	{ "top rock", 3361276673 },
+}
+local emoteSys = { track = nil, lastId = nil }
+function emoteSys.stop()
+	if emoteSys.track then
+		pcall(function() emoteSys.track:Stop() end)
+		emoteSys.track = nil
+	end
+end
+function emoteSys.play(id, name)
+	pcall(function()
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if not hum then return end
+		emoteSys.stop()
+		local anim = Instance.new("Animation")
+		anim.AnimationId = "rbxassetid://" .. tostring(id)
+		local track = hum:LoadAnimation(anim)
+		track.Looped = true
+		track:Play()
+		emoteSys.track = track
+		emoteSys.lastId = id
+		logEvent("emote: " .. (name or tostring(id)), COL.accent)
+	end)
+end
+
+local wingSys = {}
+wingSys.state = nil
+
+function wingSys.segC0(side, i, flap, lift)
+	return CFrame.new(side * (0.45 + i * 0.28), 1.05 - i * 0.22 + lift, 0.62)
+		* CFrame.Angles(0.18 + flap * 0.6, side * -0.5, side * (0.55 - i * 0.06) + flap * side)
+end
+
+function wingSys.destroy()
+	if wingSys.state then
+		pcall(function() wingSys.state.model:Destroy() end)
+		wingSys.state = nil
+	end
+end
+
+function wingSys.build(c)
+	wingSys.destroy()
+	local hrp = c and c:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	local model = Instance.new("Model")
+	model.Name = "NeverLoseWings"
+	local segs = {}
+	for side = -1, 1, 2 do
+		for i = 1, 4 do
+			local seg = Instance.new("Part")
+			seg.Name = "Wing"
+			seg.Material = Enum.Material.ForceField
+			seg.Color = COL.accent
+			seg.Transparency = 0.45
+			seg.Size = Vector3.new(0.12, 0.9 - i * 0.14, 0.42 + i * 0.34)
+			seg.CanCollide = false
+			seg.CanQuery = false
+			seg.CanTouch = false
+			seg.CastShadow = false
+			seg.Massless = true
+			seg.CFrame = hrp.CFrame
+			local weld = Instance.new("Weld")
+			weld.Name = "WingWeld"
+			weld.Part0 = hrp
+			weld.Part1 = seg
+			weld.C0 = wingSys.segC0(side, i, 0, 0)
+			weld.C1 = CFrame.new()
+			weld.Parent = seg
+			local sp = Instance.new("Sparkles")
+			sp.SparkleColor = COL.accent
+			sp.Enabled = true
+			sp.Parent = seg
+			seg.Parent = model
+			segs[#segs + 1] = { weld = weld, side = side, idx = i }
+		end
+	end
+	model.Parent = c
+	wingSys.state = { model = model, segs = segs, t = 0 }
+end
+
+function wingSys.update(dt)
+	local st = wingSys.state
+	if not st then return end
+	st.t = st.t + (dt or 0.016)
+	for _, s in ipairs(st.segs) do
+		local ph = st.t * 2.4 + (s.idx - 1) * 0.55
+		local flap = math.sin(ph) * 0.16
+		local lift = math.sin(ph - 0.7) * 0.06
+		s.weld.C0 = wingSys.segC0(s.side, s.idx, flap, lift)
+	end
+end
+
+local remoteTools = {}
+
+function remoteTools.chat(text)
+	local ok = pcall(function()
+		local tcs = game:GetService("TextChatService")
+		local channels = tcs and tcs:FindFirstChild("TextChannels")
+		local general = channels and channels:FindFirstChild("RBXGeneral")
+		if not general then error("no general channel") end
+		general:SendAsync(text)
+	end)
+	if not ok then
+		pcall(function()
+			local legacy = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+			if legacy and legacy:FindFirstChild("SayMessageRequest") then
+				legacy.SayMessageRequest:FireServer(text, "All")
+			end
+		end)
+	end
+	return ok
+end
+
+function remoteTools.god()
+	if remoteTools.chat("/god") then
+		logEvent("sent /god — the server decides if it grants immunity", COL.accent)
+	else
+		logEvent("could not send /god (no chat system found)", COL.orange)
+	end
+end
+
+function remoteTools.findGiver(name)
+	local tagged = {}
+	pcall(function() tagged = CollectionService:GetTagged("Giver") end)
+	for _, giv in ipairs(tagged) do
+		if giv.Name == name then return giv end
+	end
+	return nil
+end
+
+function remoteTools.giveGun(name)
+	local giv = remoteTools.findGiver(name)
+	if giv and GiverPressed then
+		GiverPressed:FireServer(giv)
+		logEvent("requested " .. name, COL.accent)
+		return true
+	end
+	logEvent("giver not found: " .. name .. " — trying /give", COL.orange)
+	remoteTools.chat("/give " .. name)
+	return false
+end
+
+function remoteTools.giveAll()
+	if not GiverPressed then
+		logEvent("GiverPressed remote not found", COL.orange)
+		return
+	end
+	local tagged = {}
+	pcall(function() tagged = CollectionService:GetTagged("Giver") end)
+	local seen = {}
+	local n = 0
+	for _, giv in ipairs(tagged) do
+		if not seen[giv.Name] then
+			seen[giv.Name] = true
+			GiverPressed:FireServer(giv)
+			n = n + 1
+		end
+	end
+	logEvent(("requested %d item givers"):format(n), COL.accent)
+end
+
+function remoteTools.setTeam(name)
+	if not RequestTeamChange then
+		logEvent("RequestTeamChange remote not found", COL.orange)
+		return
+	end
+	local team = Teams:FindFirstChild(name)
+	if not team then
+		logEvent("team not found: " .. name, COL.orange)
+		return
+	end
+	local ok, err = pcall(function() RequestTeamChange:InvokeServer(team, 1) end)
+	if ok then
+		logEvent("team change requested: " .. name, COL.accent)
+	else
+		logEvent("team change failed: " .. tostring(err), COL.orange)
+	end
+end
+
+local lastHudCheck, hudWiring = 0, false
+local function heartbeatTick()
+	if dead then return end
+	sampleHistory()
+	knifebotTick()
+	if os.clock() - lastHudCheck > 3 then
+		lastHudCheck = os.clock()
+		if not HUD.hud or HUD.hud.Parent == nil or not HUD.actionArea then
+			task.spawn(function()
+				if hudWiring then return end
+				hudWiring = true
+				wireHUD()
+				hookHUDControls()
+				hudWiring = false
+			end)
+		end
+	end
+
+		local defendAuto = forcedDefend ~= nil and CFG.rage.enabled and CFG.misc.autodefend
+		if (CFG.rage.enabled and CFG.rage.autofire and rageActive() or defendAuto) and not menuOpen
+		and equippedTool and gunStats and not reloading and not firingLoop then
+		local ammo = equippedTool:GetAttribute("Local_CurrentAmmo") or 0
+		if ammo > 0 and scanTarget() then
+			startFiring(nil, true)
+		end
+	end
+
+		for rec, p in pairs(pendingHits) do
+		if os.clock() - p.t > 0.6 then
+			pendingHits[rec] = nil
+			logEvent("missed " .. rec.player.Name, COL.red)
+		end
+	end
+
+	movementTick()
+end
+
+local espGui, hudGui = nil, nil
+local espRoot, fovCircle, watermarkFrame, watermarkLabel = nil, nil, nil, nil
+local keybindList, aaArrow, hitmarkerLines = nil, nil, {}
+local hitmarkerUntil = 0
+
+local function newInst(class, props, parent)
+	local o = Instance.new(class)
+	for k, v in pairs(props) do o[k] = v end
+	if parent then o.Parent = parent end
+	return o
+end
+
+pcall(function()
+	espGui = newInst("ScreenGui", {
+		Name = "neverlose_esp", ResetOnSpawn = false, IgnoreGuiInset = true,
+		DisplayOrder = 50,
+	}, PlayerGui)
+	espRoot = newInst("Frame", {
+		Name = "root", BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0),
+	}, espGui)
+
+	hudGui = newInst("ScreenGui", {
+		Name = "neverlose_hud", ResetOnSpawn = false, IgnoreGuiInset = true,
+		DisplayOrder = 60,
+	}, PlayerGui)
+
+		fovCircle = newInst("Frame", {
+		Name = "fovcircle", BackgroundTransparency = 1, Visible = false,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+	}, hudGui)
+	newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, fovCircle)
+	newInst("UIStroke", { Color = COL.accent, Thickness = 1, Transparency = 0.15 }, fovCircle)
+
+		watermarkFrame = newInst("Frame", {
+		Name = "watermark", BackgroundColor3 = COL.window,
+		BackgroundTransparency = 0.25, BorderSizePixel = 0,
+		Position = UDim2.new(0, 10, 0, 72),
+		AutomaticSize = Enum.AutomaticSize.XY,
+	}, hudGui)
+	newInst("UICorner", { CornerRadius = UDim.new(0, 4) }, watermarkFrame)
+	newInst("UIStroke", { Color = COL.window_edge, Thickness = 1, Transparency = 0.35 }, watermarkFrame)
+	newInst("UIPadding", {
+		PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10),
+		PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4),
+	}, watermarkFrame)
+	watermarkLabel = newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT_BOLD, TextSize = 13,
+		TextColor3 = COL.white, TextXAlignment = Enum.TextXAlignment.Left,
+		Text = "neverlose",
+	}, watermarkFrame)
+
+		keybindList = newInst("Frame", {
+		Name = "keybinds", BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -12, 1, -110),
+		Size = UDim2.new(0, 200, 0, 200),
+	}, hudGui)
+	newInst("UIListLayout", {
+		Padding = UDim.new(0, 3), HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, keybindList)
+
+		for i = 1, 4 do
+		local l = newInst("Frame", {
+			Name = "hm" .. i, BackgroundColor3 = COL.white, BorderSizePixel = 0,
+			Size = UDim2.new(0, 9, 0, 2), Visible = false, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0), ZIndex = 5,
+		}, hudGui)
+		local ang = 45 + (i - 1) * 90
+		l.Rotation = ang
+		local off = 11
+		local rad = math.rad(ang)
+		l.Position = UDim2.new(0.5, math.cos(rad) * off, 0.5, math.sin(rad) * off)
+		hitmarkerLines[i] = l
+	end
+
+		aaArrow = newInst("Frame", {
+		Name = "aa_arrow", BackgroundColor3 = COL.green, BorderSizePixel = 0,
+		Size = UDim2.new(0, 2, 0, 26), Visible = false, AnchorPoint = Vector2.new(0.5, 0.5),
+	}, hudGui)
+	newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, aaArrow)
+end)
+
+local function playHitSound()
+	pcall(function()
+		local s = Instance.new("Sound")
+		s.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+		s.Volume = (CFG.vis.hitsound_vol or 40) / 100
+		s.Parent = getCam()
+		s:Play()
+		Debris:AddItem(s, 2)
+	end)
+end
+
+doHitFeedback = function()
+	if CFG.vis.hitmarker then
+		hitmarkerUntil = os.clock() + 0.14
+	end
+	if CFG.vis.hitsound then
+		playHitSound()
+	end
+end
+
+local function mkText(parent, size, font, color)
+	return newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = font or FONT, TextSize = size,
+		TextColor3 = color or COL.white, Text = "",
+		TextStrokeTransparency = 0.6, TextStrokeColor3 = Color3.new(0, 0, 0),
+	}, parent)
+end
+
+local function createESP(rec)
+	if not espRoot then return end
+	local frame = newInst("Frame", {
+		Name = "esp", BackgroundTransparency = 1, Visible = false,
+		BorderSizePixel = 0, Size = UDim2.new(0, 100, 0, 100),
+	}, espRoot)
+	local obj = { frame = frame, lines = {} }
+	for i = 1, 8 do
+		obj.lines[i] = newInst("Frame", {
+			BackgroundColor3 = COL.white, BorderSizePixel = 0,
+			Size = UDim2.new(0, 10, 0, 1),
+		}, frame)
+	end
+	obj.stroke = newInst("UIStroke", { Color = COL.accent, Thickness = 1, Transparency = 0.1, Enabled = false }, frame)
+	obj.name = mkText(frame, 13, FONT_MED, COL.white)
+	obj.name.AnchorPoint = Vector2.new(0.5, 1)
+	obj.name.Position = UDim2.new(0.5, 0, 0, -4)
+	obj.name.Size = UDim2.new(0, 180, 0, 14)
+	obj.name.TextXAlignment = Enum.TextXAlignment.Center
+
+	obj.hpBg = newInst("Frame", {
+		BackgroundColor3 = Color3.fromRGB(10, 10, 12), BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0, -6, 0, 0),
+		Size = UDim2.new(0, 3, 1, 0),
+	}, frame)
+	obj.hpFill = newInst("Frame", {
+		BackgroundColor3 = COL.green, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 1, 0),
+	}, obj.hpBg)
+
+	obj.weapon = mkText(frame, 12, FONT, COL.text)
+	obj.weapon.AnchorPoint = Vector2.new(0, 0.5)
+	obj.weapon.Position = UDim2.new(1, 8, 0.5, 0)
+	obj.weapon.Size = UDim2.new(0, 130, 0, 13)
+	obj.weapon.TextXAlignment = Enum.TextXAlignment.Left
+
+	obj.dist = mkText(frame, 12, FONT, COL.text_dim)
+	obj.dist.AnchorPoint = Vector2.new(0.5, 0)
+	obj.dist.Position = UDim2.new(0.5, 0, 1, 3)
+	obj.dist.Size = UDim2.new(0, 120, 0, 12)
+	obj.dist.TextXAlignment = Enum.TextXAlignment.Center
+
+	rec.esp = obj
+end
+
+local function setCornerBox(obj, x, y, w, h, color, style)
+	local t = 1
+	local len = math.clamp(w * 0.3, 6, 26)
+	local L = obj.lines
+	if style == "full" then
+		L[1].Position, L[1].Size = UDim2.new(0, 0, 0, 0), UDim2.new(0, w, 0, t)
+		L[2].Position, L[2].Size = UDim2.new(0, 0, 0, h - t), UDim2.new(0, w, 0, t)
+		L[3].Position, L[3].Size = UDim2.new(0, 0, 0, 0), UDim2.new(0, t, 0, h)
+		L[4].Position, L[4].Size = UDim2.new(0, w - t, 0, 0), UDim2.new(0, t, 0, h)
+		for i = 5, 8 do L[i].Size = UDim2.new(0, 0, 0, 0) end
+	else 		L[1].Position, L[1].Size = UDim2.new(0, 0, 0, 0), UDim2.new(0, len, 0, t)
+		L[2].Position, L[2].Size = UDim2.new(0, 0, 0, 0), UDim2.new(0, t, 0, len)
+		L[3].Position, L[3].Size = UDim2.new(0, w - len, 0, 0), UDim2.new(0, len, 0, t)
+		L[4].Position, L[4].Size = UDim2.new(0, w - t, 0, 0), UDim2.new(0, t, 0, len)
+		L[5].Position, L[5].Size = UDim2.new(0, 0, 0, h - t), UDim2.new(0, len, 0, t)
+		L[6].Position, L[6].Size = UDim2.new(0, 0, 0, h - len), UDim2.new(0, t, 0, len)
+		L[7].Position, L[7].Size = UDim2.new(0, w - len, 0, h - t), UDim2.new(0, len, 0, t)
+		L[8].Position, L[8].Size = UDim2.new(0, w - t, 0, h - len), UDim2.new(0, t, 0, len)
+	end
+	for i = 1, 8 do
+		L[i].BackgroundColor3 = color
+	end
+end
+
+local function renderESP()
+	if not espRoot then return end
+	local cam = getCam()
+	if not cam then return end
+	local camPos = cam.CFrame.Position
+	local style = CFG.vis.box
+
+	for _, rec in pairs(records) do
+		local plr = rec.player
+		local show = CFG.vis.esp
+			and rec.char and rec.hum and rec.hum.Health > 0
+			and (CFG.vis.teammates or plr.Team ~= LocalPlayer.Team)
+			and plr ~= LocalPlayer
+		if show and rec.esp == nil then createESP(rec) end
+		if rec.esp then
+			local obj = rec.esp
+			if not show then
+				obj.frame.Visible = false
+			else
+				local hrp = rec.char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					local dist = (hrp.Position - camPos).Magnitude
+					if dist > (CFG.vis.maxdist or 1500) or dist < 2 then
+						obj.frame.Visible = false
+					else
+						local topW = hrp.Position + Vector3.new(0, 3.15, 0)
+						local botW = hrp.Position - Vector3.new(0, 3.15, 0)
+						local tv, tOn = cam:WorldToViewportPoint(topW)
+						local bv, bOn = cam:WorldToViewportPoint(botW)
+						if (tOn or bOn) and tv.Z > 0 and bv.Z > 0 then
+							local h = tv.Y - bv.Y
+							local w = h * 0.45
+							if h >= 5 and w >= 3 then
+								local cx = (tv.X + bv.X) / 2
+								local x, y = cx - w / 2, tv.Y
+								obj.frame.Position = UDim2.new(0, math.floor(x + 0.5), 0, math.floor(y + 0.5))
+								obj.frame.Size = UDim2.new(0, math.floor(w + 0.5), 0, math.floor(h + 0.5))
+								obj.frame.Visible = true
+																local boxCol = COL.white
+								if CFG.vis.teamcolors and plr.Team ~= nil then
+									boxCol = plr.TeamColor.Color
+								end
+								local isTarget = (rec == currentTarget) and CFG.vis.target_indicator
+								if style ~= "off" then
+									setCornerBox(obj, 0, 0, math.floor(w + 0.5), math.floor(h + 0.5), isTarget and COL.accent or boxCol, style)
+									for i = 1, 8 do obj.lines[i].Visible = true end
+								else
+									for i = 1, 8 do obj.lines[i].Visible = false end
+								end
+								obj.stroke.Enabled = (isTarget == true)
+																if CFG.vis.name then
+									obj.name.Text = plr.DisplayName .. " [@" .. plr.Name .. "]"
+									obj.name.TextColor3 = isTarget and COL.accent or COL.white
+									obj.name.Visible = true
+								else
+									obj.name.Visible = false
+								end
+																if CFG.vis.health then
+									local frac = math.clamp(rec.hum.Health / math.max(1, rec.hum.MaxHealth), 0, 1)
+									obj.hpBg.Visible = true
+									obj.hpFill.Size = UDim2.new(1, 0, frac, 0)
+									obj.hpFill.BackgroundColor3 = Color3.new(1 - frac * 0.7, 0.35 + frac * 0.5, 0.25)
+								else
+									obj.hpBg.Visible = false
+								end
+																if CFG.vis.weapon then
+									local t = rec.char:FindFirstChildOfClass("Tool")
+									obj.weapon.Text = t and t.Name or ""
+									obj.weapon.Visible = t ~= nil
+								else
+									obj.weapon.Visible = false
+								end
+																if CFG.vis.distance then
+									obj.dist.Text = math.floor(dist + 0.5) .. "m"
+									obj.dist.Visible = true
+								else
+									obj.dist.Visible = false
+								end
+							else
+								obj.frame.Visible = false
+							end
+						else
+							obj.frame.Visible = false
+						end
+					end
+				else
+					obj.frame.Visible = false
+				end
+			end
+		end
+	end
+end
+
+local function renderChams()
+	for _, rec in pairs(records) do
+		local want = CFG.vis.chams and rec.char and rec.hum and rec.hum.Health > 0
+			and rec.player ~= LocalPlayer
+		if want and not rec.highlight then
+			pcall(function()
+				rec.highlight = Instance.new("Highlight")
+				rec.highlight.Name = "neverlose_chams"
+				rec.highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+				rec.highlight.FillTransparency = (CFG.vis.chams_fill or 60) / 100
+				rec.highlight.OutlineColor = Color3.new(0, 0, 0)
+				rec.highlight.OutlineTransparency = 0.2
+				rec.highlight.Parent = rec.char
+			end)
+		elseif not want and rec.highlight then
+			pcall(function() rec.highlight:Destroy() end)
+			rec.highlight = nil
+		end
+		if rec.highlight and rec.char then
+			local cam = getCam()
+			local hrp = rec.char:FindFirstChild("HumanoidRootPart")
+			if cam and hrp then
+				local params = RaycastParams.new()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+				params.FilterDescendantsInstances = { char or LocalPlayer.Character, rec.char }
+				local dir = hrp.Position - cam.CFrame.Position
+				local hit = WorkspaceService:Raycast(cam.CFrame.Position, dir, params)
+				local visible = (hit == nil)
+				rec.highlight.FillColor = visible
+					and col3(CFG.vis.chams_visible)
+					or col3(CFG.vis.chams_occluded)
+				rec.highlight.FillTransparency = (CFG.vis.chams_fill or 60) / 100
+			end
+		end
+	end
+end
+
+local bindRows = {}
+local function rebuildKeybindList()
+	if not keybindList then return end
+	keybindList.Visible = CFG.vis.keybinds
+	for _, r in ipairs(bindRows) do pcall(function() r:Destroy() end) end
+	bindRows = {}
+	local defs = {}
+	local function keyName(k)
+		if k == nil then return nil end
+		if k == "LMB" then return "mouse1" end
+		if type(k) == "EnumItem" then return k.Name end
+		return tostring(k)
+	end
+	local function addBind(name, key, active, optional)
+		local kn = keyName(key)
+		if optional and kn == nil then return end
+		table.insert(defs, { name = name, key = kn or "—", active = active == true })
+	end
+	addBind("menu", CFG.menu_key, menuOpen)
+	addBind("fire", "LMB", firingLoop)
+	if equippedTool and gunStats then addBind("reload", Enum.KeyCode.R, reloading) end
+	if CFG.rage.key then
+		local act = (CFG.rage.key_mode == "toggle") and rageToggleState or rageActive()
+		addBind("rage", CFG.rage.key, act)
+	end
+	if CFG.aa.flip_key then addBind("flip", CFG.aa.flip_key, flipHeld) end
+	for i, d in ipairs(defs) do
+		local row = newInst("Frame", {
+			Name = "bind", BackgroundColor3 = COL.window, BackgroundTransparency = 0.35,
+			BorderSizePixel = 0, Size = UDim2.new(0, 150, 0, 20), LayoutOrder = i,
+		}, keybindList)
+		newInst("UICorner", { CornerRadius = UDim.new(0, 3) }, row)
+		local dot = newInst("Frame", {
+			BackgroundColor3 = d.active and COL.green or Color3.fromRGB(70, 74, 80),
+			BorderSizePixel = 0, Size = UDim2.new(0, 6, 0, 6),
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 7, 0.5, 0),
+		}, row)
+		newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
+		local _lbl = newInst("TextLabel", {
+			BackgroundTransparency = 1, Font = FONT, TextSize = 12,
+			TextColor3 = COL.text, Text = d.name, TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.new(0, 18, 0, 0), Size = UDim2.new(1, -60, 1, 0),
+		}, row)
+		local _key = newInst("TextLabel", {
+			BackgroundTransparency = 1, Font = FONT_MED, TextSize = 12,
+			TextColor3 = COL.white, Text = "[" .. string.lower(d.key) .. "]",
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Position = UDim2.new(1, -62, 0, 0), Size = UDim2.new(0, 55, 1, 0),
+		}, row)
+		table.insert(bindRows, row)
+	end
+end
+
+local function renderHUD()
+	local cam = getCam()
+	if not cam then return end
+
+		fpsCount = fpsCount + 1
+	local now = os.clock()
+	if now - fpsClock >= 1 then
+		fpsValue = fpsCount
+		fpsCount = 0
+		fpsClock = now
+		rebuildKeybindList()
+	end
+
+		if watermarkFrame then
+		watermarkFrame.Visible = CFG.vis.watermark
+		if CFG.vis.watermark then
+			local ping = "?"
+			pcall(function()
+				ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
+			end)
+			watermarkLabel.Text = ("NeverLose | %s | %d fps | %s ms"):format(
+				LocalPlayer.DisplayName, fpsValue, tostring(ping))
+		end
+	end
+
+		if fovCircle then
+		local show = CFG.vis.fovcircle and CFG.rage.enabled
+		fovCircle.Visible = show
+		if show then
+			local vp = cam.ViewportSize
+			local r = math.tan(math.rad(math.clamp(CFG.rage.fov or 180, 1, 179)) / 2)
+				/ math.tan(math.rad(math.clamp(cam.FieldOfView, 1, 120)) / 2)
+				* (vp.Y / 2)
+			r = math.clamp(r, 4, math.max(vp.X, vp.Y))
+			fovCircle.Size = UDim2.new(0, r * 2, 0, r * 2)
+		end
+	end
+
+		local hm = os.clock() < hitmarkerUntil
+	for _, l in ipairs(hitmarkerLines) do
+		l.Visible = hm
+	end
+
+		if aaArrow then
+		local show = CFG.aa.enabled and CFG.aa.arrows and root and human and human.Health > 0
+		aaArrow.Visible = show
+		if show then
+			local yaw = aaLastYaw
+			if CFG.aa.fakelag and aaLagTicks > 0 and aaLastYaw then
+				yaw = aaLastYaw
+			else
+				local look = cam.CFrame.LookVector
+				yaw = atan2(-look.X, -look.Z) + math.rad(CFG.aa.yaw or 0)
+			end
+			local base = root.Position + Vector3.new(0, -2.4, 0)
+			local tip = base + Vector3.new(-math.sin(yaw), 0, -math.cos(yaw)) * 3.2
+			local bv, bOn = cam:WorldToViewportPoint(base)
+			local tv, tOn = cam:WorldToViewportPoint(tip)
+			if bOn and tOn and bv.Z > 0 and tv.Z > 0 then
+				local dx, dy = tv.X - bv.X, tv.Y - bv.Y
+				local len = math.sqrt(dx * dx + dy * dy)
+				if len > 4 then
+					aaArrow.Size = UDim2.new(0, math.max(2, math.min(len, 46)), 0, 2)
+					aaArrow.Position = UDim2.new(0, (bv.X + tv.X) / 2, 0, (bv.Y + tv.Y) / 2)
+					aaArrow.Rotation = -math.deg(atan2(dy, dx))
+				else
+					aaArrow.Visible = false
+				end
+			else
+				aaArrow.Visible = false
+			end
+		end
+	end
+end
+
+local guiRoot = nil
+local allControls = {}
+local function refreshAllControls()
+	for _, fn in ipairs(allControls) do pcall(fn) end
+end
+
+local function buildMenu()
+local menuFrame = nil
+local groupBoxes  = {}
+local tabButtons  = {}
+local tabFrames   = {}
+local activeTab   = "rage"
+local logScroll, logLayout = nil, nil
+local rightPanel = nil
+local toggleBtn = nil
+local menuScale = nil
+
+local function addSync(fn) table.insert(allControls, fn) end
+
+local function hoverify(el)
+	el.BackgroundColor3 = COL.row_hover
+	el.BackgroundTransparency = 1
+	el.MouseEnter:Connect(function() el.BackgroundTransparency = 0.4 end)
+	el.MouseLeave:Connect(function() el.BackgroundTransparency = 1 end)
+end
+
+local function mkRow(parent, height)
+	local row = newInst("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, height),
+	}, parent)
+	hoverify(row)
+	local gb = parent and parent.Parent
+	return row
+end
+
+local function mkLabel(parent, text, color, size)
+	return newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = size or 13,
+		TextColor3 = color or COL.text, Text = text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.40, 0, 1, 0),
+	}, parent)
+end
+
+local function addSeparator(parent)
+	local row = mkRow(parent, 8)
+	newInst("Frame", {
+		BackgroundColor3 = COL.window_edge, BorderSizePixel = 0,
+		BackgroundTransparency = 0.4,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, -16, 0, 1),
+	}, row)
+end
+
+local function addToggle(parent, label, get, set)
+	local row = mkRow(parent, 30)
+	mkLabel(row, label)
+	local track = newInst("Frame", {
+		BackgroundColor3 = COL.track, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0, 38, 0, 18),
+	}, row)
+	newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, track)
+	local knob = newInst("Frame", {
+		BackgroundColor3 = COL.white, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 2, 0.5, 0),
+		Size = UDim2.new(0, 14, 0, 14),
+	}, track)
+	newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
+	local function sync()
+		local on = get() == true
+		track.BackgroundColor3 = on and COL.accent or COL.track
+		knob.Position = UDim2.new(0, on and 21 or 2, 0.5, 0)
+	end
+	row.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			set(not get())
+			sync()
+		end
+	end)
+	addSync(sync)
+	sync()
+	return row
+end
+
+local function addSlider(parent, label, min, max, get, set, fmt)
+	local row = mkRow(parent, 32)
+	mkLabel(row, label)
+	local valueLabel = newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT_MED, TextSize = 12,
+		TextColor3 = COL.white, Text = "", TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 0),
+		Size = UDim2.new(0, 64, 0, 14),
+	}, row)
+	local bar = newInst("Frame", {
+		BackgroundColor3 = COL.track, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.45, 8, 0.62, 0),
+		Size = UDim2.new(0.55, -86, 0, 4),
+	}, row)
+	newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, bar)
+	local fill = newInst("Frame", {
+		BackgroundColor3 = COL.accent, BorderSizePixel = 0,
+		Size = UDim2.new(0, 0, 1, 0),
+	}, bar)
+	newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
+	local knob = newInst("Frame", {
+		BackgroundColor3 = COL.white, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
+		Size = UDim2.new(0, 10, 0, 10), ZIndex = 2,
+	}, bar)
+	newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
+
+	local dragging = false
+	local function alphaToValue(a)
+		a = math.clamp(a, 0, 1)
+		return min + (max - min) * a
+	end
+	local function sync()
+		local v = math.clamp(get(), min, max)
+		local a = (v - min) / (max - min)
+		fill.Size = UDim2.new(a, 0, 1, 0)
+		knob.Position = UDim2.new(a, 0, 0.5, 0)
+		valueLabel.Text = fmt and fmt(v) or string.format("%g", v)
+	end
+	local function updateFromX(x)
+		local rel = (x - bar.AbsolutePosition.X) / math.max(1, bar.AbsoluteSize.X)
+		set(alphaToValue(rel))
+		sync()
+	end
+	bar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			updateFromX(input.Position.X)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			updateFromX(input.Position.X)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+	addSync(sync)
+	sync()
+	return row
+end
+
+local function addDropdown(parent, label, options, get, set)
+	local holder = newInst("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 28), AutomaticSize = Enum.AutomaticSize.Y,
+	}, parent)
+	local gb = parent and parent.Parent
+	local row = newInst("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 28),
+	}, holder)
+	hoverify(row)
+	mkLabel(row, label)
+	local current = newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT_MED, TextSize = 12,
+		TextColor3 = COL.white, Text = "", TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -26, 0, 0),
+		Size = UDim2.new(0, 120, 0, 28),
+	}, row)
+	local chev = newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = 11,
+		TextColor3 = COL.text_dim, Text = "▼", TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 0),
+		Size = UDim2.new(0, 14, 0, 28),
+	}, row)
+	local list = newInst("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false,
+		Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, 0, 0, #options * 24),
+	}, holder)
+	newInst("UIListLayout", { Padding = UDim.new(0, 1), SortOrder = Enum.SortOrder.LayoutOrder }, list)
+
+	local optionRows = {}
+	local function sync()
+		local cur = get()
+		current.Text = tostring(cur)
+		for _, o in ipairs(optionRows) do
+			o.label.TextColor3 = (o.value == cur) and COL.white or COL.text_dim
+			o.dot.Visible = (o.value == cur)
+		end
+	end
+	for i, opt in ipairs(options) do
+		local orow = newInst("Frame", {
+			BackgroundColor3 = COL.row_dark, BorderSizePixel = 0,
+			Position = UDim2.new(0, 4, 0, 0), Size = UDim2.new(1, -8, 0, 24), LayoutOrder = i,
+		}, list)
+		newInst("UICorner", { CornerRadius = UDim.new(0, 3) }, orow)
+		hoverify(orow)
+		local dot = newInst("Frame", {
+			BackgroundColor3 = COL.accent, BorderSizePixel = 0, Visible = false,
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+			Size = UDim2.new(0, 5, 0, 5),
+		}, orow)
+		newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
+		local olabel = newInst("TextLabel", {
+			BackgroundTransparency = 1, Font = FONT, TextSize = 12,
+			TextColor3 = COL.text_dim, Text = opt, TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.new(0, 22, 0, 0), Size = UDim2.new(1, -26, 1, 0),
+		}, orow)
+		orow.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch then
+				set(opt)
+				sync()
+				list.Visible = false
+				chev.Text = "▼"
+			end
+		end)
+		table.insert(optionRows, { frame = orow, label = olabel, dot = dot, value = opt })
+	end
+	row.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			list.Visible = not list.Visible
+			chev.Text = list.Visible and "▲" or "▼"
+		end
+	end)
+	addSync(sync)
+	sync()
+	return holder
+end
+
+local function addKeybind(parent, label, get, set)
+	local row = mkRow(parent, 30)
+	mkLabel(row, label)
+	local keyBtn = newInst("TextButton", {
+		AutoButtonColor = false, BackgroundColor3 = COL.row_dark, BorderSizePixel = 0,
+		Font = FONT_MED, TextSize = 12, TextColor3 = COL.white, Text = "none",
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0, 92, 0, 20), TextXAlignment = Enum.TextXAlignment.Center,
+	}, row)
+	newInst("UICorner", { CornerRadius = UDim.new(0, 3) }, keyBtn)
+	hoverify(keyBtn)
+	local function sync()
+		local k = get()
+		if capturingBind and capturingBindBtn == keyBtn then
+			keyBtn.Text = "[press a key]"
+			keyBtn.TextColor3 = COL.accent
+		else
+			keyBtn.Text = k and k.Name or "none"
+			keyBtn.TextColor3 = k and COL.white or COL.text_dim
+		end
+	end
+	keyBtn.MouseButton1Click:Connect(function()
+		if capturingBind then
+			capturingBind = nil
+			capturingBindBtn = nil
+			refreshAllControls()
+			return
+		end
+		capturingBindBtn = keyBtn
+		capturingBind = function(key)
+			capturingBind = nil
+			capturingBindBtn = nil
+			set(key)
+			refreshAllControls()
+		end
+		sync()
+	end)
+	keyBtn.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then
+			set(nil)
+			refreshAllControls()
+		end
+	end)
+	addSync(sync)
+	sync()
+	return row
+end
+
+local function addColor(parent, label, get, set)
+	local holder = newInst("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 30), AutomaticSize = Enum.AutomaticSize.Y,
+	}, parent)
+	local gb = parent and parent.Parent
+	local row = newInst("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 30),
+	}, holder)
+	hoverify(row)
+	mkLabel(row, label)
+	local swatch = newInst("Frame", {
+		BackgroundColor3 = COL.accent, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0, 30, 0, 16),
+	}, row)
+	newInst("UICorner", { CornerRadius = UDim.new(0, 3) }, swatch)
+	newInst("UIStroke", { Color = Color3.new(0, 0, 0), Transparency = 0.5 }, swatch)
+
+	local expand = newInst("Frame", {
+		BackgroundTransparency = 1, Visible = false,
+		Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 0, 118),
+	}, holder)
+
+	local function hOf()
+		local h = Color3.toHSV(col3(get()))
+		return math.floor(h * 360 + 0.5)
+	end
+	local function sOf()
+		local _, s = Color3.toHSV(col3(get()))
+		return math.floor(s * 100 + 0.5)
+	end
+	local function vOf()
+		local _, _, v = Color3.toHSV(col3(get()))
+		return math.floor(v * 100 + 0.5)
+	end
+	local function setHSV(h, s, v)
+		set(colCfg(Color3.fromHSV(h / 360, s / 100, v / 100)))
+	end
+
+	addSlider(expand, "hue", 0, 360, hOf, function(h) setHSV(h, sOf(), vOf()) end, function(v) return v .. "°" end)
+	addSlider(expand, "saturation", 0, 100, sOf, function(s) setHSV(hOf(), s, vOf()) end, function(v) return v .. "%" end)
+	addSlider(expand, "value", 0, 100, vOf, function(v) setHSV(hOf(), sOf(), v) end, function(v) return v .. "%" end)
+
+	local function sync()
+		swatch.BackgroundColor3 = col3(get())
+	end
+	row.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			expand.Visible = not expand.Visible
+		end
+	end)
+	addSync(sync)
+	sync()
+	return holder
+end
+
+local function addButton(parent, label, cb)
+	local row = mkRow(parent, 28)
+	local btn = newInst("TextButton", {
+		AutoButtonColor = false, BackgroundColor3 = COL.panel_head, BorderSizePixel = 0,
+		Font = FONT_MED, TextSize = 12, TextColor3 = COL.white, Text = label,
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.new(0.45, -8, 0, 22),
+	}, row)
+	newInst("UICorner", { CornerRadius = UDim.new(0, 3) }, btn)
+	newInst("UIStroke", { Color = COL.accent_dark, Thickness = 1, Transparency = 0.3 }, btn)
+	hoverify(btn)
+	btn.MouseButton1Click:Connect(function() cb() end)
+	return row
+end
+
+local function addTextBox(parent, height, placeholder)
+	local row = mkRow(parent, height or 100)
+	local box = newInst("TextBox", {
+		BackgroundColor3 = COL.row_dark, BorderSizePixel = 0,
+		Font = FONT, TextSize = 12, TextColor3 = COL.text,
+		Text = "", PlaceholderText = placeholder or "", PlaceholderColor3 = COL.text_dim,
+		TextWrapped = true, MultiLine = true, ClearTextOnFocus = false,
+		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+		Position = UDim2.new(0, 8, 0, 3), Size = UDim2.new(1, -16, 1, -6),
+	}, row)
+	newInst("UICorner", { CornerRadius = UDim.new(0, 3) }, box)
+	return row, box
+end
+
+local TABS = {
+	{ id = "rage",     label = "rage" },
+	{ id = "anti-aim", label = "anti-aim" },
+	{ id = "visuals",  label = "visuals" },
+	{ id = "misc",     label = "misc" },
+	{ id = "config",   label = "config" },
+}
+
+guiRoot = newInst("ScreenGui", {
+	Name = "neverlose_menu", ResetOnSpawn = false, IgnoreGuiInset = true,
+	DisplayOrder = 100, Enabled = true,
+}, PlayerGui)
+
+	local cam = getCam()
+	local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	local w = math.min(800, math.floor(vp.X * 0.94))
+	local h = math.min(520, math.floor(vp.Y * 0.92))
+	menuFrame = newInst("Frame", {
+		Name = "window", BackgroundColor3 = COL.window, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, w, 0, h), Visible = false,
+	}, guiRoot)
+	newInst("UICorner", { CornerRadius = UDim.new(0, 6) }, menuFrame)
+	newInst("UIStroke", { Color = COL.window_edge, Thickness = 1, Transparency = 0.1 }, menuFrame)
+	menuScale = newInst("UIScale", { Scale = 1 }, menuFrame)
+
+		local header = newInst("Frame", {
+		BackgroundColor3 = COL.header, BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 42),
+	}, menuFrame)
+	newInst("UICorner", { CornerRadius = UDim.new(0, 6) }, header)
+	newInst("Frame", { 		BackgroundColor3 = COL.header, BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 0, 21), Size = UDim2.new(1, 0, 0, 21),
+	}, header)
+	newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT_BOLD, TextSize = 17,
+		TextColor3 = COL.white, Text = "NeverLose", TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 14, 0, 0), Size = UDim2.new(0, 130, 1, 0),
+	}, header)
+	newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = 12,
+		TextColor3 = COL.accent, Text = "•", TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 104, 0, 0), Size = UDim2.new(0, 14, 1, 0),
+	}, header)
+	newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = 12,
+		TextColor3 = COL.text_dim, Text = "", TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 118, 0, 0), Size = UDim2.new(0, 120, 1, 0),
+	}, header)
+	newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = 12,
+		TextColor3 = COL.text_dim, Text = LocalPlayer.DisplayName,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -52, 0, 0),
+		Size = UDim2.new(0, 220, 1, 0),
+	}, header)
+	local hideBtn = newInst("TextButton", {
+		AutoButtonColor = false, BackgroundTransparency = 1, Font = FONT_MED, TextSize = 14,
+		TextColor3 = COL.text_dim, Text = "✕",
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 0),
+		Size = UDim2.new(0, 34, 1, 0),
+	}, header)
+	hideBtn.MouseEnter:Connect(function() hideBtn.TextColor3 = COL.red end)
+	hideBtn.MouseLeave:Connect(function() hideBtn.TextColor3 = COL.text_dim end)
+	hideBtn.MouseButton1Click:Connect(function() setMenuOpen(false) end)
+
+		local rail = newInst("Frame", {
+		BackgroundColor3 = COL.rail, BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 0, 42), Size = UDim2.new(0, 64, 1, -42),
+	}, menuFrame)
+	newInst("Frame", {
+		BackgroundColor3 = COL.window_edge, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0),
+		Size = UDim2.new(0, 1, 1, 0), BackgroundTransparency = 0.4,
+	}, rail)
+	local railList = newInst("Frame", {
+		BackgroundTransparency = 1, Position = UDim2.new(0, 6, 0, 8),
+		Size = UDim2.new(1, -12, 1, -16),
+	}, rail)
+	newInst("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, railList)
+
+	for i, tab in ipairs(TABS) do
+		local btn = newInst("TextButton", {
+			AutoButtonColor = false, BackgroundColor3 = COL.rail_active,
+			BackgroundTransparency = 1, BorderSizePixel = 0,
+			Font = FONT_MED, TextSize = 11, TextColor3 = COL.text_dim,
+			Text = tab.label, LayoutOrder = i,
+			Size = UDim2.new(1, 0, 0, 40),
+		}, railList)
+		newInst("UICorner", { CornerRadius = UDim.new(0, 4) }, btn)
+		local bar = newInst("Frame", {
+			BackgroundColor3 = COL.rail, BorderSizePixel = 0,
+			Position = UDim2.new(0, 0, 0.2, 0), Size = UDim2.new(0, 3, 0.6, 0),
+		}, btn)
+		newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, bar)
+		btn.MouseEnter:Connect(function() btn.BackgroundTransparency = 0.5 end)
+		btn.MouseLeave:Connect(function()
+			btn.BackgroundTransparency = (activeTab == tab.id) and 0 or 1
+		end)
+		btn.MouseButton1Click:Connect(function()
+			activeTab = tab.id
+			for id, f in pairs(tabFrames) do f.Visible = (id == tab.id) end
+			for id2, b in pairs(tabButtons) do
+				b.frame.BackgroundTransparency = (id2 == tab.id) and 0 or 1
+				b.frame.TextColor3 = (id2 == tab.id) and COL.white or COL.text_dim
+				b.bar.BackgroundColor3 = (id2 == tab.id) and COL.accent or COL.rail
+			end
+		end)
+		tabButtons[tab.id] = { frame = btn, bar = bar }
+	end
+
+		rightPanel = newInst("Frame", {
+		BackgroundColor3 = COL.rail, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -1, 0, 42),
+		Size = UDim2.new(0, 218, 1, -43),
+	}, menuFrame)
+	newInst("Frame", {
+		BackgroundColor3 = COL.window_edge, BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(0, 1, 1, 0),
+		BackgroundTransparency = 0.4,
+	}, rightPanel)
+	newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT_BOLD, TextSize = 12,
+		TextColor3 = COL.text, Text = "event log",
+		Position = UDim2.new(0, 10, 0, 8), Size = UDim2.new(1, -20, 0, 18),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, rightPanel)
+	logScroll = newInst("ScrollingFrame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0,
+		Position = UDim2.new(0, 8, 0, 30), Size = UDim2.new(1, -16, 1, -140),
+		CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 3, ScrollBarImageColor3 = COL.accent_dark,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+	}, rightPanel)
+	logLayout = newInst("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, logScroll)
+
+	local info = newInst("Frame", {
+		BackgroundColor3 = COL.panel, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -8, 1, -8),
+		Size = UDim2.new(1, -16, 0, 96),
+	}, rightPanel)
+	newInst("UICorner", { CornerRadius = UDim.new(0, 4) }, info)
+	newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT_MED, TextSize = 13, TextColor3 = COL.white,
+		Text = LocalPlayer.DisplayName, TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 10, 0, 6), Size = UDim2.new(1, -20, 0, 16),
+	}, info)
+	local infoPing = newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = 12, TextColor3 = COL.text_dim,
+		Text = "ping: —", TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 10, 0, 24), Size = UDim2.new(1, -20, 0, 14),
+	}, info)
+	local infoFps = newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = 12, TextColor3 = COL.text_dim,
+		Text = "fps: —", TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 10, 0, 40), Size = UDim2.new(1, -20, 0, 14),
+	}, info)
+	local infoUp = newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = 12, TextColor3 = COL.text_dim,
+		Text = "uptime: —", TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 10, 0, 56), Size = UDim2.new(1, -20, 0, 14),
+	}, info)
+	newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT, TextSize = 11, TextColor3 = COL.accent,
+		Text = "NeverLose build 1337",
+		Position = UDim2.new(0, 10, 0, 74), Size = UDim2.new(1, -20, 0, 14),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, info)
+
+	task.spawn(function()
+		while not dead do
+			task.wait(0.5)
+			if menuFrame and menuFrame.Visible then
+				local ping = "—"
+				pcall(function()
+					ping = tostring(math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())) .. " ms"
+				end)
+				infoPing.Text = "ping: " .. ping
+				infoFps.Text = "fps: " .. tostring(fpsValue)
+				local up = os.clock() - bootTime
+				infoUp.Text = ("uptime: %d:%02d:%02d"):format(
+					math.floor(up / 3600), math.floor(up / 60) % 60, math.floor(up) % 60)
+			end
+		end
+	end)
+
+		local content = newInst("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0,
+		Position = UDim2.new(0, 64, 0, 42), Size = UDim2.new(1, -282, 1, -42),
+	}, menuFrame)
+
+	for _, tab in ipairs(TABS) do
+		local tf = newInst("Frame", {
+			BackgroundTransparency = 1, Visible = false, Size = UDim2.new(1, 0, 1, 0),
+		}, content)
+		if tab.id == "rage" then tf.Visible = true end
+		local scroller = newInst("ScrollingFrame", {
+			BackgroundTransparency = 1, BorderSizePixel = 0,
+			Position = UDim2.new(0, 8, 0, 8), Size = UDim2.new(1, -16, 1, -16),
+			CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 4, ScrollBarImageColor3 = COL.accent_dark,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+		}, tf)
+		local cols = newInst("Frame", {
+			BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+		}, scroller)
+		newInst("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder,
+		}, cols)
+		local col1 = newInst("Frame", {
+			BackgroundTransparency = 1, Size = UDim2.new(0.5, -4, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+		}, cols)
+		local col2 = newInst("Frame", {
+			BackgroundTransparency = 1, Size = UDim2.new(0.5, -4, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+		}, cols)
+		newInst("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, col1)
+		newInst("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, col2)
+		tabFrames[tab.id] = tf
+		tab._col1 = col1
+		tab._col2 = col2
+	end
+
+		local function groupBox(tabId, title)
+		local tab
+		for _, t in ipairs(TABS) do
+			if t.id == tabId then tab = t; break end
+		end
+		if not tab then return nil end
+		local box = newInst("Frame", {
+			BackgroundColor3 = COL.panel, BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+		}, tab._col1)
+		newInst("UICorner", { CornerRadius = UDim.new(0, 4) }, box)
+		newInst("UIStroke", { Color = COL.window_edge, Thickness = 1, Transparency = 0.35 }, box)
+		newInst("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }, box)
+		local head = newInst("Frame", {
+			BackgroundColor3 = COL.panel_head, BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 24), LayoutOrder = 1,
+		}, box)
+		newInst("UICorner", { CornerRadius = UDim.new(0, 4) }, head)
+		newInst("TextLabel", {
+			BackgroundTransparency = 1, Font = FONT_BOLD, TextSize = 12,
+			TextColor3 = COL.text, Text = title, TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -20, 1, 0),
+		}, head)
+		local body = newInst("Frame", {
+			BackgroundTransparency = 1, BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 2,
+		}, box)
+		newInst("UIListLayout", { Padding = UDim.new(0, 1), SortOrder = Enum.SortOrder.LayoutOrder }, body)
+		newInst("UIPadding", {
+			PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
+			PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6),
+		}, body)
+		table.insert(groupBoxes, { tab = tabId, frame = box })
+		return body
+	end
+
+		local function reflowColumns()
+		local narrow = menuFrame.AbsoluteSize.X < 640
+		if rightPanel then
+			rightPanel.Visible = not narrow
+		end
+		content.Size = (not narrow)
+			and UDim2.new(1, -282, 1, -42)
+			or UDim2.new(1, -64, 1, -42)
+		for _, tab in ipairs(TABS) do
+			local boxes = {}
+			for _, gb in ipairs(groupBoxes) do
+				if gb.tab == tab.id then table.insert(boxes, gb.frame) end
+			end
+			for i, b in ipairs(boxes) do
+				b.Size = UDim2.new(1, 0, 0, 0)
+				if narrow or i % 2 == 1 then
+					b.Parent = tab._col1
+				else
+					b.Parent = tab._col2
+				end
+				b.LayoutOrder = i
+			end
+			tab._col1.Size = UDim2.new(narrow and 1 or 0.5, narrow and 0 or -4, 0, 0)
+			tab._col2.Visible = not narrow
+			tab._col2.Size = UDim2.new(0.5, -4, 0, 0)
+		end
+	end
+
+		local dragData = nil
+	header.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			local center = menuFrame.AbsolutePosition + menuFrame.AbsoluteSize / 2
+			dragData = {
+				start = input.Position,
+				origin = center,
+			}
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragData and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragData.start
+			local cam2 = getCam()
+			local vp = cam2 and cam2.ViewportSize or Vector2.new(1920, 1080)
+			local sz = menuFrame.AbsoluteSize
+			local cx = math.clamp(dragData.origin.X + delta.X, sz.X / 2, math.max(sz.X / 2, vp.X - sz.X / 2))
+			local cy = math.clamp(dragData.origin.Y + delta.Y, sz.Y / 2, math.max(sz.Y / 2, vp.Y - sz.Y / 2))
+			menuFrame.Position = UDim2.new(0, cx, 0, cy)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragData = nil
+		end
+	end)
+
+	local camV = getCam()
+	if camV then
+		camV:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			local cam3 = getCam()
+			if not cam3 then return end
+			local vp = cam3.ViewportSize
+			local w = math.min(800, math.floor(vp.X * 0.94))
+			local h = math.min(520, math.floor(vp.Y * 0.92))
+			menuFrame.Size = UDim2.new(0, w, 0, h)
+			reflowColumns()
+		end)
+	end
+
+				local function serializeConfig()
+		local function keyStr(k)
+			return (typeof(k) == "EnumItem") and k.Name or nil
+		end
+		local copy = deepCopy(CFG)
+		copy.menu_key = keyStr(copy.menu_key)
+		copy.rage.key = keyStr(copy.rage.key)
+		copy.aa.flip_key = keyStr(copy.aa.flip_key)
+		return HttpService:JSONEncode(copy)
+	end
+
+	local function importConfig(json)
+		local data = HttpService:JSONDecode(json)
+		if type(data) ~= "table" then return false end
+		local function strToKey(s)
+			if type(s) ~= "string" or s == "" then return nil end
+			local ok, k = pcall(function() return Enum.KeyCode[s] end)
+			return ok and k or nil
+		end
+		if data.rage and type(data.rage.key) == "string" then data.rage.key = strToKey(data.rage.key) end
+		if data.aa and type(data.aa.flip_key) == "string" then data.aa.flip_key = strToKey(data.aa.flip_key) end
+		if type(data.menu_key) == "string" then data.menu_key = strToKey(data.menu_key) or Enum.KeyCode.Insert end
+		local fresh = deepCopy(DEFAULTS)
+		deepMerge(fresh, data)
+				for k in pairs(CFG) do CFG[k] = nil end
+		for k, v in pairs(fresh) do CFG[k] = v end
+		refreshAllControls()
+		return true
+	end
+
+	local function saveConfig()
+		local sv = guiRoot:FindFirstChild("NLHvH_Config")
+		if not sv then
+			sv = Instance.new("StringValue")
+			sv.Name = "NLHvH_Config"
+			sv.Parent = guiRoot
+		end
+		sv.Value = serializeConfig()
+		logEvent("config saved", COL.green)
+	end
+	saveConfigNow = saveConfig
+
+	local function loadSavedConfig(silent)
+		local sv = guiRoot:FindFirstChild("NLHvH_Config")
+		if sv and sv.Value ~= "" then
+			local ok = pcall(importConfig, sv.Value)
+			if ok and not silent then logEvent("config loaded", COL.green) end
+			return ok
+		end
+		return false
+	end
+
+				do 		local g = groupBox("rage", "ragebot")
+		addToggle(g, "enabled", function() return CFG.rage.enabled end, function(v) CFG.rage.enabled = v end)
+		addToggle(g, "silent aim", function() return CFG.rage.silent end, function(v) CFG.rage.silent = v end)
+		addDropdown(g, "target selection", { "crosshair", "distance", "health" },
+			function() return CFG.rage.selection end, function(v) CFG.rage.selection = v end)
+		addDropdown(g, "hitbox", { "head", "torso", "root", "nearest" },
+			function() return CFG.rage.hitbox end, function(v) CFG.rage.hitbox = v end)
+		addSlider(g, "multipoint", 0, 100,
+			function() return CFG.rage.multipoint end, function(v) CFG.rage.multipoint = math.floor(v) end,
+			function(v) return v .. "%" end)
+		addSlider(g, "field of view", 5, 180,
+			function() return CFG.rage.fov end, function(v) CFG.rage.fov = math.floor(v) end,
+			function(v) return v .. "°" end)
+		addSlider(g, "hit chance", 1, 100,
+			function() return CFG.rage.hitchance end, function(v) CFG.rage.hitchance = math.floor(v) end,
+			function(v) return v .. "%" end)
+		addSlider(g, "fire rate", 0, 200,
+			function() return CFG.rage.firetime end, function(v) CFG.rage.firetime = math.floor(v) end,
+			function(v) return v .. "%" end)
+		addToggle(g, "auto fire", function() return CFG.rage.autofire end, function(v) CFG.rage.autofire = v end)
+		addToggle(g, "auto reload", function() return CFG.rage.autoreload end, function(v) CFG.rage.autoreload = v end)
+		addToggle(g, "instant reload", function() return CFG.misc.instant_reload end, function(v) CFG.misc.instant_reload = v end)
+		addToggle(g, "team check", function() return CFG.rage.teamcheck end, function(v) CFG.rage.teamcheck = v end)
+		addToggle(g, "auto defend", function() return CFG.misc.autodefend end, function(v) CFG.misc.autodefend = v end)
+		addSlider(g, "defend time", 1, 10,
+			function() return CFG.misc.autodefend_time end, function(v) CFG.misc.autodefend_time = math.floor(v) end,
+			function(v) return v .. "s" end)
+		addDropdown(g, "walls", { "ignore", "visible" },
+			function() return CFG.rage.walls end, function(v) CFG.rage.walls = v end)
+		addToggle(g, "never miss", function() return CFG.rage.nevermiss end, function(v) CFG.rage.nevermiss = v end)
+		addToggle(g, "wallbang", function() return CFG.rage.wallbang end, function(v) CFG.rage.wallbang = v end)
+		if not IS_TOUCH then
+			addDropdown(g, "activation", { "always", "hold", "toggle" },
+				function() return CFG.rage.key_mode end, function(v) CFG.rage.key_mode = v end)
+			addKeybind(g, "rage key", function() return CFG.rage.key end, function(k) CFG.rage.key = k end)
+		end
+		addButton(g, "force 100% hits", function()
+			CFG.rage.hitchance = 100
+			CFG.rage.silent = true
+			CFG.rage.walls = "ignore"
+			CFG.rage.multipoint = 0
+			CFG.rage.nevermiss = true
+			CFG.rage.wallbang = true
+			refreshAllControls()
+			logEvent("100% hits: every shot registers on the locked hitbox", COL.accent)
+		end)
+
+		local g2 = groupBox("rage", "backtracking")
+		addToggle(g2, "enabled", function() return CFG.rage.backtrack end, function(v) CFG.rage.backtrack = v end)
+		addSlider(g2, "backtrack time", 0, 400,
+			function() return CFG.rage.backtrack_ms end, function(v) CFG.rage.backtrack_ms = math.floor(v) end,
+			function(v) return v .. " ms" end)
+
+		local g3 = groupBox("rage", "resolver")
+		addDropdown(g3, "mode", { "off", "average", "extrapolate" },
+			function() return CFG.rage.resolver end, function(v) CFG.rage.resolver = v end)
+
+		local g4 = groupBox("rage", "indicators")
+		addToggle(g4, "fov circle", function() return CFG.vis.fovcircle end, function(v) CFG.vis.fovcircle = v end)
+		addToggle(g4, "target indicator", function() return CFG.vis.target_indicator end, function(v) CFG.vis.target_indicator = v end)
+
+		local g5 = groupBox("rage", "target teams")
+		local teamList = {}
+		pcall(function()
+			for _, t in ipairs(Teams:GetChildren()) do
+				if t:IsA("Team") then table.insert(teamList, t.Name) end
+			end
+		end)
+		table.sort(teamList)
+		if #teamList == 0 then teamList = { "Criminals", "Guards", "Inmates" } end
+		for _, tn in ipairs(teamList) do
+			addToggle(g5, tn,
+				function() return CFG.rage.team_targets[tn] ~= false end,
+				function(v) CFG.rage.team_targets[tn] = v end)
+		end
+	end
+
+	do 		local g = groupBox("anti-aim", "angles")
+		addToggle(g, "enabled", function() return CFG.aa.enabled end, function(v) CFG.aa.enabled = v end)
+		addDropdown(g, "pitch", { "off", "down", "up", "zero" },
+			function() return CFG.aa.pitch end, function(v) CFG.aa.pitch = v end)
+		addSlider(g, "yaw offset", -180, 180,
+			function() return CFG.aa.yaw end, function(v) CFG.aa.yaw = math.floor(v) end,
+			function(v) return v .. "°" end)
+		addToggle(g, "at targets", function() return CFG.aa.at_targets end, function(v) CFG.aa.at_targets = v end)
+		addToggle(g, "spin", function() return CFG.aa.spin end, function(v) CFG.aa.spin = v end)
+		addSlider(g, "spin speed", 30, 1080,
+			function() return CFG.aa.spin_speed end, function(v) CFG.aa.spin_speed = math.floor(v) end,
+			function(v) return v .. "°/s" end)
+		if not IS_TOUCH then
+			addKeybind(g, "flip key", function() return CFG.aa.flip_key end, function(k) CFG.aa.flip_key = k end)
+		end
+
+		local g2 = groupBox("anti-aim", "jitter")
+		addDropdown(g2, "mode", { "off", "offset", "center", "random" },
+			function() return CFG.aa.jitter end, function(v) CFG.aa.jitter = v end)
+		addSlider(g2, "range", 5, 180,
+			function() return CFG.aa.jitter_range end, function(v) CFG.aa.jitter_range = math.floor(v) end,
+			function(v) return v .. "°" end)
+		addSlider(g2, "rate", 1, 20,
+			function() return CFG.aa.jitter_rate end, function(v) CFG.aa.jitter_rate = math.floor(v) end,
+			function(v) return v .. " hz" end)
+
+		local g3 = groupBox("anti-aim", "fake lag")
+		addToggle(g3, "enabled", function() return CFG.aa.fakelag end, function(v) CFG.aa.fakelag = v end)
+		addDropdown(g3, "mode", { "factor", "random" },
+			function() return CFG.aa.fakelag_mode end, function(v) CFG.aa.fakelag_mode = v end)
+		addSlider(g3, "amount", 2, 16,
+			function() return CFG.aa.fakelag_ticks end, function(v) CFG.aa.fakelag_ticks = math.floor(v) end,
+			function(v) return v .. " ticks" end)
+
+		local g4 = groupBox("anti-aim", "indicators")
+		addToggle(g4, "show arrow", function() return CFG.aa.arrows end, function(v) CFG.aa.arrows = v end)
+		addSlider(g4, "position jitter", 0, 150,
+			function() return math.floor((CFG.aa.pos_jitter or 0) * 100 + 0.5) end,
+			function(v) CFG.aa.pos_jitter = v / 100 end,
+			function(v) return string.format("%.2f studs", v / 100) end)
+	end
+
+	do 		local g = groupBox("visuals", "player esp")
+		addToggle(g, "enabled", function() return CFG.vis.esp end, function(v) CFG.vis.esp = v end)
+		addDropdown(g, "box", { "off", "corner", "full" },
+			function() return CFG.vis.box end, function(v) CFG.vis.box = v end)
+		addToggle(g, "name", function() return CFG.vis.name end, function(v) CFG.vis.name = v end)
+		addToggle(g, "health bar", function() return CFG.vis.health end, function(v) CFG.vis.health = v end)
+		addToggle(g, "weapon", function() return CFG.vis.weapon end, function(v) CFG.vis.weapon = v end)
+		addToggle(g, "distance", function() return CFG.vis.distance end, function(v) CFG.vis.distance = v end)
+		addToggle(g, "team colors", function() return CFG.vis.teamcolors end, function(v) CFG.vis.teamcolors = v end)
+		addToggle(g, "teammates", function() return CFG.vis.teammates end, function(v) CFG.vis.teammates = v end)
+		addSlider(g, "max distance", 100, 3000,
+			function() return CFG.vis.maxdist end, function(v) CFG.vis.maxdist = math.floor(v) end,
+			function(v) return v .. "m" end)
+
+		local g2 = groupBox("visuals", "chams")
+		addToggle(g2, "enabled", function() return CFG.vis.chams end, function(v) CFG.vis.chams = v end)
+		addColor(g2, "visible", function() return CFG.vis.chams_visible end, function(c) CFG.vis.chams_visible = c end)
+		addColor(g2, "occluded", function() return CFG.vis.chams_occluded end, function(c) CFG.vis.chams_occluded = c end)
+		addSlider(g2, "fill", 0, 95,
+			function() return CFG.vis.chams_fill end, function(v) CFG.vis.chams_fill = math.floor(v) end,
+			function(v) return v .. "%" end)
+
+		local g3 = groupBox("visuals", "effects")
+		addToggle(g3, "hit marker", function() return CFG.vis.hitmarker end, function(v) CFG.vis.hitmarker = v end)
+		addToggle(g3, "hit sound", function() return CFG.vis.hitsound end, function(v) CFG.vis.hitsound = v end)
+		addSlider(g3, "hit sound volume", 0, 100,
+			function() return CFG.vis.hitsound_vol end, function(v) CFG.vis.hitsound_vol = math.floor(v) end,
+			function(v) return v .. "%" end)
+
+		local g4 = groupBox("visuals", "interface")
+		addToggle(g4, "watermark", function() return CFG.vis.watermark end, function(v) CFG.vis.watermark = v end)
+		addToggle(g4, "keybind list", function() return CFG.vis.keybinds end, function(v) CFG.vis.keybinds = v end)
+	end
+
+	do 		local g = groupBox("misc", "movement")
+		addDropdown(g, "bunny hop", { "off", "space", "always" },
+			function() return CFG.misc.bhop end, function(v) CFG.misc.bhop = v end)
+		addToggle(g, "auto strafe", function() return CFG.misc.autostrafe end, function(v) CFG.misc.autostrafe = v end)
+
+		local g2 = groupBox("misc", "combat")
+		addToggle(g2, "knife bot", function() return CFG.misc.knifebot end, function(v) CFG.misc.knifebot = v end)
+		addSlider(g2, "knife range", 3, 12,
+			function() return CFG.misc.knife_range end, function(v) CFG.misc.knife_range = v end,
+			function(v) return v .. "m" end)
+
+		local g3 = groupBox("misc", "utility")
+		addToggle(g3, "anti-afk", function() return CFG.misc.antiafk end, function(v) CFG.misc.antiafk = v end)
+		addToggle(g3, "remove scope", function() return CFG.misc.remove_scope end, function(v) CFG.misc.remove_scope = v end)
+		addButton(g3, "unload NeverLose", function()
+			if unload then unload() end
+		end)
+
+		local g4 = groupBox("misc", "gun giver")
+		addButton(g4, "give all guns", function() task.spawn(remoteTools.giveAll) end)
+		local gunNames = {}
+		pcall(function()
+			for _, giv in ipairs(CollectionService:GetTagged("Giver")) do
+				gunNames[giv.Name] = true
+			end
+		end)
+		local gunSort = {}
+		for n in pairs(gunNames) do table.insert(gunSort, n) end
+		table.sort(gunSort)
+		for _, n in ipairs(gunSort) do
+			addButton(g4, n, function() remoteTools.giveGun(n) end)
+		end
+
+		local g5 = groupBox("misc", "teams")
+		for _, tn in ipairs({ "Inmates", "Guards", "Criminals", "Neutral" }) do
+			addButton(g5, tn, function() remoteTools.setTeam(tn) end)
+		end
+
+		local g6 = groupBox("misc", "client")
+		addToggle(g6, "wings", function() return CFG.misc.wings end, function(v)
+			CFG.misc.wings = v
+			if v then wingSys.build(char) else wingSys.destroy() end
+		end)
+		addToggle(g6, "god mode (/god)", function() return CFG.misc.god end, function(v)
+			CFG.misc.god = v
+			if v then remoteTools.god() end
+		end)
+
+		local g7 = groupBox("misc", "emotes")
+		for _, e in ipairs(EMOTES) do
+			addButton(g7, e[1], function() emoteSys.play(e[2], e[1]) end)
+		end
+		local _, emoteBox = addTextBox(g7, 60, "emote id")
+		addButton(g7, "play id", function()
+			local id = tonumber(emoteBox and emoteBox.Text or "")
+			if id then emoteSys.play(id, "custom") end
+		end)
+		addButton(g7, "stop emote", function() emoteSys.stop() end)
+	end
+
+	do 		local g = groupBox("config", "config")
+		addButton(g, "save", function() saveConfig() end)
+		addButton(g, "load", function() loadSavedConfig(false) end)
+		addButton(g, "reset defaults", function()
+			local fresh = deepCopy(DEFAULTS)
+			for k in pairs(CFG) do CFG[k] = nil end
+			for k, v in pairs(fresh) do CFG[k] = v end
+			refreshAllControls()
+			logEvent("config reset to defaults", COL.orange)
+		end)
+		addSeparator(g)
+		addButton(g, "preset: rage", function()
+			PRESETS["rage"](); refreshAllControls(); logEvent("preset loaded: rage", COL.accent)
+		end)
+		addButton(g, "preset: legit", function()
+			PRESETS["legit"](); refreshAllControls(); logEvent("preset loaded: legit", COL.accent)
+		end)
+		addButton(g, "preset: closet", function()
+			PRESETS["closet"](); refreshAllControls(); logEvent("preset loaded: closet", COL.accent)
+		end)
+
+		local g2 = groupBox("config", "import / export")
+		local _, jsonBox = addTextBox(g2, 120, "config json")
+		addButton(g2, "export →", function()
+			jsonBox.Text = serializeConfig()
+			pcall(function() SetClipboard(jsonBox.Text) end)
+			logEvent("config exported", COL.green)
+		end)
+		addButton(g2, "← import", function()
+			if jsonBox.Text and #jsonBox.Text > 2 then
+				local ok = pcall(importConfig, jsonBox.Text)
+				logEvent(ok and "config imported" or "import failed (bad json)", ok and COL.green or COL.red)
+			end
+		end)
+
+		local g3 = groupBox("config", "menu")
+		if not IS_TOUCH then
+			addKeybind(g3, "menu key", function() return CFG.menu_key end, function(k) CFG.menu_key = k or Enum.KeyCode.Insert end)
+		end
+		addDropdown(g3, "toggle button", { "touch", "always", "off" },
+			function() return CFG.menu_button end, function(v) CFG.menu_button = v end)
+	end
+
+		do
+		local b = tabButtons[activeTab]
+		if b then
+			b.frame.BackgroundTransparency = 0
+			b.frame.TextColor3 = COL.white
+			b.bar.BackgroundColor3 = COL.accent
+		end
+	end
+
+		local function pushLogLabel(text, color)
+		if not logScroll then return end
+		local _lbl = newInst("TextLabel", {
+			BackgroundTransparency = 1, Font = FONT, TextSize = 11,
+			TextColor3 = color or COL.text_dim,
+			Text = "[" .. os.date("%H:%M:%S") .. "] " .. text,
+			TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true,
+			Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = os.clock() * 1000,
+		}, logScroll)
+		local count = 0
+		for _, c in ipairs(logScroll:GetChildren()) do
+			if c:IsA("TextLabel") then count = count + 1 end
+		end
+		while count > 60 do
+			for _, c in ipairs(logScroll:GetChildren()) do
+				if c:IsA("TextLabel") then c:Destroy(); count = count - 1; break end
+			end
+		end
+		task.defer(function()
+			if logLayout and logScroll then
+				logScroll.CanvasPosition = Vector2.new(0, math.max(0, logLayout.AbsoluteContentSize.Y))
+			end
+		end)
+	end
+	table.insert(logListeners, pushLogLabel)
+	for _, e in ipairs(eventLog) do pushLogLabel(e.text, e.col) end
+
+		setMenuOpen = function(open)
+		if menuOpen == open then return end
+		menuOpen = open
+		menuFrame.Visible = open
+		if open then
+			prevMouseBehavior = UserInputService.MouseBehavior
+			prevMouseIcon = UserInputService.MouseIconEnabled
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			UserInputService.MouseIconEnabled = true
+			if menuScale then
+				menuScale.Scale = 0.93
+				pcall(function()
+					TweenService:Create(menuScale,
+						TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+						{ Scale = 1 }):Play()
+				end)
+			end
+			task.defer(reflowColumns)
+		else
+			UserInputService.MouseBehavior = prevMouseBehavior
+			UserInputService.MouseIconEnabled = prevMouseIcon
+		end
+		rebuildKeybindList()
+	end
+
+		connect(UserInputService.TextBoxFocused, function(tb)
+		if tb and tb:IsDescendantOf(guiRoot) then typingInMenu = true end
+	end)
+	connect(UserInputService.TextBoxFocusReleased, function()
+		typingInMenu = false
+	end)
+
+				toggleBtn = newInst("TextButton", {
+		Name = "mobile_toggle", AutoButtonColor = false,
+		BackgroundColor3 = COL.window, BackgroundTransparency = 0.15, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 96),
+		Size = UDim2.new(0, 52, 0, 52), Text = "", ZIndex = 10,
+	}, guiRoot)
+	newInst("UICorner", { CornerRadius = UDim.new(1, 0) }, toggleBtn)
+	newInst("UIStroke", { Color = COL.accent, Thickness = 1.4, Transparency = 0.05 }, toggleBtn)
+	newInst("TextLabel", {
+		BackgroundTransparency = 1, Font = FONT_BOLD, TextSize = 17,
+		TextColor3 = COL.white, Text = "NL", Size = UDim2.new(1, 0, 1, 0), ZIndex = 11,
+	}, toggleBtn)
+
+	local function syncToggleBtn()
+		local mode = CFG.menu_button
+		toggleBtn.Visible = (mode == "always") or (mode == "touch" and IS_TOUCH)
+	end
+	addSync(syncToggleBtn)
+	syncToggleBtn()
+
+	do
+		local btnDrag = nil
+		local tapT, tapPos = 0, nil
+		toggleBtn.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch
+				or input.UserInputType == Enum.UserInputType.MouseButton1 then
+				btnDrag = { start = input.Position, origin = toggleBtn.AbsolutePosition, moved = 0 }
+				tapT = os.clock()
+				tapPos = input.Position
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if btnDrag and (input.UserInputType == Enum.UserInputType.Touch
+				or input.UserInputType == Enum.UserInputType.MouseMovement) then
+				local delta = input.Position - btnDrag.start
+				local dist = (input.Position - tapPos).Magnitude
+				if dist > btnDrag.moved then btnDrag.moved = dist end
+				if btnDrag.moved > 8 then
+					local cam2 = getCam()
+					local vp = cam2 and cam2.ViewportSize or Vector2.new(1920, 1080)
+					local sz = toggleBtn.AbsoluteSize
+					local nx = math.clamp(btnDrag.origin.X + delta.X, 6, math.max(6, vp.X - sz.X - 6))
+					local ny = math.clamp(btnDrag.origin.Y + delta.Y, 60, math.max(60, vp.Y - sz.Y - 6))
+					toggleBtn.AnchorPoint = Vector2.new(0, 0)
+					toggleBtn.Position = UDim2.new(0, nx, 0, ny)
+				end
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if btnDrag and (input.UserInputType == Enum.UserInputType.Touch
+				or input.UserInputType == Enum.UserInputType.MouseButton1) then
+				local dur = os.clock() - tapT
+				local moved = btnDrag.moved
+				btnDrag = nil
+				if moved < 10 and dur < 0.45 then
+					setMenuOpen(not menuOpen)
+				end
+			end
+		end)
+	end
+
+		task.delay(0.6, function()
+		if dead or not guiRoot then return end
+		local hint = newInst("TextLabel", {
+			BackgroundColor3 = COL.window, BackgroundTransparency = 0.25, BorderSizePixel = 0,
+			Font = FONT_MED, TextSize = 13, TextColor3 = COL.white,
+			Text = IS_TOUCH
+				and "neverlose loaded — tap the NL button (top right) to open the menu"
+				or  "neverlose loaded — press INSERT to open the menu",
+			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -40),
+			Size = UDim2.new(0, 460, 0, 30), ZIndex = 20,
+		}, guiRoot)
+		newInst("UICorner", { CornerRadius = UDim.new(0, 4) }, hint)
+		newInst("UIStroke", { Color = COL.accent_dark, Thickness = 1, Transparency = 0.3 }, hint)
+		task.delay(6, function()
+			pcall(function()
+				TweenService:Create(hint, TweenInfo.new(0.6), { BackgroundTransparency = 1, TextTransparency = 1 }):Play()
+			end)
+			task.delay(0.7, function() pcall(function() hint:Destroy() end) end)
+		end)
+	end)
+
+		loadSavedConfig(true)
+	if IS_TOUCH then
+		CFG.rage.key_mode = "always"
+		CFG.rage.autofire = true
+		CFG.rage.key = nil
+		CFG.aa.flip_key = nil
+	end
+	reflowColumns()
+end
+buildMenu()
+
+bindRender("NL_Aim", Enum.RenderPriority.Camera.Value + 1, function()
+	if cameraAimPoint then
+		local cam = getCam()
+		if cam then
+			cam.CFrame = CFrame.lookAt(cam.CFrame.Position, cameraAimPoint)
+		end
+	end
+end)
+
+bindRender("NL_ESP", Enum.RenderPriority.Camera.Value + 2, function()
+	if dead then return end
+	renderESP()
+	renderHUD()
+end)
+
+connect(RunService.PreSimulation, function(dt)
+	antiAimTick(dt)
+end)
+
+connect(RunService.Heartbeat, function(dt)
+	wingSys.update(dt)
+	if dead then return end
+	heartbeatTick()
+	renderChams()
+end)
+
+connect(UserInputService.InputBegan, function(input, gameProcessed)
+		if capturingBind then
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			local cb = capturingBind
+			capturingBind = nil
+			capturingBindBtn = nil
+			if cb then cb(input.KeyCode) end
+		elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+			capturingBind = nil
+			capturingBindBtn = nil
+			refreshAllControls()
+		end
+		return
+	end
+
+	if typingInMenu then return end
+
+		if CFG.menu_key and input.UserInputType == Enum.UserInputType.Keyboard
+		and keyEquals(input.KeyCode, CFG.menu_key) then
+		setMenuOpen(not menuOpen)
+		return
+	end
+
+	if menuOpen then return end
+
+		if CFG.rage.key and input.UserInputType == Enum.UserInputType.Keyboard
+		and keyEquals(input.KeyCode, CFG.rage.key) and CFG.rage.key_mode == "toggle" then
+		rageToggleState = not rageToggleState
+		logEvent("ragebot " .. (rageToggleState and "enabled" or "disabled") .. " (key)", COL.accent)
+	end
+
+		if CFG.aa.flip_key and input.UserInputType == Enum.UserInputType.Keyboard
+		and keyEquals(input.KeyCode, CFG.aa.flip_key) then
+		flipHeld = true
+		return
+	end
+
+	if gameProcessed then return end
+
+		if equippedTool and gunStats and equippedTool:GetAttribute("ToolType") == "Gun" then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			heldInputs[input] = true
+			startFiring(input)
+		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+			if UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
+				and gunStats.Behavior == "Sniper" then
+				setScope(not scoped)
+			end
+		elseif input.UserInputType == Enum.UserInputType.Touch then
+			if touchAllowedToFire(input) then
+				heldInputs[input] = true
+				startFiring(input)
+			end
+		elseif input.UserInputType == Enum.UserInputType.Keyboard then
+			if input.KeyCode == Enum.KeyCode.R then
+				reloadGun()
+			elseif input.KeyCode == Enum.KeyCode.Z and gunStats.Behavior == "Sniper" then
+				setScope(not scoped)
+			end
+		elseif input.UserInputType == Enum.UserInputType.Gamepad1 then
+			if input.KeyCode == Enum.KeyCode.ButtonR2 then
+				heldInputs[input] = true
+				startFiring(input)
+			elseif input.KeyCode == Enum.KeyCode.ButtonX then
+				reloadGun()
+			elseif input.KeyCode == Enum.KeyCode.ButtonL2 and gunStats.Behavior == "Sniper" then
+				setScope(not scoped)
+			end
+		end
+	end
+end)
+
+connect(UserInputService.InputEnded, function(input)
+	heldInputs[input] = nil
+	if CFG.aa.flip_key and keyEquals(input.KeyCode, CFG.aa.flip_key) then
+		flipHeld = false
+	end
+end)
+
+connect(UserInputService.LastInputTypeChanged, function(t)
+	lastInputTouch = (t == Enum.UserInputType.Touch)
+	if equippedTool and gunStats then applyGunHUD(true) end
+end)
+connect(UserInputService:GetPropertyChangedSignal("MouseBehavior"), function()
+	if equippedTool and gunStats then applyGunHUD(true) end
+end)
+
+local function onPlayerAdded(plr)
+	if plr == LocalPlayer then return end
+	local rec = makeRecord(plr)
+	if plr.Character then task.defer(refreshRecord, rec) end
+	connect(plr.CharacterAdded, function()
+		task.defer(refreshRecord, rec)
+	end)
+	connect(plr:GetPropertyChangedSignal("Team"), function()
+		task.defer(refreshRecord, rec)
+		local tn = plr.Team and plr.Team.Name or "none"
+		logEvent(plr.Name .. " switched to " .. tn, COL.orange)
+	end)
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+	onPlayerAdded(plr)
+end
+connect(Players.PlayerAdded, onPlayerAdded)
+connect(Players.PlayerRemoving, function(plr)
+	local rec = records[plr]
+	if rec then
+		destroyRecordESP(rec)
+		records[plr] = nil
+	end
+end)
+
+local function onMyCharacter(c)
+	char = c
+	human = c:WaitForChild("Humanoid", 10)
+	root = c:WaitForChild("HumanoidRootPart", 10)
+	setBulletFilter({ c })
+	equippedTool = nil
+	gunStats = nil
+	reloading = false
+	scoped = false
+	cameraAimPoint = nil
+	aaAutoRotateOff = false
+	pendingHits = {}
+	myLastHealth = human and human.Health or 100
+	forcedDefend = nil
+	emoteSys.stop()
+	killVanillaGunScript() 	watchCharacter(c)
+	if CFG.misc.wings then wingSys.build(c) end
+	if CFG.misc.god then task.delay(1, remoteTools.god) end
+	if human then
+		connect(human:GetPropertyChangedSignal("Health"), function()
+			onMyHealthChanged(human.Health)
+		end)
+		connect(human.Died, function()
+			applyGunHUD(false)
+			cameraAimPoint = nil
+			scoped = false
+			pcall(function()
+				LocalPlayer.CameraMode = Enum.CameraMode.Classic
+				local cam = getCam()
+				if cam then cam.FieldOfView = 70 end
+				if HUD.scope then HUD.scope.Visible = false end
+				_G.cameraSensitivity = 1
+			end)
+		end)
+	end
+end
+
+if LocalPlayer.Character then
+	task.spawn(onMyCharacter, LocalPlayer.Character)
+end
+connect(LocalPlayer.CharacterAdded, function(c)
+	task.spawn(onMyCharacter, c)
+	task.spawn(function()
+		wireHUD()
+		hookHUDControls()
+	end)
+end)
+
+unload = function()
+	wingSys.destroy()
+	pcall(function() emoteSys.stop() end)
+	if dead then return end
+	dead = true
+		pcall(function() saveConfigNow() end)
+	for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+	for _, n in ipairs(renderBinds) do pcall(function() RunService:UnbindFromRenderStep(n) end) end
+	clearToolConns()
+		pcall(function()
+		local c = LocalPlayer.Character
+		if c then
+			local h = c:FindFirstChildOfClass("Humanoid")
+			if h then h.AutoRotate = true end
+		end
+		LocalPlayer.CameraMode = Enum.CameraMode.Classic
+		local cam = getCam()
+		if cam then cam.FieldOfView = 70 end
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		UserInputService.MouseIconEnabled = true
+		UserInputService.MouseIcon = ""
+		_G.cameraSensitivity = 1
+	end)
+		for _, rec in pairs(records) do
+		destroyRecordESP(rec)
+	end
+	records = {}
+		pcall(function() if espGui then espGui:Destroy() end end)
+	pcall(function() if hudGui then hudGui:Destroy() end end)
+	pcall(function() if guiRoot then guiRoot:Destroy() end end)
+		if equippedTool then
+		pcall(function() equippedTool:SetAttribute("Local_IsShooting", false) end)
+	end
+	if vanillaController then
+		pcall(function() vanillaController.Disabled = false end)
+	end
+	warn("[neverlose] unloaded — vanilla GunController re-enabled")
+end
+
+_G.NLHvH = { unload = unload, version = "1.0.0" }
+
+logEvent("NeverLose loaded", COL.accent)
+logEvent(IS_TOUCH
+	and "tap the NL button (top right) to open the menu"
+	or "press INSERT to open the menu", COL.text_dim)
+if not vanillaDisabled then
+	logEvent("warning: vanilla GunController is still active", COL.orange)
+end
+if not ShootEvent then
+	logEvent("warning: ShootEvent not found — rage features disabled", COL.orange)
+end
+
+warn("[neverlose] NeverLose loaded — INSERT / NL button to toggle the menu")
