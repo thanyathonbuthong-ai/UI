@@ -1602,11 +1602,20 @@ pcall(function()
 end)
 
 --[[==========================================================================
-    F$VL MM2 — UI ported to OasisUI (WindUI-compatible shim)
-    The block below replaces the original WindUI loader + theme + window setup.
-    obj2 / obj3 keep the same WindUI-style surface so the rest of the script
-    (game logic, callbacks, config, keybinds) runs unchanged.
+    F$VL MM2 — UI = OasisUI (native API)
+    obj2 / obj3 keep the small WindUI-style surface the rest of the script was
+    written against, but every call below now goes through OasisUI's own API:
+      * elements get Title / Description / Flag / Default / Callback directly,
+        so Library.Flags and Window.Config (save / load / autoload) work natively
+      * Keybind uses Pressed (Always mode) + Binding; Toggle GUI shares the
+        window's MenuBinding; Library:IsCapturing is honoured by OasisUI itself
+      * sub-tabs use Tab:SubTab, paragraphs use Paragraph (+ Embed for custom
+        frames), window control uses Window:Toggle / SetVisible / SelectTab,
+        shutdown uses Library:Unload
   ==========================================================================]]
+
+-- true = ignore every toggle's `Value = true` default and start everything OFF (the old shim's behaviour)
+local FORCE_TOGGLES_OFF = false
 
 local __guiBefore = {} -- GUIs that existed before the UI library loaded (used for role colours)
 pcall(function()
@@ -1618,26 +1627,28 @@ pcall(function()
 end)
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/thanyathonbuthong-ai/UI/refs/heads/main/UI%20KIM"))()
-local obj2, obj3  -- WindUI-style handles, assigned below (upvalues for the rest of the script)
-
--- theme: match the original F$VL green look as closely as OasisUI allows
-pcall(function()
-	local Theme = Library.Theme
-	if Theme and Theme.UsePalette then
-		pcall(Theme.UsePalette, "Emerald")
-	end
-	if Theme and Theme.Set then
-		pcall(Theme.Set, {
-			Accent = Color3.fromHex("#22c55e"),
-			AccentAlt = Color3.fromHex("#4ade80"),
-		})
-	end
-end)
+local obj2, obj3 -- WindUI-style handles, assigned below (upvalues for the rest of the script)
+local oasisWindow -- the OasisUI window, assigned below
 
 local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local hui = (gethui and gethui()) or CoreGui
+
+-- theme: green F$VL look through the documented Library API (a theme the user saved in OasisUI still wins)
+pcall(function()
+	Library:SetTheme("Emerald")
+	Library:SetThemeValues({
+		Accent = Color3.fromHex("#22c55e"),
+		AccentAlt = Color3.fromHex("#4ade80"),
+	})
+end)
+
+local function safe(fn, ...)
+	if type(fn) ~= "function" then return end
+	local ok, err = pcall(fn, ...)
+	if not ok then warn("[F$VL] callback error: " .. tostring(err)) end
+end
 
 -- icon normalizer: WindUI uses "lucide:x" / "solar:x-bold"; OasisUI wants plain Lucide names
 local function normIcon(icon)
@@ -1701,595 +1712,358 @@ local function normIcon(icon)
 	return map[s] or s
 end
 
--- flag registry for config persistence (replaces WindUI ConfigManager)
-local _FVL = { flags = {}, autoSave = nil }
 
-local function colorToTable(c)
-	return { __color = true, r = c.R, g = c.G, b = c.B }
-end
-local function tableToColor(t)
-	return Color3.new(t.r, t.g, t.b)
+-- config / element registry: OasisUI keeps every element that has a Flag in Library.Flags
+local _FVL = { flags = Library.Flags, autoSave = nil }
+
+local color = Color3.fromHex -- kept for compatibility
+
+local function descOf(def)
+	return def.Desc or def.Description
 end
 
--- element wrapper helpers ---------------------------------------------------
--- .Value is read dynamically from the underlying OasisUI element so the
--- script's direct `.Value` checks (e.g. handleLink.Value) always stay fresh.
-local dynMT = {
-	__index = function(t, k)
-		if k == "Value" then
-			local ok, v = pcall(function() return t._oasis.Value end)
-			return ok and v or rawget(t, "_fallback")
+local function colorOf(v)
+	if typeof(v) == "Color3" then return v end
+	if type(v) == "table" then
+		if v.__color then return Color3.new(v.r, v.g, v.b) end
+		if typeof(v.Color) == "Color3" then return v.Color end
+		if type(v.Hex) == "string" then
+			local ok, c = pcall(Color3.fromHex, v.Hex)
+			if ok then return c end
 		end
-		return rawget(t, k)
+	end
+	return nil
+end
+
+-- WindUI-style helpers on top of the native element. All of them call the element's own API
+-- (Get / Set / Refresh / SetDescription / SetKey); `SetValue` is NOT silent, so callbacks run
+-- and the feature really switches (same as WindUI).
+local SETTERS = {
+	Toggle = function(el, v) el:Set(v and true or false) end,
+	Slider = function(el, v)
+		v = tonumber(v)
+		if v then el:Set(v) end
 	end,
-	__newindex = function(t, k, v)
-		if k == "Value" then
-			local set = rawget(t, "Set")
-			if set then pcall(set, t, v); return end
-		end
-		rawset(t, k, v)
+	Dropdown = function(el, v)
+		if v == nil then return end
+		el:Set(type(v) == "table" and v or tostring(v))
 	end,
+	ColorPicker = function(el, v)
+		local c = colorOf(v)
+		if c then el:Set(c) end
+	end,
+	Input = function(el, v) el:Set(v == nil and "" or v) end,
+	Keybind = function(el, v) el:SetKey(v) end,
 }
-local function dyn(w) return setmetatable(w, dynMT) end
 
--- silent programmatic set: updates state + repaints WITHOUT firing the callback.
--- WindUI's SetValue repainted regardless; OasisUI skips repaint when silent=true,
--- so we fire Changed manually (the paint handler is connected to it, the
--- callback is invoked directly inside _commit and is skipped by silent=true).
--- config-load set: NON-silent so it repaints the switch AND invokes the
--- callback (real functionality turns on). WindUI applied saved values fully;
--- OasisUI's silent=true skips the callback so features stayed off.
-local function syncSet(oasis, v)
-	pcall(function() if oasis.Set then oasis:Set(v, false) end end)
-end
-
-local function wrapToggle(oasis, def)
-	local w = dyn({ _oasis = oasis })
-	if def and def.Flag then _FVL.flags[def.Flag] = w end
-	function w:Set(v, silent) pcall(function() oasis:Set(v and true or false, silent) end) end
-	function w:GetValue() return oasis.Value end
-	function w:SetValue(v) syncSet(oasis, v) end
-	return w
-end
-
-local function wrapSlider(oasis, def)
-	local w = dyn({ _oasis = oasis })
-	if def and def.Flag then _FVL.flags[def.Flag] = w end
-	function w:Set(v, silent)
-		pcall(function()
-			if oasis.Set then oasis:Set(v, silent)
-			else oasis.Value = v; oasis.Changed:Fire(v) end
-		end)
+local function decorate(el, kind)
+	el.__type = kind
+	local setter = SETTERS[kind]
+	el.GetValue = function(self)
+		if kind == "ColorPicker" then return self.Value.Color end
+		if kind == "Keybind" then return self:GetKey() end
+		return self:Get()
 	end
-	function w:GetValue() return oasis.Value end
-	function w:SetValue(v) syncSet(oasis, v) end
-	return w
-end
-
-local function wrapDropdown(oasis, def)
-	local w = dyn({ _oasis = oasis })
-	if def and def.Flag then _FVL.flags[def.Flag] = w end
-	function w:Refresh(values, keep) pcall(function() oasis:Refresh(values, keep) end) end
-	function w:SetValues(values) w:Refresh(values) end
-	function w:Set(v, silent) pcall(function() oasis:Set(v, silent) end) end
-	function w:GetValue() return oasis.Value end
-	function w:SetValue(v) syncSet(oasis, v) end
-	return w
-end
-
-local function wrapColorPicker(oasis, def)
-	local w = dyn({ _oasis = oasis })
-	if def and def.Flag then _FVL.flags[def.Flag] = w end
-	function w:Set(v, silent) pcall(function() if oasis.Set then oasis:Set(v, silent) else oasis.Value = v end end) end
-	function w:GetValue()
-		local v = oasis.Value
-		return typeof(v) == "Color3" and colorToTable(v) or v
+	el.SetValue = function(self, v)
+		if setter then setter(self, v) end
 	end
-	function w:SetValue(v)
-		if type(v) == "table" and v.__color then w:Set(tableToColor(v), true) else w:Set(v, true) end
+	el.SetDesc = function(self, text) self:SetDescription(text) end
+	el.SetImage = function() end -- OasisUI rows have no icon slot; cosmetic only
+	if kind == "Dropdown" then
+		el.SetValues = function(self, values) self:Refresh(values, true) end
 	end
-	return w
+	return el
 end
 
-local function wrapInput(oasis, def)
-	local w = dyn({ _oasis = oasis })
-	if def and def.Flag then _FVL.flags[def.Flag] = w end
-	function w:Set(v, silent)
-		pcall(function()
-			if oasis.Set then oasis:Set(v, silent)
-			elseif oasis.SetText then oasis:SetText(v)
-			else oasis.Value = v end
-		end)
-	end
-	function w:Get() return oasis.Value end
-	function w:GetValue() return oasis.Value end
-	function w:SetValue(v) syncSet(oasis, v) end
-	return w
-end
+-- ConfigManager: thin adapter over the window's native Config (Window.Config) ------------------------
+-- Snapshot / Apply / Save / Load / Delete / List are OasisUI's own; files live in <Folder>/configs/<name>.json
+local ConfigManager = {}
 
-local function wrapKeybind(oasis, def)
-	local w = { _oasis = oasis, Value = nil }
-	if def and def.Flag then _FVL.flags[def.Flag] = w end
-	function w:GetKey() local ok, k = pcall(function() return oasis:GetKey() end); return ok and k or nil end
-	function w:GetValue() return w:GetKey() end
-	function w:SetValue(v) pcall(function() if oasis.SetKey then oasis:SetKey(v) elseif oasis.Set then oasis:SetKey(v) end end) end
-	return w
-end
-
-local function wrapButton(oasis, def)
-	local w = { _oasis = oasis }
-	return w
-end
-
--- paragraph wrapper: OasisUI Label + SetDesc + (lazy) skin-grid container
-local function wrapParagraph(oasis, def, oasisTab, window)
-	local title = def and def.Title or ""
-	local w = { _oasis = oasis, _title = title }
-	function w:SetDesc(text)
-		pcall(function() oasis:Set(title .. "\n" .. tostring(text or "")) end)
-	end
-	-- lazy container for the custom skin grid (func119 reads .ParagraphFrame.UIElements.Container)
-	local container = Instance.new("Frame")
-	container.Name = "FVLParagraphContainer"
-	container.BackgroundTransparency = 1
-	container.Size = UDim2.new(1, 0, 0, 0)
-	container.AutomaticSize = Enum.AutomaticSize.Y
-	w.ParagraphFrame = { UIElements = { Container = container } }
-	task.spawn(function()
-		for i = 1, 80 do
-			local ok = pcall(function()
-				local page = oasisTab and oasisTab.Page
-				local pageFrame = page and page.Frame
-				if not pageFrame then error("no page") end
-				local scroll = pageFrame:FindFirstChildWhichIsA("ScrollingFrame", true)
-				if not scroll then error("no scroll") end
-				local content = scroll:FindFirstChildOfClass("Frame") or scroll
-				if container.Parent == nil then
-					container.LayoutOrder = 100000 + i
-					container.Parent = content
-				end
-			end)
-			if ok and container.Parent then return end
-			RunService.RenderStepped:Wait()
-		end
-	end)
-	return w
-end
-
--- ConfigManager shim (JSON files in FVLV2 folder) ---------------------------
-local function cfgPath(name)
-	-- fresh namespace so old WindUI / v1 configs are never loaded (they cause bugs);
-	-- values saved from this UI live here and load normally on next run.
-	return "FVLV2/oasiscfg_" .. tostring(name) .. ".json"
+local function nativeConfig()
+	return oasisWindow.Config
 end
 
 local function makeConfig(name)
-	local cfg = { Name = name, Elements = {} }
+	local cfg = { Name = name }
+	cfg.Elements = Library.Flags -- flag -> live element (has .__type / .Value)
+
+	-- JSON-safe values of every saved flag
 	function cfg:GetData()
-		local data = {}
-		for flag, w in pairs(_FVL.flags) do
-			local ok, v = pcall(function() return w:GetValue() end)
-			if ok then data[flag] = v end
-		end
-		return data
+		return nativeConfig():Snapshot().Flags
 	end
-	function cfg:Save()
-		pcall(function()
-			self.Elements = self:GetData()
-			if makefolder and isfolder and not isfolder("FVLV2") then makefolder("FVLV2") end
-			if writefile then writefile(cfgPath(self.Name), HttpService:JSONEncode(self.Elements)) end
-		end)
-	end
-	function cfg:Load()
+
+	-- value stored on disk for one flag (nil if the file / flag does not exist)
+	function cfg:GetSaved(flag)
 		local ok, data = pcall(function()
-			if isfile and isfile(cfgPath(self.Name)) then
-				return HttpService:JSONDecode(readfile(cfgPath(self.Name)))
-			end
-			return nil
+			return Library.Storage.ReadJSON(nativeConfig():Path(self.Name))
 		end)
-		if not ok or type(data) ~= "table" then return false end
-		self.Elements = data
-		for flag, v in pairs(data) do
-			local w = _FVL.flags[flag]
-			if w and w.SetValue then pcall(function() w:SetValue(v) end) end
+		if ok and type(data) == "table" and type(data.Flags) == "table" then
+			return data.Flags[flag]
 		end
-		return true
+		return nil
 	end
+
+	function cfg:Save()
+		local ok, err = nativeConfig():Save(self.Name)
+		if not ok then warn("[F$VL] config save failed: " .. tostring(err)) end
+		return ok
+	end
+
+	function cfg:Load()
+		local cfgStore = nativeConfig()
+		if not cfgStore:Exists(self.Name) then return false end
+		local ok, err = cfgStore:Load(self.Name)
+		if not ok then warn("[F$VL] config load failed: " .. tostring(err)) end
+		return ok
+	end
+
 	function cfg:Delete()
-		pcall(function() if delfile and isfile and isfile(cfgPath(self.Name)) then delfile(cfgPath(self.Name)) end end)
+		nativeConfig():Delete(self.Name)
 	end
-	function cfg:SetAsCurrent() end
+
+	function cfg:SetAsCurrent()
+		nativeConfig().Current = self.Name
+	end
+
 	return cfg
 end
 
-local ConfigManager = {}
-function ConfigManager:CreateConfig(name) return makeConfig(name) end
+function ConfigManager:CreateConfig(name)
+	return makeConfig(name)
+end
+
 function ConfigManager:GetConfig(name)
-	if isfile and isfile(cfgPath(name)) then return makeConfig(name) end
+	if nativeConfig():Exists(name) then return makeConfig(name) end
 	return nil
 end
+
 function ConfigManager:AllConfigs()
-	local out = {}
-	pcall(function()
-		if listfiles then
-			for _, f in ipairs(listfiles("FVLV2")) do
-				local n = f:match("cfg_(.+)%.json$")
-				if n and n ~= "autosave" then out[#out + 1] = n end
-			end
-		end
-	end)
-	return out
-end
-function ConfigManager:DeleteConfig(name)
-	pcall(function() if delfile and isfile and isfile(cfgPath(name)) then delfile(cfgPath(name)) end end)
+	return nativeConfig():List()
 end
 
--- section wrapper -----------------------------------------------------------
-local function makeSection(oasisSection, oasisTab, window)
-	local sec = { _oasis = oasisSection, _tab = oasisTab, _window = window }
+function ConfigManager:DeleteConfig(name)
+	nativeConfig():Delete(name)
+end
+
+-- section wrapper -------------------------------------------------------------
+local function makeSection(oasisSection)
+	local sec = { _oasis = oasisSection }
+	-- anything not defined here falls through to the native section (SetTitle, Divider, Spacer, ...)
+	setmetatable(sec, {
+		__index = function(_, k)
+			local v = oasisSection[k]
+			if type(v) == "function" then
+				return function(_, ...) return v(oasisSection, ...) end
+			end
+			return v
+		end,
+	})
 
 	function sec:Toggle(def)
-		-- force every toggle to start OFF (no imported state); saved config still
-		-- overrides this on subsequent runs via SetValue.
-		local d = {
+		local default = (not FORCE_TOGGLES_OFF) and def.Value == true
+		local el = oasisSection:Toggle({
 			Title = def.Title or "Toggle",
-			Default = false,
-			Tooltip = def.Desc or def.Description,
-			Callback = function(v)
-				if def.Callback then pcall(def.Callback, v) end
-			end,
-		}
-		local ok, el = pcall(function() return oasisSection:Toggle(d) end)
-		if not ok then el = oasisSection:Toggle(d) end
-		-- WindUI fires the callback on creation so the initial state is applied
-		-- (e.g. on-screen buttons get destroyed when their toggle is off).
-		-- OasisUI does not, so we fire it manually with the current default.
-		task.spawn(function()
-			pcall(function() if def.Callback then def.Callback(el.Value) end end)
-		end)
-		return wrapToggle(el, def)
+			Description = descOf(def),
+			Flag = def.Flag,
+			Default = default,
+			Callback = def.Callback,
+		})
+		-- WindUI fires the callback once on creation so the initial state is applied
+		-- (e.g. on-screen buttons are removed while their toggle is off); OasisUI does not.
+		if def.Callback then
+			task.spawn(function() safe(def.Callback, el.Value) end)
+		end
+		return decorate(el, "Toggle")
 	end
 
 	function sec:Slider(def)
-		local min, max, default = 0, 100, 0
+		local min, max, default
 		if type(def.Value) == "table" then
-			min = def.Value.Min or 0; max = def.Value.Max or 100; default = def.Value.Default or min
+			min = def.Value.Min or 0
+			max = def.Value.Max or 100
+			default = def.Value.Default or min
 		else
-			min = def.Min or 0; max = def.Max or 100; default = def.Default or def.Value or min
+			min = def.Min or 0
+			max = def.Max or 100
+			default = def.Default or def.Value or min
 		end
-		local d = {
+		local el = oasisSection:Slider({
 			Title = def.Title or "Slider",
-			Min = min, Max = max, Default = default,
+			Description = descOf(def),
+			Flag = def.Flag,
+			Min = min,
+			Max = max,
+			Default = default,
 			Step = def.Step,
 			Suffix = def.Suffix,
-			Tooltip = def.Desc or def.Description,
-			Callback = function(v)
-				if def.Callback then pcall(def.Callback, v) end
-			end,
-		}
-		local el = oasisSection:Slider(d)
-		return wrapSlider(el, def)
+			Callback = def.Callback,
+		})
+		return decorate(el, "Slider")
 	end
 
 	function sec:Button(def)
-		local d = {
+		local el = oasisSection:Button({
 			Title = def.Title or "Button",
+			Description = descOf(def),
 			Icon = normIcon(def.Icon),
-			Tooltip = def.Desc or def.Description,
+			Color = typeof(def.Color) == "Color3" and def.Color or nil,
 			Style = def.Style,
 			Confirm = def.Confirm,
-			Callback = function()
-				if def.Callback then pcall(def.Callback) end
-			end,
-		}
-		local el = oasisSection:Button(d)
-		return wrapButton(el, def)
+			Callback = def.Callback, -- OasisUI runs it protected, shows the spinner and flashes red on error
+		})
+		return decorate(el, "Button")
 	end
 
 	function sec:Dropdown(def)
-		local d = {
+		local el = oasisSection:Dropdown({
 			Title = def.Title or "Dropdown",
+			Description = descOf(def),
+			Flag = def.Flag,
 			Values = def.Values or {},
 			Default = def.Value,
+			AllowNone = def.Value == nil, -- no starting value: show the placeholder instead of picking the first entry
 			Multi = def.Multi == true,
 			Placeholder = def.Placeholder,
-			Tooltip = def.Desc or def.Description,
-			Callback = function(v)
-				if def.Callback then pcall(def.Callback, v) end
-			end,
-		}
-		local el = oasisSection:Dropdown(d)
-		return wrapDropdown(el, def)
+			Callback = def.Callback,
+		})
+		return decorate(el, "Dropdown")
 	end
 
 	function sec:Colorpicker(def)
-		local d = {
+		local el = oasisSection:ColorPicker({
 			Title = def.Title or "Color",
-			Default = def.Default,
-			Tooltip = def.Desc or def.Description,
-			Callback = function(v)
-				if def.Callback then pcall(def.Callback, v) end
-			end,
-		}
-		local el = oasisSection:ColorPicker(d)
-		return wrapColorPicker(el, def)
+			Description = descOf(def),
+			Flag = def.Flag,
+			Default = colorOf(def.Default or def.Value),
+			Transparency = def.Transparency,
+			Callback = def.Callback, -- (Color3, alpha)
+		})
+		return decorate(el, "ColorPicker")
 	end
 	sec.ColorPicker = sec.Colorpicker
 
 	function sec:Input(def)
-		local d = {
+		local el = oasisSection:Input({
 			Title = def.Title or "Input",
+			Description = descOf(def),
+			Flag = def.Flag,
 			Placeholder = def.Placeholder,
 			Default = def.Default or def.Value,
 			Numeric = def.Numeric == true,
-			Tooltip = def.Desc or def.Description,
-			Callback = function(v)
-				if def.Callback then pcall(def.Callback, v) end
-			end,
-		}
-		local el = oasisSection:Input(d)
-		return wrapInput(el, def)
+			Callback = def.Callback,
+		})
+		return decorate(el, "Input")
 	end
 
+	-- def.Action: runs every time the bound key is pressed (native Pressed, Always mode)
+	-- def.Callback(key): runs when the binding changes (native ChangedCallback)
+	-- def.Menu: show the window's own toggle-key binding instead of a new one
 	function sec:Keybind(def)
-		local defaultKey = def.Value
-		if defaultKey == "Unknown" or defaultKey == "" then defaultKey = nil end
+		local key = def.Value
+		if key == "Unknown" or key == "" then key = nil end
+		local action = def.Action
 		local d = {
 			Title = def.Title or "Keybind",
-			Default = defaultKey,
+			Description = descOf(def),
+			Flag = def.Flag,
+			Default = key,
 			Mode = "Always",
 			Modes = { "Always" },
-			Tooltip = def.Desc or def.Description,
-			ChangedCallback = function(key)
-				if def.Callback then pcall(def.Callback, key) end
-			end,
+			Pressed = action and function() task.spawn(safe, action) end or nil,
+			ChangedCallback = def.Callback,
 		}
-		local ok, el = pcall(function() return oasisSection:Keybind(d) end)
-		if not ok then
-			-- fallback: a button that captures the next key press
-			local capturing = false
-			local btn = oasisSection:Button({
-				Title = (def.Title or "Keybind") .. ":  click to set",
-				Callback = function() end,
-			})
-			el = { GetKey = function() return nil end, SetKey = function() end }
+		if def.Menu and oasisWindow.MenuBinding then
+			d.Binding = oasisWindow.MenuBinding
+			d.Default = nil
 		end
-		return wrapKeybind(el, def)
+		return decorate(oasisSection:Keybind(d), "Keybind")
 	end
 
+	-- native Paragraph; the custom-frame container used by the skin grid / crosshair preview is a
+	-- native Embed that follows the frame's height
 	function sec:Paragraph(def)
-		local text = ((def.Title or "") .. "\n" .. (def.Desc or "")):gsub("^\n", "")
-		local el = oasisSection:Label({ Text = text, Size = 12 })
-		return wrapParagraph(el, def, sec._tab, sec._window)
+		local el = oasisSection:Paragraph({
+			Title = def.Title or "",
+			Content = def.Desc or def.Content or def.Description or "",
+		})
+		el.__type = "Paragraph"
+		el.SetDesc = function(self, text) self:SetContent(text) end
+		el.SetValue = function(self, text) self:SetContent(text) end
+
+		local container
+		local uiElements = setmetatable({}, {
+			__index = function(_, k)
+				if k ~= "Container" then return nil end
+				if not container then
+					container = Instance.new("Frame")
+					container.Name = "FVLParagraphContainer"
+					container.BackgroundTransparency = 1
+					container.Size = UDim2.new(1, 0, 0, 0)
+					container.AutomaticSize = Enum.AutomaticSize.Y
+					local embed = oasisSection:Embed({ Instance = container, Height = 1, Resize = false })
+					local function fit()
+						local scale = 1
+						pcall(function() scale = oasisWindow:GetScale() end)
+						if type(scale) ~= "number" or scale <= 0 then scale = 1 end
+						embed:SetHeight(math.max(1, math.ceil(container.AbsoluteSize.Y / scale)))
+					end
+					container:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+					task.defer(fit)
+				end
+				return container
+			end,
+		})
+		el.ParagraphFrame = { UIElements = uiElements }
+		return el
 	end
 
 	function sec:Label(def)
-		local el = oasisSection:Label({ Text = def.Text or def.Title or "", Size = def.Size or 12 })
-		return { _oasis = el, Set = function(_, t) pcall(function() el:Set(t) end) end }
+		return oasisSection:Label({ Text = def.Text or def.Title or "", Size = def.Size or 12 })
 	end
 
 	return sec
 end
 
--- sub-tab (category) bar inside a tab ---------------------------------------
-local SubUI = {}
--- tab:SubTabs({ {"Category", {"Section title", ...}}, ... }) groups the tab's
--- sections into categories and adds a pill bar at the top of the tab page.
--- Everything is best-effort: if the page / sections can't be located the tab
--- simply keeps showing every section (nothing breaks).
-SubUI.BAR_H = 30
-
-function SubUI.Accent()
-	local c = Color3.fromHex("#22c55e")
-	pcall(function()
-		local a = Library.Theme and Library.Theme.Accent
-		if typeof(a) == "Color3" then c = a end
-	end)
-	return c
-end
-
-function SubUI.PageFrame(oasisTab)
-	local ok, f = pcall(function() return oasisTab.Page and oasisTab.Page.Frame end)
-	if ok and typeof(f) == "Instance" then return f end
-	return nil
-end
-
-function SubUI.Snapshot(root)
-	local s = {}
-	for _, d in ipairs(root:GetDescendants()) do s[d] = true end
-	return s
-end
-
-function SubUI.NewRoots(pageFrame, before)
-	local out = {}
-	for _, inst in ipairs(pageFrame:GetDescendants()) do
-		if not before[inst] and inst:IsA("GuiObject") then
-			local p = inst.Parent
-			if p == pageFrame or before[p] then out[#out + 1] = inst end
-		end
-	end
-	return out
-end
-
-function SubUI.Repaint(S)
-	local accent = S.accent
-	for _, name in ipairs(S.cats) do
-		local b = S.buttons[name]
-		if b then
-			local on = (name == S.selected)
-			b.BackgroundColor3 = on and accent or Color3.fromRGB(34, 34, 42)
-			b.TextColor3 = on and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(170, 170, 184)
-		end
-	end
-end
-
-function SubUI.Apply(S)
-	for _, name in ipairs(S.cats) do
-		local show = (name == S.selected)
-		for _, root in ipairs(S.roots[name]) do
-			if root.Parent then root.Visible = show end
-		end
-	end
-	SubUI.Repaint(S)
-end
-
-function SubUI.Refresh(S)
-	-- show a button only for categories that really got sections
-	local populated = 0
-	for _, name in ipairs(S.cats) do
-		local has = #S.roots[name] > 0
-		if has then populated = populated + 1 end
-		if S.buttons[name] then S.buttons[name].Visible = has end
-	end
-	if S.bar then S.bar.Visible = populated >= 1 end
-	if S.selected == nil or #S.roots[S.selected] == 0 then
-		S.selected = nil
-		for _, name in ipairs(S.cats) do
-			if #S.roots[name] > 0 then S.selected = name; break end
-		end
-	end
-	SubUI.Apply(S)
-end
-
-function SubUI.BuildBar(S, pageFrame)
-	-- the page's scrolling area: the bar goes above it and pushes it down
-	local scroll = pageFrame:FindFirstChildWhichIsA("ScrollingFrame", true)
-	if not scroll then return false end
-	local holder = scroll
-	while holder.Parent and holder.Parent ~= pageFrame do holder = holder.Parent end
-	if holder.Parent ~= pageFrame then return false end
-
-	local bar = Instance.new("ScrollingFrame")
-	bar.Name = "FVLSubTabs"
-	bar.BackgroundTransparency = 1
-	bar.BorderSizePixel = 0
-	bar.Size = UDim2.new(1, 0, 0, SubUI.BAR_H)
-	bar.Position = UDim2.fromOffset(0, 0)
-	bar.ScrollBarThickness = 0
-	bar.CanvasSize = UDim2.new()
-	bar.AutomaticCanvasSize = Enum.AutomaticSize.X
-	bar.ScrollingDirection = Enum.ScrollingDirection.X
-	bar.ZIndex = 50
-
-	local layout = Instance.new("UIListLayout")
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 6)
-	layout.Parent = bar
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 4)
-	pad.PaddingRight = UDim.new(0, 4)
-	pad.Parent = bar
-
-	S.accent = SubUI.Accent()
-	for i, name in ipairs(S.cats) do
-		local b = Instance.new("TextButton")
-		b.Name = "Sub_" .. name
-		b.LayoutOrder = i
-		b.AutoButtonColor = false
-		b.AutomaticSize = Enum.AutomaticSize.X
-		b.Size = UDim2.new(0, 0, 0, 24)
-		b.BorderSizePixel = 0
-		b.Font = Enum.Font.GothamMedium
-		b.TextSize = 12
-		b.Text = name
-		b.ZIndex = 51
-		b.Visible = false
-		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 12); c.Parent = b
-		local bp = Instance.new("UIPadding")
-		bp.PaddingLeft = UDim.new(0, 12); bp.PaddingRight = UDim.new(0, 12)
-		bp.Parent = b
-		b.Parent = bar
-		b.Activated:Connect(function()
-			S.selected = name
-			SubUI.Apply(S)
-		end)
-		S.buttons[name] = b
-	end
-
-	-- FIX: the page has TWO scrolling columns (left + right). Only the first one used to be pushed
-	-- below the bar, so the right column stayed at the top: taller than the left one and covered by
-	-- the bar (its collapse arrows could not be clicked). Push every column down by the same amount.
-	local shiftList, seen = {}, {}
-	local function addShift(inst)
-		if inst and not seen[inst] then seen[inst] = true; shiftList[#shiftList + 1] = inst end
-	end
-	addShift(holder)
-	for _, child in ipairs(pageFrame:GetChildren()) do
-		if child:IsA("ScrollingFrame") then addShift(child) end
-	end
-	for _, inst in ipairs(shiftList) do
-		inst.Position = inst.Position + UDim2.fromOffset(0, SubUI.BAR_H + 4)
-		inst.Size = inst.Size - UDim2.fromOffset(0, SubUI.BAR_H + 4)
-	end
-	bar.Parent = pageFrame
-	S.bar = bar
-	return true
-end
-
 -- tab wrapper ---------------------------------------------------------------
-local function makeTab(oasisTab, window)
-	local tab = { _oasis = oasisTab, _window = window, _sections = {}, _current = nil, _secCount = 0 }
+local function makeTab(oasisTab)
+	local tab = { _oasis = oasisTab, _current = nil, _subs = nil, _used = {} }
+
+	-- two sections with the same title in one tab would share a saved-layout Id: number the later ones
+	local function sectionId(target, title, def)
+		if def.Id then return def.Id end
+		if not title then return nil end
+		local key = target.Id .. "/" .. title
+		tab._used[key] = (tab._used[key] or 0) + 1
+		if tab._used[key] > 1 then return key .. " #" .. tab._used[key] end
+		return nil
+	end
 
 	function tab:Section(def)
-		tab._secCount = tab._secCount + 1
+		def = def or {}
+		local title = def.Title
+		local target = oasisTab
 		local S = tab._subs
-		local title = def and def.Title or nil
-		local cat = nil
-		local n = tab._secCount
 		if S then
-			cat = (title and S.lookup[title]) or S.last or S.cats[1]
+			local cat = (title and S.lookup[title]) or S.last or S.cats[1]
 			S.last = cat
-			S.count[cat] = (S.count[cat] or 0) + 1
-			n = S.count[cat] -- left/right balance is per category
+			target = S.subs[cat]
+			if not S.shown[cat] then
+				S.shown[cat] = true
+				target:SetVisible(true)
+			end
 		end
-		local side = (def and def.Side) or ((n % 2 == 1) and "Left" or "Right") -- Side = "Left"/"Right" in the def forces a column
-		local d = {
+		local oasisSec = target:Section({
 			Title = title,
-			Icon = normIcon(def and def.Icon),
-			Side = side,
-			Id = def and def.Id,
-		}
-		local pageFrame, before
-		if S and not S.off then
-			pageFrame = SubUI.PageFrame(oasisTab)
-			if pageFrame then before = SubUI.Snapshot(pageFrame) end
-		end
-		local oasisSec = oasisTab:Section(d)
-		-- FIX (ESP tab: "Alerts" and "Copy Names" ended up in the same column): OasisUI restores every card's
-		-- column from the SAVED layout (Window.State.Layout, written when a card is dragged / moved) and that
-		-- wins over Side. So when a section asks for an explicit Side, move its card to that column if it
-		-- landed in the other one. Nothing is saved here, so the rest of the user's layout is left alone.
-		if def and (def.Side == "Left" or def.Side == "Right") then
-			pcall(function()
-				local page = oasisTab.Page
-				local view = page:Find(oasisSec)
-				local want = (def.Side == "Right") and 2 or 1
-				if view and view.Column ~= want and page.Columns[want] then
-					page._counter = (page._counter or 0) + 1
-					view.Column = want
-					view.Card.Parent = page.Columns[want]
-					view.Card.LayoutOrder = 10000 + page._counter
-				end
-			end)
-		end
-		if pageFrame and before then
-			pcall(function()
-				local roots = SubUI.NewRoots(pageFrame, before)
-				if #roots == 0 then return end -- can't locate it: leave it always visible
-				if not S.bar and not SubUI.BuildBar(S, pageFrame) then S.off = true; return end
-				for _, r in ipairs(roots) do S.roots[cat][#S.roots[cat] + 1] = r end
-				SubUI.Refresh(S)
-			end)
-		end
-		local sec = makeSection(oasisSec, oasisTab, window)
+			Icon = normIcon(def.Icon),
+			Side = def.Side, -- nil: OasisUI balances the columns (a layout the user saved wins)
+			Id = sectionId(target, title, def),
+		})
+		local sec = makeSection(oasisSec)
 		tab._current = sec
-		tab._sections[#tab._sections + 1] = sec
 		return sec
 	end
 
-	-- forward element calls to the current section (WindUI allows tab:Toggle(...) etc.)
+	-- WindUI allows tab:Toggle(...) etc.: forward to the current section
 	local function forward(name)
 		return function(_, def)
 			if not tab._current then tab:Section({ Title = nil }) end
@@ -2307,28 +2081,42 @@ local function makeTab(oasisTab, window)
 	tab.Paragraph = forward("Paragraph")
 	tab.Label = forward("Label")
 
-	-- group this tab's sections into categories (sub-tabs)
+	-- tab:SubTabs({ {"Category", {"Section title", ...}}, ... }) -> native Tab:SubTab chips;
+	-- a category's chip shows up as soon as it receives its first section (the first one is always shown)
 	function tab:SubTabs(cats)
-		local S = { cats = {}, lookup = {}, roots = {}, buttons = {}, count = {},
-			selected = nil, last = nil, bar = nil, off = false, accent = SubUI.Accent() }
-		for _, c in ipairs(cats) do
-			S.cats[#S.cats + 1] = c[1]
-			S.roots[c[1]] = {}
-			for _, t in ipairs(c[2] or {}) do S.lookup[t] = c[1] end
+		if tab._subs then return tab end
+		local S = { cats = {}, lookup = {}, subs = {}, shown = {}, last = nil }
+		for i, c in ipairs(cats) do
+			local name = c[1]
+			S.cats[#S.cats + 1] = name
+			for _, t in ipairs(c[2] or {}) do S.lookup[t] = name end
+			local sub = oasisTab:SubTab({ Title = name, Columns = oasisTab.Def and oasisTab.Def.Columns })
+			S.subs[name] = sub
+			if i == 1 then
+				S.shown[name] = true
+			else
+				sub:SetVisible(false)
+			end
 		end
 		tab._subs = S
 		return tab
+	end
+
+	function tab:Select()
+		oasisTab:Select()
 	end
 
 	return tab
 end
 
 -- create the OasisUI window -------------------------------------------------
-local oasisWindow = Library:CreateWindow({
+oasisWindow = Library:CreateWindow({
 	Title = "F$VL",
-	Author = "Murder Mystery 2",
+	Subtitle = "Murder Mystery 2",
 	Icon = "sword",
 	Folder = "FVLV2_Oasis",
+	ToggleKey = "G",
+	AutoLoad = false, -- the script loads its config itself once every element exists
 })
 
 -- remember every ScreenGui the UI library created (dropdown lists may live in their own layer)
@@ -2343,14 +2131,14 @@ pcall(function()
 	end
 end)
 
--- dummy UIElements.Main so cosmetic DOM-dive loops (func118/func120/tag sheen) no-op safely
+-- dummy UIElements.Main so the old cosmetic DOM-dive loops (func118/func120/tag sheen) no-op safely
 local dummyMain = Instance.new("Frame")
 dummyMain.Name = "FVLDummyMain"
 dummyMain.Size = UDim2.fromOffset(0, 0)
 dummyMain.BackgroundTransparency = 1
 dummyMain.Parent = hui
 
-local obj3 = {
+obj3 = {
 	_oasis = oasisWindow,
 	Destroyed = false,
 	CurrentTab = 1,
@@ -2361,45 +2149,35 @@ local obj3 = {
 }
 
 function obj3:Tab(def)
-	local d = {
+	local oasisTab = oasisWindow:Tab({
 		Title = def.Title or "Tab",
 		Icon = normIcon(def.Icon),
 		Id = def.Id,
 		Columns = def.Columns, -- 1 = one column across the whole tab (default: 2)
-	}
-	local oasisTab = oasisWindow:Tab(d)
-	local tab = makeTab(oasisTab, oasisWindow)
+	})
+	local tab = makeTab(oasisTab)
 	self._tabs[#self._tabs + 1] = tab
 	return tab
 end
 
-function obj3:Tag() end -- cosmetic; ignored
-function obj3:EditOpenButton() end -- cosmetic; ignored
-
-local color = Color3.fromHex -- kept for compatibility (unused in the tail)
+function obj3:Tag(tag)
+	if type(tag) == "string" then pcall(oasisWindow.Tag, oasisWindow, tag) end
+end
+function obj3:EditOpenButton() end -- OasisUI has its own menu button (Settings > Interface); nothing to do
 
 function obj3:SetBackgroundTransparency(v)
 	pcall(function()
-		local Theme = Library.Theme
-		if Theme and Theme.Set then
-			Theme.Set({ WindowTransparency = math.clamp(tonumber(v) or 0, 0, 0.9) })
-		end
+		Library:SetThemeValues({ WindowTransparency = math.clamp(tonumber(v) or 0, 0, 0.9) })
 	end)
 end
 function obj3:SetBackgroundImageTransparency() end
 
 function obj3:Toggle()
-	pcall(function()
-		local r = oasisWindow.Root
-		if r then r.Visible = not r.Visible end
-	end)
+	oasisWindow:Toggle()
 end
 
 function obj3:Open()
-	pcall(function()
-		local r = oasisWindow.Root
-		if r then r.Visible = true end
-	end)
+	oasisWindow:SetVisible(true)
 end
 
 function obj3:SelectTab(i)
@@ -2411,7 +2189,8 @@ function obj3:SelectTab(i)
 		tab = i
 	end
 	if tab then
-		pcall(function() oasisWindow:SelectTab(tab._oasis) end)
+		-- silent: a tab picked by the script is not remembered as the user's last tab
+		pcall(function() oasisWindow:SelectTab(tab._oasis, nil, true) end)
 	end
 end
 
@@ -2423,36 +2202,49 @@ function obj3:Destroy()
 	if self.Destroyed then return end
 	self.Destroyed = true
 	for _, cb in ipairs(self._onDestroy) do pcall(cb) end
-	pcall(function() oasisWindow:Destroy() end)
 	pcall(function() dummyMain:Destroy() end)
+	Library:Unload() -- closes popups / notifications, keybinds and the window itself
 end
 
--- obj2 = WindUI-style library handle (Notify + theme stubs) -----------------
-local obj2 = { Themes = {} }
+-- unloading from OasisUI's own Settings (or CloseAction) must run the script's cleanup as well
+Library:OnUnload(function()
+	if not obj3.Destroyed then obj3:Destroy() end
+end)
+
+-- obj2 = WindUI-style library handle (Notify + theme) --------------------------
+obj2 = { Themes = {} }
 
 function obj2:AddTheme(def)
 	self.Themes[def.Name or "Default"] = def
 end
-function obj2:SetTheme() end
+function obj2:SetTheme(name)
+	-- only OasisUI palettes can be applied; unknown names (the old WindUI "F$VL" theme) are ignored by UsePalette
+	if type(name) == "string" then
+		pcall(Library.SetTheme, Library, name)
+	end
+end
 
 function obj2:Notify(def)
 	def = def or {}
 	local icon = def.Icon and tostring(def.Icon) or ""
 	local kind = "Info"
-	if icon == "check" then kind = "Success"
-	elseif icon == "x" then kind = "Error"
-	elseif icon:find("warn") or icon:find("shield") then kind = "Warning"
+	if icon == "check" then
+		kind = "Success"
+	elseif icon == "x" then
+		kind = "Error"
+	elseif icon:find("warn") or icon:find("shield") then
+		kind = "Warning"
 	end
 	pcall(function()
 		Library:Notify({
 			Title = def.Title or "Notification",
 			Content = def.Content or "",
 			Type = kind,
+			Icon = normIcon(def.Icon),
 			Duration = def.Duration or 3,
 		})
 	end)
 end
-
 
 
 _G.FVLV2 = obj3
@@ -2595,131 +2387,13 @@ task.delay(20, function()
 	list2.sfxReady = true
 end)
 
-task.spawn(function()
-	local CoreGui_ = game:GetService("CoreGui")
-
-	local function func7(child)
-		if not (child and child:IsA("GuiObject")) then
-			return
-		end
-
-		task.spawn(function()
-			local imageLabel = nil
-
-			for i = 1, 60 do
-				imageLabel = child:FindFirstChildWhichIsA("ImageLabel")
-				if not (imageLabel or not child.Parent) then
-					task.wait()
-					continue
-				end
-				break
-			end
-
-			if not imageLabel or imageLabel:FindFirstChild("FVLToastRamp") then
-				return
-			end
-			local uiGradient = Instance.new("UIGradient")
-			uiGradient.Name = "FVLToastRamp"
-			uiGradient.Rotation = 45
-
-			uiGradient.Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-				ColorSequenceKeypoint.new(1, Color3.fromRGB(118, 118, 130)),
-			})
-
-			uiGradient.Parent = imageLabel
-		end)
-	end
-
-	local windUINotifications = nil
-
-	for i = 1, 900 do
-		windUINotifications = CoreGui_:FindFirstChild("WindUI/Notifications", true)
-		if not windUINotifications then
-			task.wait(0.2)
-			continue
-		end
-		break
-	end
-
-	if not windUINotifications then
-		return
-	end
-	local frame = nil
-
-	for i = 1, 900 do
-		frame = windUINotifications:FindFirstChildWhichIsA("Frame")
-		if not frame then
-			task.wait(0.2)
-			continue
-		end
-		break
-	end
-
-	if not frame then
-		return
-	end
-
-	for _, child in ipairs(frame:GetChildren()) do
-		func7(child)
-	end
-
-	frame.ChildAdded:Connect(func7)
-end)
-
+-- OasisUI draws its own notifications and menu button (Settings > Interface), so the old WindUI toast
+-- gradient / open-pill hunters are gone. pinOpenPill stays as a harmless stub for the callers below.
 list2.findOpenPill = function()
-	local windUI = (gethui and gethui() or game:GetService("CoreGui")):FindFirstChild("WindUI")
-	windUI = windUI and windUI:FindFirstChild("Window")
-	if not windUI then
-		return nil, nil
-	end
-	local value12 = nil
-	local value13 = nil
-
-	for _, child in ipairs(windUI:GetChildren()) do
-		if child:IsA("Frame") then
-			if child:FindFirstChild("Main") then
-				value12 = child
-			elseif child:FindFirstChildWhichIsA("TextButton", true) then
-				value13 = child
-			end
-		end
-	end
-
-	return value13, value12
+	return nil, nil
 end
 
-list2.pinOpenPill = function()
-	task.spawn(function()
-		local value14 = nil
-		local value15 = nil
-
-		for i = 1, 200 do
-			value14, value15 = list2.findOpenPill()
-			if not (value14 and value15) then
-				task.wait(0.05)
-				continue
-			end
-			break
-		end
-
-		if not (value14 and value15) then
-			return
-		end
-
-		local function func8()
-			local visible = not value15.Visible
-
-			if value14.Visible ~= visible then
-				value14.Visible = visible
-			end
-		end
-
-		func8()
-		list2.conns[#list2.conns + 1] = value15:GetPropertyChangedSignal("Visible"):Connect(func8)
-		list2.conns[#list2.conns + 1] = value14:GetPropertyChangedSignal("Visible"):Connect(func8)
-	end)
-end
+list2.pinOpenPill = function() end
 
 list2.mouseAimPoint = function()
 	local currentCamera = Workspace.CurrentCamera
@@ -43768,15 +43442,12 @@ tbl43.farm:Dropdown({
 	}
 
 	local function hudSavedOn(flag)
-		-- F$VL OasisUI port: read from THIS ui's config (list2.config.Elements)
-		-- instead of the hardcoded old WindUI path. First run = no saved values =
-		-- everything off; subsequent runs restore only what the user enabled here.
-		local elements = list2.config and list2.config.Elements
-		if type(elements) == "table" then
-			local entry = elements[flag]
-			if type(entry) == "boolean" then return entry end
-			if type(entry) == "table" and entry.value ~= nil then return entry.value and true or false end
-			if entry ~= nil then return entry and true or false end
+		-- value this toggle was saved with in the autosave config (first run = nothing saved = off)
+		if list2.config and list2.config.GetSaved then
+			local saved = list2.config:GetSaved(flag)
+			if saved ~= nil then
+				return saved == true
+			end
 		end
 		return false
 	end
@@ -55213,8 +54884,6 @@ end
 func120(ICON.mono)
 
 do
-	local tbl110 = { ToggleGUI = Enum.KeyCode.G }
-
 	local tbl111 = {
 		ToggleGUI = function()
 			obj3:Toggle()
@@ -55329,33 +54998,9 @@ do
 		end,
 	}
 
-	keybindConn = UserInputService.InputBegan:Connect(function(input)
-		if input.UserInputType ~= Enum.UserInputType.Keyboard then
-			return
-		end
-
-		if input.KeyCode == Enum.KeyCode.Unknown then
-			return
-		end
-
-		if UserInputService:GetFocusedTextBox() then
-			return
-		end
-
-		for k, value219 in pairs(tbl110) do
-			value219 = value219 and input.KeyCode == value219
-
-			if value219 then
-				local entry30 = tbl111[k]
-
-				if entry30 then
-					task.spawn(function()
-						pcall(entry30)
-					end)
-				end
-			end
-		end
-	end)
+	-- Keys are handled by OasisUI's own Keybind elements: they fire `Action` on every press, ignore typing in text
+	-- boxes, stay quiet while a bind is being captured and support combos / mouse buttons.
+	keybindConn = nil
 
 	local function func197(obj29, param157, param158, str35, param159)
 		obj29:Keybind({
@@ -55363,15 +55008,11 @@ do
 			Desc = param158,
 			Flag = "Keybind_" .. str35,
 			Value = param159,
-			Callback = function(value)
-				local ok, result = pcall(function()
-					return Enum.KeyCode[value]
-				end)
-
-				if ok and result and result ~= Enum.KeyCode.Unknown then
-					tbl110[str35] = result
-				else
-					tbl110[str35] = nil
+			Menu = (str35 == "ToggleGUI"), -- Toggle GUI = the window's own menu key
+			Action = function()
+				local fn = tbl111[str35]
+				if fn then
+					fn()
 				end
 			end,
 		})
